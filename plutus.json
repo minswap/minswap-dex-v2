@@ -1,0 +1,55 @@
+{
+  "preamble": {
+    "title": "aiken/amm_dex_v2",
+    "description": "Aiken contracts for project 'aiken/amm_dex_v2'",
+    "version": "0.0.0",
+    "plutusVersion": "v2",
+    "license": "Apache-2.0"
+  },
+  "validators": [
+    {
+      "title": "hello.spend",
+      "datum": {
+        "title": "datum",
+        "schema": {
+          "$ref": "#/definitions/amm_dex_v2~1types~1Datum"
+        }
+      },
+      "redeemer": {
+        "title": "_redeemer",
+        "schema": {
+          "$ref": "#/definitions/Data"
+        }
+      },
+      "compiledCode": "58910100003232323232323232322223253330083371e6eb8cc014c01c00520004890c48656c6c6f20576f726c642100149858c8010c94ccc020cdc3a400000226464a66601a601e0042930b1bae300d001300700416300837540066600200290001111199980319b8700100300a233330050053370000890011806000801001118021baa0015734aae7555cf2ab9f5742ae89",
+      "hash": "c123d0abad1de6b67bfcd9d37a98dab5b9a1e2e1761185f21a1d7d92"
+    }
+  ],
+  "definitions": {
+    "ByteArray": {
+      "dataType": "bytes"
+    },
+    "Data": {
+      "title": "Data",
+      "description": "Any Plutus data."
+    },
+    "amm_dex_v2/types/Datum": {
+      "title": "Datum",
+      "description": "Custom type",
+      "anyOf": [
+        {
+          "title": "Datum",
+          "dataType": "constructor",
+          "index": 0,
+          "fields": [
+            {
+              "title": "message",
+              "description": "A utf8 encoded message",
+              "$ref": "#/definitions/ByteArray"
+            }
+          ]
+        }
+      ]
+    }
+  }
+}
