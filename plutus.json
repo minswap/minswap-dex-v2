@@ -8,44 +8,675 @@
   },
   "validators": [
     {
-      "title": "hello.spend",
-      "datum": {
-        "title": "datum",
+      "title": "authen_minting_policy.validate_authen",
+      "redeemer": {
+        "title": "_redeemer",
         "schema": {
-          "$ref": "#/definitions/amm_dex_v2~1types~1Datum"
+          "$ref": "#/definitions/amm_dex_v2~1types~1AuthenRedeemer"
+        }
+      },
+      "compiledCode": "4f010000322253330034a22930b2b9a1",
+      "hash": "69eb6e27b7098c51cef74d8929553456e0ff6748c50a08c0daae7986"
+    },
+    {
+      "title": "factory_validator.validate_factory",
+      "datum": {
+        "title": "_datum",
+        "schema": {
+          "$ref": "#/definitions/amm_dex_v2~1types~1FactoryDatum"
         }
       },
       "redeemer": {
         "title": "_redeemer",
         "schema": {
-          "$ref": "#/definitions/Data"
+          "$ref": "#/definitions/amm_dex_v2~1types~1FactoryRedeemer"
         }
       },
-      "compiledCode": "58910100003232323232323232322223253330083371e6eb8cc014c01c00520004890c48656c6c6f20576f726c642100149858c8010c94ccc020cdc3a400000226464a66601a601e0042930b1bae300d001300700416300837540066600200290001111199980319b8700100300a233330050053370000890011806000801001118021baa0015734aae7555cf2ab9f5742ae89",
-      "hash": "c123d0abad1de6b67bfcd9d37a98dab5b9a1e2e1761185f21a1d7d92"
+      "parameters": [
+        {
+          "title": "_params",
+          "schema": {
+            "$ref": "#/definitions/amm_dex_v2~1types~1FactoryParams"
+          }
+        }
+      ],
+      "compiledCode": "5001000032222253330054a22930b2b9a1",
+      "hash": "b0243a149553e986ddf77d2f1144bb264c23fd9df7fb360d20559f71"
+    },
+    {
+      "title": "order_validator.validate_order",
+      "datum": {
+        "title": "_datum",
+        "schema": {
+          "$ref": "#/definitions/amm_dex_v2~1types~1OrderDatum"
+        }
+      },
+      "redeemer": {
+        "title": "_redeemer",
+        "schema": {
+          "$ref": "#/definitions/amm_dex_v2~1types~1OrderRedeemer"
+        }
+      },
+      "parameters": [
+        {
+          "title": "_pool_hash",
+          "schema": {
+            "$ref": "#/definitions/ByteArray"
+          }
+        }
+      ],
+      "compiledCode": "540100003223222253330064a22930b1bae0015735",
+      "hash": "383b77a61a8dfcc94b895fc85cbe1928951e6ff1db44990097405b40"
+    },
+    {
+      "title": "pool_validator.validate_pool",
+      "datum": {
+        "title": "_datum",
+        "schema": {
+          "$ref": "#/definitions/amm_dex_v2~1types~1PoolDatum"
+        }
+      },
+      "redeemer": {
+        "title": "_redeemer",
+        "schema": {
+          "$ref": "#/definitions/amm_dex_v2~1types~1PoolRedeemer"
+        }
+      },
+      "parameters": [
+        {
+          "title": "_params",
+          "schema": {
+            "$ref": "#/definitions/amm_dex_v2~1types~1PoolParams"
+          }
+        }
+      ],
+      "compiledCode": "5001000032222253330054a22930b2b9a1",
+      "hash": "b0243a149553e986ddf77d2f1144bb264c23fd9df7fb360d20559f71"
     }
   ],
   "definitions": {
+    "Bool": {
+      "title": "Bool",
+      "anyOf": [
+        {
+          "title": "False",
+          "dataType": "constructor",
+          "index": 0,
+          "fields": []
+        },
+        {
+          "title": "True",
+          "dataType": "constructor",
+          "index": 1,
+          "fields": []
+        }
+      ]
+    },
     "ByteArray": {
       "dataType": "bytes"
     },
-    "Data": {
-      "title": "Data",
-      "description": "Any Plutus data."
+    "Int": {
+      "dataType": "integer"
     },
-    "amm_dex_v2/types/Datum": {
-      "title": "Datum",
-      "description": "Custom type",
+    "List$Int": {
+      "dataType": "list",
+      "items": {
+        "$ref": "#/definitions/Int"
+      }
+    },
+    "Option$ByteArray": {
+      "title": "Optional",
       "anyOf": [
         {
-          "title": "Datum",
+          "title": "Some",
+          "description": "An optional value.",
           "dataType": "constructor",
           "index": 0,
           "fields": [
             {
-              "title": "message",
-              "description": "A utf8 encoded message",
               "$ref": "#/definitions/ByteArray"
+            }
+          ]
+        },
+        {
+          "title": "None",
+          "description": "Nothing.",
+          "dataType": "constructor",
+          "index": 1,
+          "fields": []
+        }
+      ]
+    },
+    "Option$aiken/transaction/credential/Referenced$aiken/transaction/credential/Credential": {
+      "title": "Optional",
+      "anyOf": [
+        {
+          "title": "Some",
+          "description": "An optional value.",
+          "dataType": "constructor",
+          "index": 0,
+          "fields": [
+            {
+              "$ref": "#/definitions/aiken~1transaction~1credential~1Referenced$aiken~1transaction~1credential~1Credential"
+            }
+          ]
+        },
+        {
+          "title": "None",
+          "description": "Nothing.",
+          "dataType": "constructor",
+          "index": 1,
+          "fields": []
+        }
+      ]
+    },
+    "Option$amm_dex_v2/types/ProfitSharing": {
+      "title": "Optional",
+      "anyOf": [
+        {
+          "title": "Some",
+          "description": "An optional value.",
+          "dataType": "constructor",
+          "index": 0,
+          "fields": [
+            {
+              "$ref": "#/definitions/amm_dex_v2~1types~1ProfitSharing"
+            }
+          ]
+        },
+        {
+          "title": "None",
+          "description": "Nothing.",
+          "dataType": "constructor",
+          "index": 1,
+          "fields": []
+        }
+      ]
+    },
+    "aiken/transaction/credential/Address": {
+      "title": "Address",
+      "description": "A Cardano `Address` typically holding one or two credential references.\n\n Note that legacy bootstrap addresses (a.k.a. 'Byron addresses') are\n completely excluded from Plutus contexts. Thus, from an on-chain\n perspective only exists addresses of type 00, 01, ..., 07 as detailed\n in [CIP-0019 :: Shelley Addresses](https://github.com/cardano-foundation/CIPs/tree/master/CIP-0019/#shelley-addresses).",
+      "anyOf": [
+        {
+          "title": "Address",
+          "dataType": "constructor",
+          "index": 0,
+          "fields": [
+            {
+              "title": "payment_credential",
+              "$ref": "#/definitions/aiken~1transaction~1credential~1Credential"
+            },
+            {
+              "title": "stake_credential",
+              "$ref": "#/definitions/Option$aiken~1transaction~1credential~1Referenced$aiken~1transaction~1credential~1Credential"
+            }
+          ]
+        }
+      ]
+    },
+    "aiken/transaction/credential/Credential": {
+      "title": "Credential",
+      "description": "A general structure for representing an on-chain `Credential`.\n\n Credentials are always one of two kinds: a direct public/private key\n pair, or a script (native or Plutus).",
+      "anyOf": [
+        {
+          "title": "VerificationKeyCredential",
+          "dataType": "constructor",
+          "index": 0,
+          "fields": [
+            {
+              "$ref": "#/definitions/ByteArray"
+            }
+          ]
+        },
+        {
+          "title": "ScriptCredential",
+          "dataType": "constructor",
+          "index": 1,
+          "fields": [
+            {
+              "$ref": "#/definitions/ByteArray"
+            }
+          ]
+        }
+      ]
+    },
+    "aiken/transaction/credential/Referenced$aiken/transaction/credential/Credential": {
+      "title": "Referenced",
+      "description": "Represent a type of object that can be represented either inline (by hash)\n or via a reference (i.e. a pointer to an on-chain location).\n\n This is mainly use for capturing pointers to a stake credential\n registration certificate in the case of so-called pointer addresses.",
+      "anyOf": [
+        {
+          "title": "Inline",
+          "dataType": "constructor",
+          "index": 0,
+          "fields": [
+            {
+              "$ref": "#/definitions/aiken~1transaction~1credential~1Credential"
+            }
+          ]
+        },
+        {
+          "title": "Pointer",
+          "dataType": "constructor",
+          "index": 1,
+          "fields": [
+            {
+              "title": "slot_number",
+              "$ref": "#/definitions/Int"
+            },
+            {
+              "title": "transaction_index",
+              "$ref": "#/definitions/Int"
+            },
+            {
+              "title": "certificate_index",
+              "$ref": "#/definitions/Int"
+            }
+          ]
+        }
+      ]
+    },
+    "amm_dex_v2/types/Asset": {
+      "title": "Asset",
+      "anyOf": [
+        {
+          "title": "Asset",
+          "dataType": "constructor",
+          "index": 0,
+          "fields": [
+            {
+              "title": "policy_id",
+              "$ref": "#/definitions/ByteArray"
+            },
+            {
+              "title": "asset_name",
+              "$ref": "#/definitions/ByteArray"
+            }
+          ]
+        }
+      ]
+    },
+    "amm_dex_v2/types/AuthenRedeemer": {
+      "title": "AuthenRedeemer",
+      "anyOf": [
+        {
+          "title": "MintFactoryAuthen",
+          "dataType": "constructor",
+          "index": 0,
+          "fields": []
+        },
+        {
+          "title": "CreatePool",
+          "dataType": "constructor",
+          "index": 1,
+          "fields": []
+        }
+      ]
+    },
+    "amm_dex_v2/types/FactoryDatum": {
+      "title": "FactoryDatum",
+      "anyOf": [
+        {
+          "title": "FactoryDatum",
+          "dataType": "constructor",
+          "index": 0,
+          "fields": [
+            {
+              "title": "head",
+              "$ref": "#/definitions/ByteArray"
+            },
+            {
+              "title": "tail",
+              "$ref": "#/definitions/ByteArray"
+            }
+          ]
+        }
+      ]
+    },
+    "amm_dex_v2/types/FactoryParams": {
+      "title": "FactoryParams",
+      "anyOf": [
+        {
+          "title": "FactoryParams",
+          "dataType": "constructor",
+          "index": 0,
+          "fields": [
+            {
+              "title": "authen_policy_id",
+              "$ref": "#/definitions/ByteArray"
+            },
+            {
+              "title": "pool_hash",
+              "$ref": "#/definitions/ByteArray"
+            },
+            {
+              "title": "order_hash",
+              "$ref": "#/definitions/ByteArray"
+            }
+          ]
+        }
+      ]
+    },
+    "amm_dex_v2/types/FactoryRedeemer": {
+      "title": "FactoryRedeemer",
+      "anyOf": [
+        {
+          "title": "FactoryRedeemer",
+          "dataType": "constructor",
+          "index": 0,
+          "fields": [
+            {
+              "title": "asset_a",
+              "$ref": "#/definitions/amm_dex_v2~1types~1Asset"
+            },
+            {
+              "title": "asset_b",
+              "$ref": "#/definitions/amm_dex_v2~1types~1Asset"
+            }
+          ]
+        }
+      ]
+    },
+    "amm_dex_v2/types/OrderDatum": {
+      "title": "OrderDatum",
+      "anyOf": [
+        {
+          "title": "OrderDatum",
+          "dataType": "constructor",
+          "index": 0,
+          "fields": [
+            {
+              "title": "sender",
+              "$ref": "#/definitions/aiken~1transaction~1credential~1Address"
+            },
+            {
+              "title": "receiver",
+              "$ref": "#/definitions/aiken~1transaction~1credential~1Address"
+            },
+            {
+              "title": "receiver_datum_hash_opt",
+              "$ref": "#/definitions/Option$ByteArray"
+            },
+            {
+              "title": "lp_asset",
+              "$ref": "#/definitions/amm_dex_v2~1types~1Asset"
+            },
+            {
+              "title": "step",
+              "$ref": "#/definitions/amm_dex_v2~1types~1OrderStep"
+            },
+            {
+              "title": "batcher_fee",
+              "$ref": "#/definitions/Int"
+            },
+            {
+              "title": "output_ada",
+              "$ref": "#/definitions/Int"
+            }
+          ]
+        }
+      ]
+    },
+    "amm_dex_v2/types/OrderRedeemer": {
+      "title": "OrderRedeemer",
+      "anyOf": [
+        {
+          "title": "ApplyOrder",
+          "dataType": "constructor",
+          "index": 0,
+          "fields": []
+        },
+        {
+          "title": "CancelOrder",
+          "dataType": "constructor",
+          "index": 1,
+          "fields": []
+        }
+      ]
+    },
+    "amm_dex_v2/types/OrderStep": {
+      "title": "OrderStep",
+      "anyOf": [
+        {
+          "title": "SwapExactIn",
+          "dataType": "constructor",
+          "index": 0,
+          "fields": [
+            {
+              "title": "a_to_b_direction",
+              "$ref": "#/definitions/Bool"
+            },
+            {
+              "title": "minimum_receive",
+              "$ref": "#/definitions/Int"
+            }
+          ]
+        },
+        {
+          "title": "SwapExactOut",
+          "dataType": "constructor",
+          "index": 1,
+          "fields": [
+            {
+              "title": "a_to_b_direction",
+              "$ref": "#/definitions/Bool"
+            },
+            {
+              "title": "expected_receive",
+              "$ref": "#/definitions/Int"
+            }
+          ]
+        },
+        {
+          "title": "Deposit",
+          "dataType": "constructor",
+          "index": 2,
+          "fields": [
+            {
+              "title": "minimum_lp",
+              "$ref": "#/definitions/Int"
+            }
+          ]
+        },
+        {
+          "title": "Withdraw",
+          "dataType": "constructor",
+          "index": 3,
+          "fields": [
+            {
+              "title": "minimum_asset_a",
+              "$ref": "#/definitions/Int"
+            },
+            {
+              "title": "minimum_asset_b",
+              "$ref": "#/definitions/Int"
+            }
+          ]
+        },
+        {
+          "title": "ZapIn",
+          "dataType": "constructor",
+          "index": 4,
+          "fields": [
+            {
+              "title": "a_to_b_direction",
+              "$ref": "#/definitions/Bool"
+            },
+            {
+              "title": "minimum_lp",
+              "$ref": "#/definitions/Int"
+            }
+          ]
+        },
+        {
+          "title": "ZapOut",
+          "dataType": "constructor",
+          "index": 5,
+          "fields": [
+            {
+              "title": "a_to_b_direction",
+              "$ref": "#/definitions/Bool"
+            },
+            {
+              "title": "minimum_receive",
+              "$ref": "#/definitions/Int"
+            }
+          ]
+        }
+      ]
+    },
+    "amm_dex_v2/types/PoolDatum": {
+      "title": "PoolDatum",
+      "anyOf": [
+        {
+          "title": "PoolDatum",
+          "dataType": "constructor",
+          "index": 0,
+          "fields": [
+            {
+              "title": "asset_a",
+              "$ref": "#/definitions/amm_dex_v2~1types~1Asset"
+            },
+            {
+              "title": "asset_b",
+              "$ref": "#/definitions/amm_dex_v2~1types~1Asset"
+            },
+            {
+              "title": "total_liquidity",
+              "$ref": "#/definitions/Int"
+            },
+            {
+              "title": "root_k_last",
+              "$ref": "#/definitions/Int"
+            },
+            {
+              "title": "trading_fee_numerator",
+              "$ref": "#/definitions/Int"
+            },
+            {
+              "title": "trading_fee_denominator",
+              "$ref": "#/definitions/Int"
+            },
+            {
+              "title": "order_hash",
+              "$ref": "#/definitions/ByteArray"
+            },
+            {
+              "title": "profit_a",
+              "$ref": "#/definitions/Int"
+            },
+            {
+              "title": "profit_b",
+              "$ref": "#/definitions/Int"
+            },
+            {
+              "title": "profit_sharing_opt",
+              "$ref": "#/definitions/Option$amm_dex_v2~1types~1ProfitSharing"
+            }
+          ]
+        }
+      ]
+    },
+    "amm_dex_v2/types/PoolParams": {
+      "title": "PoolParams",
+      "anyOf": [
+        {
+          "title": "PoolParams",
+          "dataType": "constructor",
+          "index": 0,
+          "fields": [
+            {
+              "title": "authen_policy_id",
+              "$ref": "#/definitions/ByteArray"
+            },
+            {
+              "title": "license_policy_id",
+              "$ref": "#/definitions/ByteArray"
+            },
+            {
+              "title": "admin_asset_name",
+              "$ref": "#/definitions/ByteArray"
+            },
+            {
+              "title": "maximum_deadline_range",
+              "$ref": "#/definitions/Int"
+            }
+          ]
+        }
+      ]
+    },
+    "amm_dex_v2/types/PoolRedeemer": {
+      "title": "PoolRedeemer",
+      "anyOf": [
+        {
+          "title": "ApplyPool",
+          "dataType": "constructor",
+          "index": 0,
+          "fields": [
+            {
+              "title": "batcher_address",
+              "$ref": "#/definitions/aiken~1transaction~1credential~1Address"
+            },
+            {
+              "title": "input_indexes",
+              "$ref": "#/definitions/List$Int"
+            },
+            {
+              "title": "license_index",
+              "$ref": "#/definitions/Int"
+            }
+          ]
+        },
+        {
+          "title": "UpdateFeeTo",
+          "dataType": "constructor",
+          "index": 1,
+          "fields": [
+            {
+              "title": "admin_index",
+              "$ref": "#/definitions/Int"
+            }
+          ]
+        },
+        {
+          "title": "WithdrawLiquidityShare",
+          "dataType": "constructor",
+          "index": 2,
+          "fields": [
+            {
+              "title": "admin_index",
+              "$ref": "#/definitions/Int"
+            },
+            {
+              "title": "fee_to_index",
+              "$ref": "#/definitions/Int"
+            }
+          ]
+        }
+      ]
+    },
+    "amm_dex_v2/types/ProfitSharing": {
+      "title": "ProfitSharing",
+      "anyOf": [
+        {
+          "title": "ProfitSharing",
+          "dataType": "constructor",
+          "index": 0,
+          "fields": [
+            {
+              "title": "fee_sharing_numerator",
+              "$ref": "#/definitions/Int"
+            },
+            {
+              "title": "fee_sharing_denominator",
+              "$ref": "#/definitions/Int"
+            },
+            {
+              "title": "fee_to",
+              "$ref": "#/definitions/aiken~1transaction~1credential~1Address"
+            },
+            {
+              "title": "fee_to_datum_hash_opt",
+              "$ref": "#/definitions/Option$ByteArray"
             }
           ]
         }
