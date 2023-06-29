@@ -42,6 +42,7 @@ pub type PoolRedeemer {
     input_indexes: List<Int>,
     license_index: Int,
   }
+  MultiRouting { batcher_address: Address, license_index: Int }
   UpdateFeeTo { admin_index: Int }
   WithdrawLiquidityShare { admin_index: Int, fee_to_index: Int }
 }
