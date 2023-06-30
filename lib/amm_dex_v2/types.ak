@@ -31,8 +31,6 @@ pub type PoolDatum {
   trading_fee_numerator: Int,
   trading_fee_denominator: Int,
   order_hash: ValidatorHash,
-  profit_a: Int,
-  profit_b: Int,
   profit_sharing_opt: Option<ProfitSharing>,
 }
 
@@ -88,13 +86,8 @@ pub type FactoryRedeemer {
   asset_b: Asset,
 }
 
-pub type FactoryParams {
-  authen_policy_id: PolicyId,
-  pool_hash: ValidatorHash,
-  order_hash: ValidatorHash,
-}
-
 pub type AuthenRedeemer {
   MintFactoryAuthen
   CreatePool
+  MintLiquidity
 }

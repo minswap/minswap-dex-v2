@@ -2,6 +2,8 @@ use aiken/builtin
 use aiken/bytearray
 use aiken/cbor
 use aiken/list
+use aiken/transaction/value.{AssetName, PolicyId, ada_asset_name, ada_policy_id}
+use amm_dex_v2/types.{Asset}
 
 const minus_ascii_code = 45
 
@@ -42,4 +44,20 @@ test test_digit_to_bytearray() {
     arr,
     fn(x) { digit_to_bytearray(x) == bytearray.from_string(cbor.diagnostic(x)) },
   )
+}
+
+pub fn sorted_asset(asset_a: Asset, asset_b: Asset) -> Bool {
+  let Asset { policy_id: asset_a_policy_id, asset_name: asset_a_asset_name } =
+    asset_a
+  let Asset { policy_id: asset_b_policy_id, asset_name: asset_b_asset_name } =
+    asset_b
+  if asset_a_policy_id == asset_b_policy_id {
+    builtin.less_than_bytearray(asset_a_asset_name, asset_b_asset_name)
+  } else {
+    builtin.less_than_bytearray(asset_a_policy_id, asset_b_policy_id)
+  }
+}
+
+pub fn is_ada_asset(pid: PolicyId, name: AssetName) -> Bool {
+  pid == ada_policy_id && name == ada_asset_name
 }
