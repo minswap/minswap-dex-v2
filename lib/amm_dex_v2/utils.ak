@@ -2,8 +2,9 @@ use aiken/builtin
 use aiken/bytearray
 use aiken/cbor
 use aiken/list
+use aiken/transaction.{Datum, InlineDatum}
 use aiken/transaction/value.{AssetName, PolicyId, ada_asset_name, ada_policy_id}
-use amm_dex_v2/types.{Asset}
+use amm_dex_v2/types.{Asset, FactoryDatum, PoolDatum}
 
 const minus_ascii_code = 45
 
@@ -60,4 +61,16 @@ pub fn sorted_asset(asset_a: Asset, asset_b: Asset) -> Bool {
 
 pub fn is_ada_asset(pid: PolicyId, name: AssetName) -> Bool {
   pid == ada_policy_id && name == ada_asset_name
+}
+
+pub fn parse_pool_datum(datum: Datum) -> PoolDatum {
+  expect InlineDatum(data) = datum
+  expect pool_datum: PoolDatum = data
+  pool_datum
+}
+
+pub fn parse_factory_datum(datum: Datum) -> FactoryDatum {
+  expect InlineDatum(data) = datum
+  expect factory_datum: FactoryDatum = data
+  factory_datum
 }

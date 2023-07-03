@@ -8,8 +8,8 @@ use aiken/transaction.{
 use aiken/transaction/minted_value
 use aiken/transaction/value.{AssetName}
 use amm_dex_v2/types.{
-  Asset, AuthenRedeemer, CreatePool, FactoryRedeemer, MintFactoryAuthen,
-  MintLiquidity,
+  Asset, AuthenRedeemer, CreatePool, FactoryDatum, FactoryRedeemer,
+  MintFactoryAuthen, MintLiquidity,
 }
 use amm_dex_v2/utils
 
@@ -23,7 +23,7 @@ validator(
     expect Mint(authen_policy_id) = purpose
     when redeemer is {
       MintFactoryAuthen -> {
-        let Transaction { inputs, mint, .. } = transaction
+        let Transaction { inputs, mint, outputs, .. } = transaction
         let has_ref =
           list.length(
             list.filter(
@@ -38,7 +38,30 @@ validator(
           minted_value.flatten(mint)
         let has_mint_single_factory_auth =
           minted_pid == authen_policy_id && minted_an == factory_auth_asset_name && minted_amount == 1
-        has_ref && has_mint_single_factory_auth
+        let factory_outputs =
+          list.filter(
+            outputs,
+            fn(output) {
+              let Output { value: out_value, .. } = output
+              value.quantity_of(
+                out_value,
+                authen_policy_id,
+                factory_auth_asset_name,
+              ) == 1
+            },
+          )
+        expect [factory_output] = factory_outputs
+        let Output { datum: factory_raw_datum, .. } = factory_output
+        let FactoryDatum { head, tail } =
+          utils.parse_factory_datum(factory_raw_datum)
+        let is_valid_initial_factory_datum =
+          head == #"00" && tail == #"ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff00"
+
+        // Validation
+        has_ref && // Transaction must has @out_ref in the input to make sure that this redeemer can only be executed once
+        has_mint_single_factory_auth && // Transaction must mint only 1 Factory Auth Asset
+        // Transaction must pay Factory Asset to UTxO with Initial Factory head/tail
+        is_valid_initial_factory_datum
       }
       CreatePool -> {
         let Transaction { inputs, mint, redeemers, .. } = transaction

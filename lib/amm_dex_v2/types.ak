@@ -1,5 +1,5 @@
 use aiken/hash.{Blake2b_224, Blake2b_256, Hash}
-use aiken/transaction/credential.{Address, Script, VerificationKey}
+use aiken/transaction/credential.{Address, Credential, Script, VerificationKey}
 use aiken/transaction/value.{AssetName, PolicyId}
 
 pub type CustomDatumHash =
@@ -19,7 +19,7 @@ pub type Asset {
 pub type ProfitSharing {
   fee_sharing_numerator: Int,
   fee_sharing_denominator: Int,
-  fee_to: Address,
+  fee_to: Credential,
   fee_to_datum_hash_opt: Option<CustomDatumHash>,
 }
 
@@ -43,13 +43,6 @@ pub type PoolRedeemer {
   MultiRouting { batcher_address: Address, license_index: Int }
   UpdateFeeTo { admin_index: Int }
   WithdrawLiquidityShare { admin_index: Int, fee_to_index: Int }
-}
-
-pub type PoolParams {
-  authen_policy_id: PolicyId,
-  license_policy_id: PolicyId,
-  admin_asset_name: AssetName,
-  maximum_deadline_range: Int,
 }
 
 pub type OrderStep {
