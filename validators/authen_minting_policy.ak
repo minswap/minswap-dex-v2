@@ -108,6 +108,8 @@ validator(
           policy_id: asset_b_policy_id,
           asset_name: asset_b_asset_name,
         } = asset_b
+
+        // todo, consider whether we need this logic or not?
         let is_sorted_asset = utils.sorted_asset(asset_a, asset_b)
         let asset_a_ident =
           bytearray.concat(asset_a_policy_id, asset_a_asset_name)
