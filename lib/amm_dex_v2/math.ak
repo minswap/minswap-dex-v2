@@ -3,7 +3,7 @@ use aiken/math
 
 pub fn calculate_sqrt(x: Int) -> Int {
   if x < 0 {
-    error
+    fail
   } else if x == 0 {
     0
   } else if x == 1 {
