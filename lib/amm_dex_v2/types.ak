@@ -28,6 +28,7 @@ pub type PoolDatum {
   asset_b: Asset,
   total_liquidity: Int,
   root_k_last: Int,
+  liquidity_share: Int,
   trading_fee_numerator: Int,
   trading_fee_denominator: Int,
   order_hash: ValidatorHash,
@@ -35,7 +36,7 @@ pub type PoolDatum {
 }
 
 pub type PoolRedeemer {
-  ApplyPool {
+  Batching {
     batcher_address: Address,
     input_indexes: List<Int>,
     license_index: Int,

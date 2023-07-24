@@ -1,9 +1,17 @@
 use aiken/builtin
 use aiken/bytearray
 use aiken/cbor
+use aiken/dict.{Dict}
+use aiken/hash.{Blake2b_256, Hash}
+use aiken/interval.{Finite}
 use aiken/list
-use aiken/transaction.{Datum, InlineDatum}
-use aiken/transaction/value.{AssetName, PolicyId, ada_asset_name, ada_policy_id}
+use aiken/string
+use aiken/transaction.{
+  Datum, DatumHash, InlineDatum, NoDatum, Output, ValidityRange,
+}
+use aiken/transaction/value.{
+  AssetName, PolicyId, Value, ada_asset_name, ada_policy_id,
+}
 use amm_dex_v2/types.{Asset, FactoryDatum, PoolDatum}
 
 const minus_ascii_code = 45
@@ -73,4 +81,107 @@ pub fn parse_factory_datum(datum: Datum) -> FactoryDatum {
   expect InlineDatum(data) = datum
   expect factory_datum: FactoryDatum = data
   factory_datum
+}
+
+pub fn compute_lp_asset_name(
+  asset_a_policy_id: PolicyId,
+  asset_a_asset_name: AssetName,
+  asset_b_policy_id: PolicyId,
+  asset_b_asset_name: AssetName,
+) -> AssetName {
+  let asset_a_ident =
+    hash.sha3_256(bytearray.concat(asset_a_policy_id, asset_a_asset_name))
+  let asset_b_ident =
+    hash.sha3_256(bytearray.concat(asset_b_policy_id, asset_b_asset_name))
+  let pair_ident = bytearray.concat(asset_a_ident, asset_b_ident)
+  hash.sha3_256(pair_ident)
+}
+
+test test_compute_lp_asset_name() {
+  let asset_a_policy_id = #""
+  let asset_a_asset_name = #""
+  let asset_b_policy_id =
+    #"29d222ce763455e3d7a09a665ce554f00ac89d2e99a1a83d267170c6"
+  let asset_b_asset_name = #"4d494e"
+  let lp_asset_name =
+    compute_lp_asset_name(
+      asset_a_policy_id,
+      asset_a_asset_name,
+      asset_b_policy_id,
+      asset_b_asset_name,
+    )
+  lp_asset_name == #"82e2b1fd27a7712a1a9cf750dfbea1a5778611b20e06dd6a611df7a643f8cb75"
+}
+
+pub fn must_parse_option(op: Option<a>) -> a {
+  expect Some(t) = op
+  t
+}
+
+pub fn find_license_deadline(license_symbol: PolicyId, val: Value) -> Int {
+  expect [(tn, am)] =
+    val
+      |> value.tokens(license_symbol)
+      |> dict.to_list()
+  if am == 1 {
+    bytearray_to_int(tn)
+  } else {
+    fail
+  }
+}
+
+pub fn bytearray_to_int(byte_arr: ByteArray) -> Int {
+  let byte_len = bytearray.length(byte_arr)
+  do_bytearray_to_int(byte_arr, 0, 0, byte_len)
+}
+
+pub fn do_bytearray_to_int(
+  byte_arr: ByteArray,
+  idx: Int,
+  acc: Int,
+  byte_len: Int,
+) -> Int {
+  if idx == byte_len {
+    acc
+  } else {
+    let byte = builtin.index_bytearray(byte_arr, idx)
+    if idx == 0 && byte == minus_ascii_code {
+      do_bytearray_to_int(byte_arr, idx + 1, acc, byte_len) * -1
+    } else if byte < zero_ascii_code || byte < zero_ascii_code || byte > zero_ascii_code + 9 {
+      fail
+    } else {
+      do_bytearray_to_int(
+        byte_arr,
+        idx + 1,
+        acc * 10 + ( byte - zero_ascii_code ),
+        byte_len,
+      )
+    }
+  }
+}
+
+test test_bytearray_to_int() {
+  let r1 = bytearray_to_int(string.to_bytearray(@"123"))
+  let r2 = bytearray_to_int(string.to_bytearray(@"111"))
+  r1 == 123 && r2 == 111
+}
+
+pub fn find_posix_time_range(time_rage: ValidityRange) -> (Int, Int) {
+  expect Finite(t1) = time_rage.lower_bound.bound_type
+  expect Finite(t2) = time_rage.upper_bound.bound_type
+  (t1, t2)
+}
+
+pub fn must_find_script_datum(
+  outputs: List<Output>,
+  datums: Dict<Hash<Blake2b_256, Data>, Data>,
+  output: Output,
+) -> Data {
+  let data_option =
+    when output.datum is {
+      NoDatum -> None
+      DatumHash(dh) -> transaction.find_datum(outputs, datums, dh)
+      InlineDatum(dat) -> Some(dat)
+    }
+  must_parse_option(data_option)
 }
