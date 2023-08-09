@@ -1,5 +1,4 @@
 use aiken/list
-use aiken/math
 
 pub fn calculate_sqrt(x: Int) -> Int {
   if x < 0 {
@@ -35,6 +34,10 @@ test test_calculate_sqrt() {
   )
 }
 
+pub fn calculate_pow(x: Int) -> Int {
+  x * x
+}
+
 pub fn calculate_initial_liquidity(out_a: Int, out_b: Int) -> Int {
   let p = out_a * out_b
   let sqrt = calculate_sqrt(p)
@@ -57,6 +60,21 @@ pub fn calculate_amount_out(
   let numerator = in_with_fee * reserve_out
   let denominator = trading_fee_denominator * reserve_in + in_with_fee
   numerator / denominator
+}
+
+pub fn calculate_amount_out_fraction(
+  reserve_in: Int,
+  reserve_out: Int,
+  amount_in_numerator: Int,
+  amount_in_denominator: Int,
+  trading_fee_numerator: Int,
+  trading_fee_denominator: Int,
+) -> (Int, Int) {
+  let diff = trading_fee_denominator - trading_fee_numerator
+  let numerator = amount_in_numerator * diff * reserve_out
+  let denominator =
+    trading_fee_denominator * amount_in_denominator * reserve_in + amount_in_numerator * diff
+  (numerator, denominator)
 }
 
 pub fn calculate_amount_in(
@@ -108,28 +126,105 @@ pub fn calculate_profit_sharing(
   }
 }
 
+// Calculate which amount will be swapped to supply enough amount for depositing
+// Refer: https://blog.alphafinance.io/onesideduniswap/
+pub fn calculate_swap_amount(
+  amount_in: Int,
+  amount_out: Int,
+  reserve_in: Int,
+  reserve_out: Int,
+  trading_fee_numerator: Int,
+  trading_fee_denominator: Int,
+) -> (Int, Int) {
+  let x = ( amount_out + reserve_out ) * reserve_in
+  let y =
+    4 * ( amount_out + reserve_out ) * (
+      amount_out * calculate_pow(reserve_in) - amount_in * reserve_in * reserve_out
+    )
+  let z = 2 * ( amount_out + reserve_out )
+  let a =
+    calculate_pow(x) * calculate_pow(
+      2 * trading_fee_denominator - trading_fee_numerator,
+    ) - y * trading_fee_denominator * (
+      trading_fee_denominator - trading_fee_numerator
+    )
+  let b = ( 2 * trading_fee_denominator - trading_fee_numerator ) * x
+  let numerator = calculate_sqrt(a) - b
+  let denominator = z * ( trading_fee_denominator - trading_fee_numerator )
+  (numerator, denominator)
+}
+
 pub fn calculate_deposit_amount(
   amount_a: Int,
   amount_b: Int,
   reserve_a: Int,
   reserve_b: Int,
   total_liquidity: Int,
-) -> Option<(Int, Int, Int)> {
-  let delta_lp_a = amount_a * total_liquidity / reserve_a
-  let delta_lp_b = amount_b * total_liquidity / reserve_b
-  let (necessary_a, necessary_b) =
-    if delta_lp_a > delta_lp_b {
-      (amount_b * reserve_a / reserve_b, amount_b)
-    } else if delta_lp_a < delta_lp_b {
-      (amount_a, amount_a * reserve_b / reserve_a)
-    } else {
-      (amount_a, amount_b)
-    }
-  let delta_liquidity = math.min(delta_lp_a, delta_lp_b)
-  if necessary_a > 0 && necessary_b > 0 && delta_liquidity > 0 {
-    Some((necessary_a, necessary_b, delta_liquidity))
+  trading_fee_numerator: Int,
+  trading_fee_denominator: Int,
+) -> (Int, Int) {
+  let ratio_a = amount_a * total_liquidity / reserve_a
+  let ratio_b = amount_b * total_liquidity / reserve_b
+  if ratio_a > ratio_b {
+    // swap a part of A to B
+    let (swap_amount_a_numerator, swap_amount_a_denominator) =
+      calculate_swap_amount(
+        amount_in: amount_a,
+        amount_out: amount_b,
+        reserve_in: reserve_a,
+        reserve_out: reserve_b,
+        trading_fee_numerator: trading_fee_numerator,
+        trading_fee_denominator: trading_fee_denominator,
+      )
+    let (receive_amount_b_numerator, receive_amount_b_denominator) =
+      calculate_amount_out_fraction(
+        reserve_in: reserve_a,
+        reserve_out: reserve_b,
+        amount_in_numerator: swap_amount_a_numerator,
+        amount_in_denominator: swap_amount_a_denominator,
+        trading_fee_numerator: trading_fee_numerator,
+        trading_fee_denominator: trading_fee_denominator,
+      )
+    let reserve_product_after_swap =
+      ( reserve_a * swap_amount_a_denominator - swap_amount_a_numerator ) * (
+        reserve_b * receive_amount_b_denominator - receive_amount_b_numerator
+      ) / ( swap_amount_a_denominator * receive_amount_b_denominator ) + 1
+    let lp_amount =
+      ( amount_b * receive_amount_b_denominator + receive_amount_b_numerator ) * total_liquidity / (
+        reserve_b * receive_amount_b_denominator - receive_amount_b_numerator
+      )
+    (reserve_product_after_swap, lp_amount)
+  } else if ratio_a < ratio_b {
+    // swap a part of B to A
+    let (swap_amount_b_numerator, swap_amount_b_denominator) =
+      calculate_swap_amount(
+        amount_in: amount_b,
+        amount_out: amount_a,
+        reserve_in: reserve_b,
+        reserve_out: reserve_a,
+        trading_fee_numerator: trading_fee_numerator,
+        trading_fee_denominator: trading_fee_denominator,
+      )
+    let (receive_amount_a_numerator, receive_amount_a_denominator) =
+      calculate_amount_out_fraction(
+        reserve_in: reserve_b,
+        reserve_out: reserve_a,
+        amount_in_numerator: swap_amount_b_numerator,
+        amount_in_denominator: swap_amount_b_denominator,
+        trading_fee_numerator: trading_fee_numerator,
+        trading_fee_denominator: trading_fee_denominator,
+      )
+    let reserve_product_after_swap =
+      ( reserve_b * swap_amount_b_denominator - swap_amount_b_numerator ) * (
+        reserve_a * receive_amount_a_denominator - receive_amount_a_numerator
+      ) / ( swap_amount_b_denominator * receive_amount_a_denominator ) + 1
+    let lp_amount =
+      ( amount_a * receive_amount_a_denominator + receive_amount_a_numerator ) * total_liquidity / (
+        reserve_a * receive_amount_a_denominator - receive_amount_a_numerator
+      )
+    (reserve_product_after_swap, lp_amount)
   } else {
-    None
+    (reserve_a * reserve_b, ratio_a)
   }
 }
 
@@ -144,116 +239,45 @@ pub fn calculate_withdraw(
   (amount_a, amount_b)
 }
 
-// Calculate which amount will be swapped to supply enough amount for depositing
-// Refer: https://blog.alphafinance.io/onesideduniswap/
-pub fn calculate_zap_swap_amount(
-  reserve_in: Int,
-  amount_in: Int,
+pub fn calculate_zap_out(
+  withdrawal_lp_amount: Int,
+  reserve_a: Int,
+  reserve_b: Int,
+  total_liquidity: Int,
+  a_to_b_direction: Bool,
   trading_fee_numerator: Int,
   trading_fee_denominator: Int,
-) -> Int {
-  let temp_reserve_in =
-    ( 2 * trading_fee_denominator - trading_fee_numerator ) * reserve_in
-  let diff = trading_fee_denominator - trading_fee_numerator
-  let numerator =
-    calculate_sqrt(
-      temp_reserve_in * temp_reserve_in + 4 * trading_fee_denominator * diff * reserve_in * amount_in,
-    ) - temp_reserve_in
-  let denominator = 2 * diff
-  numerator / denominator
+) -> (Int, Int) {
+  let (withdrawal_asset_a_amount, withdrawal_asset_b_amount) =
+    calculate_withdraw(
+      reserve_a: reserve_a,
+      reserve_b: reserve_b,
+      withdrawal_lp_amount: withdrawal_lp_amount,
+      total_liquidity: total_liquidity,
+    )
+  let reserve_a_after_withdraw = reserve_a - withdrawal_asset_a_amount
+  let reserve_b_after_withdraw = reserve_b - withdrawal_asset_b_amount
+  let amount_out =
+    if a_to_b_direction {
+      let extra_amount_out =
+        calculate_amount_out(
+          reserve_in: reserve_a_after_withdraw,
+          reserve_out: reserve_b_after_withdraw,
+          amount_in: withdrawal_asset_a_amount,
+          trading_fee_numerator: trading_fee_numerator,
+          trading_fee_denominator: trading_fee_denominator,
+        )
+      withdrawal_asset_b_amount + extra_amount_out
+    } else {
+      let extra_amount_out =
+        calculate_amount_out(
+          reserve_in: reserve_b_after_withdraw,
+          reserve_out: reserve_a_after_withdraw,
+          amount_in: withdrawal_asset_b_amount,
+          trading_fee_numerator: trading_fee_numerator,
+          trading_fee_denominator: trading_fee_denominator,
+        )
+      withdrawal_asset_a_amount + extra_amount_out
+    }
+  (reserve_a_after_withdraw * reserve_b_after_withdraw, amount_out)
 }
-// Calculate which LP amount will be received after deposit @amount_in 
-// Refer: https://blog.alphafinance.io/onesideduniswap/
-// pub fn calculate_zap_in(
-//   reserve_in: Int,
-//   reserve_out: Int,
-//   total_liquidity: Int,
-//   amount_in: Int,
-//   trading_fee_numerator: Int,
-//   trading_fee_denominator: Int,
-// ) -> Int {
-//   let swap_amount_in =
-//     calculate_zap_swap_amount(
-//       reserve_in,
-//       amount_in,
-//       trading_fee_numerator,
-//       trading_fee_denominator,
-//     )
-//   let swap_to_asset_out_amount =
-//     calculate_amount_out(
-//       reserve_in,
-//       reserve_out,
-//       swap_amount_in,
-//       trading_fee_numerator,
-//       trading_fee_denominator,
-//     )
-//   swap_to_asset_out_amount * total_liquidity / (
-//     reserve_out - swap_to_asset_out_amount
-//   )
-// }
-// pub fn calculate_zap_out(
-//   reserve_a: Int,
-//   reserve_b: Int,
-//   total_liquidity: Int,
-//   withdrawal_lp_amount: Int,
-//   trading_fee_numerator: Int,
-//   trading_fee_denominator: Int,
-//   a_to_b_direction: Bool,
-// ) -> Int {
-//   let reserve_out =
-//     if a_to_b_direction {
-//       reserve_b
-//     } else {
-//       reserve_a
-//     }
-//   let numerator =
-//     reserve_out * withdrawal_lp_amount * (
-//       trading_fee_denominator * ( 2 * total_liquidity - withdrawal_lp_amount ) - trading_fee_numerator * total_liquidity
-//     )
-//   let denominator =
-//     total_liquidity * (
-//       trading_fee_denominator * total_liquidity - trading_fee_numerator * withdrawal_lp_amount
-//     )
-//   numerator / denominator
-// }
-// pub fn calculate_zap_out_1(
-//   reserve_a: Int,
-//   reserve_b: Int,
-//   total_liquidity: Int,
-//   withdrawal_lp_amount: Int,
-//   trading_fee_numerator: Int,
-//   trading_fee_denominator: Int,
-//   a_to_b_direction: Bool,
-// ) -> Int {
-//   let (amount_a_out, amount_b_out) =
-//     calculate_withdraw(
-//       reserve_a: reserve_a,
-//       reserve_b: reserve_b,
-//       withdrawal_lp_amount: withdrawal_lp_amount,
-//       total_liquidity: total_liquidity,
-//     )
-//   let new_reserve_a = reserve_a - amount_a_out
-//   let new_reserve_b = reserve_b - amount_b_out
-
-//   if a_to_b_direction {
-//     let extra_out =
-//       calculate_amount_out(
-//         reserve_in: new_reserve_a,
-//         reserve_out: new_reserve_b,
-//         amount_in: amount_a_out,
-//         trading_fee_numerator: trading_fee_numerator,
-//         trading_fee_denominator: trading_fee_denominator,
-//       )
-//     amount_b_out + extra_out
-//   } else {
-//     let extra_out =
-//       calculate_amount_out(
-//         reserve_in: new_reserve_b,
-//         reserve_out: new_reserve_a,
-//         amount_in: amount_b_out,
-//         trading_fee_numerator: trading_fee_numerator,
-//         trading_fee_denominator: trading_fee_denominator,
-//       )
-//     amount_a_out + extra_out
-//   }
-// }
