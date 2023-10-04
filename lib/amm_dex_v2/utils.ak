@@ -12,7 +12,7 @@ use aiken/transaction.{
 use aiken/transaction/value.{
   AssetName, PolicyId, Value, ada_asset_name, ada_policy_id,
 }
-use amm_dex_v2/types.{Asset, FactoryDatum, PoolDatum}
+use amm_dex_v2/types.{Asset, FactoryDatum, OrderDatum, PoolDatum}
 
 const minus_ascii_code = 45
 
@@ -71,6 +71,35 @@ pub fn is_ada_asset(pid: PolicyId, name: AssetName) -> Bool {
   pid == ada_policy_id && name == ada_asset_name
 }
 
+pub fn verify_pool_datum_in_batch(datum1: PoolDatum, datum2: PoolDatum) -> Bool {
+  let PoolDatum {
+    asset_a: datum_1_asset_a,
+    asset_b: datum_1_asset_b,
+    trading_fee_numerator: datum_1_trading_fee_numerator,
+    trading_fee_denominator: datum_1_trading_fee_denominator,
+    order_hash: datum_1_order_hash,
+    profit_sharing_opt: datum_1_profit_sharing_opt,
+    ..
+  } = datum1
+
+  let PoolDatum {
+    asset_a: datum_2_asset_a,
+    asset_b: datum_2_asset_b,
+    trading_fee_numerator: datum_2_trading_fee_numerator,
+    trading_fee_denominator: datum_2_trading_fee_denominator,
+    order_hash: datum_2_order_hash,
+    profit_sharing_opt: datum_2_profit_sharing_opt,
+    ..
+  } = datum2
+  datum_1_asset_a == datum_2_asset_a && // hehe
+  datum_1_asset_b == datum_2_asset_b && // hehe
+  datum_1_trading_fee_numerator == datum_2_trading_fee_numerator && // hehe
+  datum_1_trading_fee_denominator == datum_2_trading_fee_denominator && // hehe
+  datum_1_order_hash == datum_2_order_hash && // hehe
+  datum_1_profit_sharing_opt == datum_2_profit_sharing_opt
+  // hehe
+}
+
 pub fn compare_pool_datum(datum1: PoolDatum, datum2: PoolDatum) -> Bool {
   let PoolDatum {
     asset_a: datum_1_asset_a,
@@ -105,18 +134,6 @@ pub fn compare_pool_datum(datum1: PoolDatum, datum2: PoolDatum) -> Bool {
   datum_1_order_hash == datum_2_order_hash && // hehe
   datum_1_profit_sharing_opt == datum_2_profit_sharing_opt
   // hehe
-}
-
-pub fn parse_pool_datum(datum: Datum) -> PoolDatum {
-  expect InlineDatum(data) = datum
-  expect pool_datum: PoolDatum = data
-  pool_datum
-}
-
-pub fn parse_factory_datum(datum: Datum) -> FactoryDatum {
-  expect InlineDatum(data) = datum
-  expect factory_datum: FactoryDatum = data
-  factory_datum
 }
 
 pub fn compute_lp_asset_name(
@@ -220,6 +237,30 @@ pub fn must_find_script_datum(
       InlineDatum(dat) -> Some(dat)
     }
   must_parse_option(data_option)
+}
+
+pub fn must_find_order_datum(
+  outputs: List<Output>,
+  datums: Dict<Hash<Blake2b_256, Data>, Data>,
+  output: Output,
+) -> OrderDatum {
+  expect order_datum: OrderDatum =
+    must_find_script_datum(outputs, datums, output)
+  order_datum
+}
+
+// TODO: Support both normal & inline datum
+pub fn parse_pool_datum(datum: Datum) -> PoolDatum {
+  expect InlineDatum(data) = datum
+  expect pool_datum: PoolDatum = data
+  pool_datum
+}
+
+// TODO: Support both normal & inline datum
+pub fn parse_factory_datum(datum: Datum) -> FactoryDatum {
+  expect InlineDatum(data) = datum
+  expect factory_datum: FactoryDatum = data
+  factory_datum
 }
 
 pub fn list_at_index(outputs: List<a>, payout_outputs_offset: Int) -> a {

@@ -18,27 +18,32 @@ validator(pool_hash: ValidatorHash) {
     expect Spend(_) = purpose
     when redeemer is {
       ApplyOrder -> {
-        let has_one_pool_input =
+        // TODO: Consider this line
+        let has_pool_input =
           list.length(
             list.filter(
               inputs,
               fn(i) {
-                let Input { output, .. } = i
-                let Output { address, .. } = output
-                let Address { payment_credential, .. } = address
+                let Input {
+                  output: Output {
+                    address: Address { payment_credential, .. },
+                    ..
+                  },
+                  ..
+                } = i
                 when payment_credential is {
                   ScriptCredential(hash) -> pool_hash == hash
                   _ -> False
                 }
               },
             ),
-          ) == 1
-        has_one_pool_input
+          ) > 0
+        has_pool_input
       }
       CancelOrder -> {
         expect order_datum: OrderDatum = raw_datum
-        let OrderDatum { sender, .. } = order_datum
-        let Address { payment_credential, .. } = sender
+        let OrderDatum { sender: Address { payment_credential, .. }, .. } =
+          order_datum
         expect VerificationKeyCredential(owner_pkh) = payment_credential
         list.has(extra_signatories, owner_pkh)
       }
