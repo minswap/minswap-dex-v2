@@ -58,7 +58,7 @@ validator(
         authen_policy_id,
         factory_auth_asset_name,
       ) == 1
-    let factory_outputs =
+    expect [factory_output_1, factory_output_2] =
       list.filter(
         outputs,
         fn(output) {
@@ -70,7 +70,6 @@ validator(
           ) == 1
         },
       )
-    expect [factory_output_1, factory_output_2] = factory_outputs
     let Output { datum: factory_output_1_raw_datum, .. } = factory_output_1
     let Output { datum: factory_output_2_raw_datum, .. } = factory_output_2
     let FactoryDatum { head: new_head_1, tail: new_tail_1 } =
@@ -83,7 +82,7 @@ validator(
         new_head_2,
         new_tail_2,
       ) && new_head_1 == current_head && new_tail_2 == current_tail && lp_asset_name == new_tail_1 && lp_asset_name == new_head_2
-    let pool_outputs =
+    expect [pool_output] =
       list.filter(
         outputs,
         fn(output) {
@@ -101,7 +100,6 @@ validator(
           }
         },
       )
-    expect [pool_output] = pool_outputs
     let Output { value: pool_output_value, datum: pool_output_raw_datum, .. } =
       pool_output
     let PoolDatum {
@@ -144,9 +142,9 @@ validator(
       pool_datum_trading_fee_numerator > 0 && pool_datum_trading_fee_denominator > 0 && pool_datum_trading_fee_numerator < pool_datum_trading_fee_denominator && // Trading Fee Numenator & Denominator must be positive, Trading Fee Numenator must be less than Trading Fee Denominator
       pool_datum_order_hash == order_hash
     // Order Hash in Pool Datum must be matched with Order Hash in parameters
-    let remaining_liquidity = 9223372036854775807 - total_liquidity - 1000
+    let remaining_liquidity = 9223372036854775807 - total_liquidity
 
-    // Remaining Liquidity must be MAX_LIQUIDITY - total_liquidity - 1000 (to avoid drainning liquidity)
+    // Remaining Liquidity must be MAX_LIQUIDITY - total_liquidity
     expect
       value.quantity_of(pool_output_value, authen_policy_id, lp_asset_name) == remaining_liquidity
     // Transaction must mint only 1 Factory Asset + 1 Pool Asset + MAX INT64 LP Asset

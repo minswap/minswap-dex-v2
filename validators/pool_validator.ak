@@ -201,10 +201,16 @@ fn get_batching_pool(
     value.quantity_of(pool_in_value, authen_policy_id, pool_auth_asset_name) == 1
   expect
     value.quantity_of(pool_out_value, authen_policy_id, pool_auth_asset_name) == 1
-  let reserve_a_in =
+  let temp_reserve_a_in =
     value.quantity_of(pool_in_value, asset_a_policy_id, asset_a_asset_name)
-  let reserve_a_out =
+  let temp_reserve_a_out =
     value.quantity_of(pool_out_value, asset_a_policy_id, asset_a_asset_name)
+  let (reserve_a_in, reserve_a_out) =
+    if utils.is_ada_asset(asset_a_policy_id, asset_a_asset_name) {
+      (temp_reserve_a_in - 3000000, temp_reserve_a_out - 3000000)
+    } else {
+      (temp_reserve_a_in, temp_reserve_a_out)
+    }
   let reserve_b_in =
     value.quantity_of(pool_in_value, asset_b_policy_id, asset_b_asset_name)
   let reserve_b_out =
