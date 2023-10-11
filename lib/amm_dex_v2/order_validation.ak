@@ -434,7 +434,7 @@ fn validate_zap_out(
   }
 }
 
-fn validate_multi_routing_swap(
+fn get_multi_routing_swap_amount_out(
   amount_in: Int,
   pool: BatchingPool,
   routing: SwapRouting,
@@ -451,8 +451,8 @@ fn validate_multi_routing_swap(
     pool_state_in
   let PoolState { reserve_a: new_reserve_a, reserve_b: new_reserve_b, .. } =
     pool_state_out
-  let SwapRouting { lp_asset: rounting_lp_asset, direction } = routing
-  expect pool_lp_asset == rounting_lp_asset
+  let SwapRouting { lp_asset: routing_lp_asset, direction } = routing
+  expect pool_lp_asset == routing_lp_asset
   let (reserve_in, reserve_out) =
     when direction is {
       AToB -> (old_reserve_a, old_reserve_b)
@@ -491,7 +491,8 @@ pub fn get_swap_multi_amount_out(
       when all_routings is {
         [] -> current_amount_out
         [routing, ..routings] -> {
-          let amount_out = validate_multi_routing_swap(amount_in, pool, routing)
+          let amount_out =
+            get_multi_routing_swap_amount_out(amount_in, pool, routing)
           get_swap_multi_amount_out(
             amount_in: amount_out,
             current_amount_out: amount_out,

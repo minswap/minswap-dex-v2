@@ -397,7 +397,6 @@ fn validate_batching(
     )
 
   let delta_total_liquidity = total_liquidity_out - total_liquidity_in
-  let delta_liquidity_share = liquidity_share_out - liquidity_share_in
   let delta_remaining_liquidity_supply =
     remaining_liquidity_supply_in - remaining_liquidity_supply_out
 
@@ -405,7 +404,7 @@ fn validate_batching(
   // Batching transaction transfers Liquidity Provider share to their addresses and keep Minswap Labs share
   // Minswap Labs share is stored in @liquidity_share variable in Pool Datum 
   let is_liquidity_correct =
-    delta_total_liquidity == delta_liquidity_share + delta_remaining_liquidity_supply
+    delta_total_liquidity == delta_remaining_liquidity_supply
 
   // Validate the Pool State (reserve_a, reserve_b, total_liquidity, liquidity_share, root_k_last) must be the same with the calculated amount after applying through all orders
   expect
