@@ -143,7 +143,6 @@ validator(
       pool_datum_order_hash == order_hash
     // Order Hash in Pool Datum must be matched with Order Hash in parameters
     let remaining_liquidity = 9223372036854775807 - total_liquidity
-
     // Remaining Liquidity must be MAX_LIQUIDITY - total_liquidity
     expect
       value.quantity_of(pool_output_value, authen_policy_id, lp_asset_name) == remaining_liquidity

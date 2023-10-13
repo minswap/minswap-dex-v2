@@ -44,10 +44,8 @@ pub type PoolRedeemer {
   MultiRouting {
     batcher_address: Address,
     license_index: Int,
-    pool_one_in_index: Int,
-    pool_two_in_index: Int,
-    pool_one_out_index: Int,
-    pool_two_out_index: Int,
+    routing_in_indexes: List<Int>,
+    routing_out_indexes: List<Int>,
   }
   UpdateFeeTo { admin_index: Int }
   WithdrawLiquidityShare { admin_index: Int, fee_to_index: Int }
@@ -56,6 +54,11 @@ pub type PoolRedeemer {
 pub type OrderDirection {
   AToB
   BToA
+}
+
+pub type SwapRouting {
+  lp_asset: Asset,
+  direction: OrderDirection,
 }
 
 // TODO: handle MultiRouting Order
@@ -72,11 +75,7 @@ pub type OrderStep {
   Deposit { minimum_lp: Int }
   Withdraw { minimum_asset_a: Int, minimum_asset_b: Int }
   ZapOut { direction: OrderDirection, minimum_receive: Int }
-  SwapMultiRouting {
-    target_lp_asset: Asset,
-    route_one_direction: OrderDirection,
-    minimum_receive: Int,
-  }
+  SwapMultiRouting { routings: List<SwapRouting>, minimum_receive: Int }
 }
 
 pub type OrderDatum {
@@ -108,4 +107,26 @@ pub type AuthenRedeemer {
   MintFactoryAuthen
   CreatePool
   MintLiquidity
+}
+
+pub type BatchingPool {
+  asset_a: Asset,
+  asset_b: Asset,
+  lp_asset: Asset,
+  trading_fee_numerator: Int,
+  trading_fee_denominator: Int,
+  profit_sharing: Option<ProfitSharing>,
+  order_hash: ValidatorHash,
+  address: Address,
+  pool_state_in: PoolState,
+  pool_state_out: PoolState,
+}
+
+pub type PoolState {
+  reserve_a: Int,
+  reserve_b: Int,
+  root_k_last: Int,
+  total_liquidity: Int,
+  liquidity_share: Int,
+  remaining_liquidity_supply: Int,
 }

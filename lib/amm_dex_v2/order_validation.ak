@@ -1,12 +1,14 @@
 use aiken/dict.{Dict}
 use aiken/hash.{Blake2b_256, Hash}
+use aiken/list
 use aiken/transaction.{DatumHash, Input, NoDatum, Output}
+use aiken/transaction/credential
 use aiken/transaction/value.{Value, ada_asset_name, ada_policy_id}
 use amm_dex_v2/math
 use amm_dex_v2/types.{
-  AToB, Asset, BToA, Deposit, OrderDatum, OrderDirection, ProfitSharing,
+  AToB, Asset, BToA, BatchingPool, Deposit, OrderDatum, PoolState, ProfitSharing,
   SwapExactIn, SwapExactInOCO, SwapExactInStopLoss, SwapExactOut,
-  SwapMultiRouting, Withdraw, ZapOut,
+  SwapMultiRouting, SwapRouting, Withdraw, ZapOut,
 }
 use amm_dex_v2/utils
 
@@ -424,20 +426,31 @@ fn validate_zap_out(
   }
 }
 
-fn validate_multi_routing_swap(
+fn get_multi_routing_swap_amount_out(
   amount_in: Int,
-  a_to_b_direction: Bool,
-  trading_fee_numerator: Int,
-  trading_fee_denominator: Int,
-  pool_state: (Int, Int),
-) -> (Int, Int, Int) {
-  let (reserve_a, reserve_b) = pool_state
+  pool: BatchingPool,
+  routing: SwapRouting,
+) -> Int {
+  let BatchingPool {
+    pool_state_in,
+    pool_state_out,
+    lp_asset: pool_lp_asset,
+    trading_fee_numerator,
+    trading_fee_denominator,
+    ..
+  } = pool
+  let PoolState { reserve_a: old_reserve_a, reserve_b: old_reserve_b, .. } =
+    pool_state_in
+  let PoolState { reserve_a: new_reserve_a, reserve_b: new_reserve_b, .. } =
+    pool_state_out
+  let SwapRouting { lp_asset: routing_lp_asset, direction } = routing
+  expect pool_lp_asset == routing_lp_asset
   let (reserve_in, reserve_out) =
-    if a_to_b_direction {
-      (reserve_a, reserve_b)
-    } else {
-      (reserve_b, reserve_a)
+    when direction is {
+      AToB -> (old_reserve_a, old_reserve_b)
+      BToA -> (old_reserve_b, old_reserve_a)
     }
+
   expect amount_in > 0
   let amount_out =
     math.calculate_amount_out(
@@ -447,48 +460,185 @@ fn validate_multi_routing_swap(
       trading_fee_numerator: trading_fee_numerator,
       trading_fee_denominator: trading_fee_denominator,
     )
-  if a_to_b_direction {
-    (reserve_a + amount_in, reserve_b - amount_out, amount_out)
-  } else {
-    (reserve_a - amount_out, reserve_b + amount_in, amount_out)
+  expect amount_out > 0
+  expect
+    when direction is {
+      AToB ->
+        old_reserve_a + amount_in == new_reserve_a && old_reserve_b - amount_out == new_reserve_b
+      BToA ->
+        old_reserve_a - amount_out == new_reserve_a && old_reserve_b + amount_in == new_reserve_b
+    }
+  amount_out
+}
+
+pub fn get_swap_multi_amount_out(
+  amount_in: Int,
+  current_amount_out: Int,
+  all_pools: List<BatchingPool>,
+  all_routings: List<SwapRouting>,
+) -> Int {
+  when all_pools is {
+    [] -> current_amount_out
+    [pool, ..pools] ->
+      when all_routings is {
+        [] -> current_amount_out
+        [routing, ..routings] -> {
+          let amount_out =
+            get_multi_routing_swap_amount_out(amount_in, pool, routing)
+          get_swap_multi_amount_out(
+            amount_in: amount_out,
+            current_amount_out: amount_out,
+            all_pools: pools,
+            all_routings: routings,
+          )
+        }
+      }
   }
 }
 
+test test_validate_swap_multi_routing_order() {
+  let pool_1_asset_a =
+    Asset { policy_id: ada_policy_id, asset_name: ada_asset_name }
+  let pool_1_asset_b =
+    Asset {
+      policy_id: #"e16c2dc8ae937e8d3790c7fd7168d7b994621ba14ca11415f39fed72",
+      asset_name: #"4d494e",
+    }
+  let pool_1_lp_asset =
+    Asset {
+      policy_id: #"1a919d30617fcbc8a92c337c59c3aecb6c4ded8f154e4c24528ccea2",
+      asset_name: #"6c3ea488e6ff940bb6fb1b18fd605b5931d9fefde6440117015ba484cf321200",
+    }
+  let pool_1_pool_state_in =
+    PoolState {
+      reserve_a: 27877961987941,
+      reserve_b: 414804973691450,
+      root_k_last: 0,
+      total_liquidity: 106241703280080,
+      liquidity_share: 0,
+      remaining_liquidity_supply: 9223372036854775807 - 106241703280080,
+    }
+  let pool_1_pool_state_out =
+    PoolState {
+      reserve_a: 27871263020717,
+      reserve_b: 414904973691450,
+      root_k_last: 0,
+      total_liquidity: 106241703280080,
+      liquidity_share: 0,
+      remaining_liquidity_supply: 9223372036854775807 - 106241703280080,
+    }
+  let pool1 =
+    BatchingPool {
+      asset_a: pool_1_asset_a,
+      asset_b: pool_1_asset_b,
+      lp_asset: pool_1_lp_asset,
+      trading_fee_numerator: 3,
+      trading_fee_denominator: 1000,
+      profit_sharing: None,
+      order_hash: #"6dc232f0f5832da2070a232ad2f58433883b9a277577048b40d17673",
+      address: credential.from_script(
+        #"11f3fb05033cb08e95f5c6d4b11891003dc762a46828a4b6f164efe2",
+      ),
+      pool_state_in: pool_1_pool_state_in,
+      pool_state_out: pool_1_pool_state_out,
+    }
+  let pool_2_asset_a =
+    Asset { policy_id: ada_policy_id, asset_name: ada_asset_name }
+  let pool_2_asset_b =
+    Asset {
+      policy_id: #"f66d78b4a3cb3d37afa0ec36461e51ecbde00f26c8f0a68f94b69880",
+      asset_name: #"69555344",
+    }
+  let pool_2_lp_asset =
+    Asset {
+      policy_id: #"1a919d30617fcbc8a92c337c59c3aecb6c4ded8f154e4c24528ccea2",
+      asset_name: #"452089abb5bf8cc59b678a2cd7b9ee952346c6c0aa1cf27df324310a70d02fc3",
+    }
+  let pool_2_pool_state_in =
+    PoolState {
+      reserve_a: 5281584632864,
+      reserve_b: 1432277778019,
+      root_k_last: 0,
+      total_liquidity: 2450077671602,
+      liquidity_share: 0,
+      remaining_liquidity_supply: 9223372036854775807 - 2450077671602,
+    }
+  let pool_2_pool_state_out =
+    PoolState {
+      reserve_a: 5288283600088,
+      reserve_b: 1430468867110,
+      root_k_last: 0,
+      total_liquidity: 2450077671602,
+      liquidity_share: 0,
+      remaining_liquidity_supply: 9223372036854775807 - 2450077671602,
+    }
+  let pool2 =
+    BatchingPool {
+      asset_a: pool_2_asset_a,
+      asset_b: pool_2_asset_b,
+      lp_asset: pool_2_lp_asset,
+      trading_fee_numerator: 3,
+      trading_fee_denominator: 1000,
+      profit_sharing: None,
+      order_hash: #"6dc232f0f5832da2070a232ad2f58433883b9a277577048b40d17673",
+      address: credential.from_script(
+        #"11f3fb05033cb08e95f5c6d4b11891003dc762a46828a4b6f164efe2",
+      ),
+      pool_state_in: pool_2_pool_state_in,
+      pool_state_out: pool_2_pool_state_out,
+    }
+  let pools =
+    [pool1, pool2]
+  let routing1 = SwapRouting { lp_asset: pool_1_lp_asset, direction: BToA }
+  let routing2 = SwapRouting { lp_asset: pool_2_lp_asset, direction: AToB }
+  let routings =
+    [routing1, routing2]
+  let amount_out =
+    get_swap_multi_amount_out(
+      amount_in: 100000000000,
+      current_amount_out: 0,
+      all_pools: pools,
+      all_routings: routings,
+    )
+  amount_out == 1808910909
+}
+
 pub fn validate_swap_multi_routing_order(
-  pool_one_in_state: (Int, Int),
-  pool_one_out_state: (Int, Int),
-  pool_two_in_state: (Int, Int),
-  pool_two_out_state: (Int, Int),
-  pool_one_trading_fee_numerator: Int,
-  pool_one_trading_fee_denominator: Int,
-  pool_two_trading_fee_numerator: Int,
-  pool_two_trading_fee_denominator: Int,
-  pool_one_asset_a: Asset,
-  pool_one_asset_b: Asset,
-  pool_two_asset_a: Asset,
-  pool_two_asset_b: Asset,
-  route_one_direction: OrderDirection,
+  pools: List<BatchingPool>,
+  routings: List<SwapRouting>,
   order_in_value: Value,
   order_out_value: Value,
   minimum_receive: Int,
   batcher_fee: Int,
   output_ada: Int,
 ) -> Bool {
-  let (route_two_direction, asset_in, asset_out) =
-    when route_one_direction is {
-      AToB ->
-        if pool_one_asset_b == pool_two_asset_a {
-          (AToB, pool_one_asset_a, pool_two_asset_b)
-        } else {
-          (BToA, pool_one_asset_a, pool_two_asset_a)
-        }
-      BToA ->
-        if pool_one_asset_a == pool_two_asset_a {
-          (AToB, pool_one_asset_b, pool_two_asset_b)
-        } else {
-          (BToA, pool_one_asset_b, pool_two_asset_a)
-        }
+  let first_routing = utils.list_at_index(routings, 0)
+  let last_routing = utils.list_at_index(routings, list.length(routings) - 1)
+  let first_pool = utils.list_at_index(pools, 0)
+  let last_pool = utils.list_at_index(pools, list.length(pools) - 1)
+  let SwapRouting { direction: first_routing_direction, .. } = first_routing
+  let SwapRouting { direction: last_routing_direction, .. } = last_routing
+  let BatchingPool {
+    asset_a: first_pool_asset_a,
+    asset_b: first_pool_asset_b,
+    ..
+  } = first_pool
+  let BatchingPool {
+    asset_a: last_pool_asset_a,
+    asset_b: last_pool_asset_b,
+    ..
+  } = last_pool
+  let asset_in =
+    when first_routing_direction is {
+      AToB -> first_pool_asset_a
+      BToA -> first_pool_asset_b
     }
+  let asset_out =
+    when last_routing_direction is {
+      AToB -> last_pool_asset_b
+      BToA -> last_pool_asset_a
+    }
+
   let Asset { policy_id: asset_in_policy_id, asset_name: asset_in_asset_name } =
     asset_in
   let Asset { policy_id: asset_out_policy_id, asset_name: asset_out_asset_name } =
@@ -501,41 +651,14 @@ pub fn validate_swap_multi_routing_order(
     } else {
       temp_amount_in
     }
-  let (pool_one_in_reserve_a, pool_one_in_reserve_b) = pool_one_in_state
-  let (pool_one_out_reserve_a, pool_one_out_reserve_b) = pool_one_out_state
-  let (pool_two_in_reserve_a, pool_two_in_reserve_b) = pool_two_in_state
-  let (pool_two_out_reserve_a, pool_two_out_reserve_b) = pool_two_out_state
-  let round_one_a_to_b_direction =
-    when route_one_direction is {
-      AToB -> True
-      BToA -> False
-    }
-  let round_two_a_to_b_direction =
-    when route_two_direction is {
-      AToB -> True
-      BToA -> False
-    }
-  let (new_pool_one_reserve_a, new_pool_one_reserve_b, round_one_amount_out) =
-    validate_multi_routing_swap(
+  let amount_out =
+    get_swap_multi_amount_out(
       amount_in: amount_in,
-      a_to_b_direction: round_one_a_to_b_direction,
-      trading_fee_numerator: pool_one_trading_fee_numerator,
-      trading_fee_denominator: pool_one_trading_fee_denominator,
-      pool_state: (pool_one_in_reserve_a, pool_one_in_reserve_b),
+      current_amount_out: 0,
+      all_pools: pools,
+      all_routings: routings,
     )
-  let (new_pool_two_reserve_a, new_pool_two_reserve_b, round_two_amount_out) =
-    validate_multi_routing_swap(
-      amount_in: round_one_amount_out,
-      a_to_b_direction: round_two_a_to_b_direction,
-      trading_fee_numerator: pool_two_trading_fee_numerator,
-      trading_fee_denominator: pool_two_trading_fee_denominator,
-      pool_state: (pool_two_in_reserve_a, pool_two_in_reserve_b),
-    )
-  expect round_two_amount_out >= minimum_receive
-  let is_valid_pool_one =
-    pool_one_out_reserve_a == new_pool_one_reserve_a && pool_one_out_reserve_b == new_pool_one_reserve_b
-  let is_valid_pool_two =
-    pool_two_out_reserve_a == new_pool_two_reserve_a && pool_two_out_reserve_b == new_pool_two_reserve_b
+  expect amount_out >= minimum_receive
   let actual_amount_out =
     value.quantity_of(
       order_out_value,
@@ -544,13 +667,13 @@ pub fn validate_swap_multi_routing_order(
     )
   let is_valid_amount_out =
     if utils.is_ada_asset(asset_out_policy_id, asset_out_asset_name) {
-      round_two_amount_out + output_ada == actual_amount_out
+      amount_out + output_ada == actual_amount_out
     } else {
       let ada_amount =
         value.quantity_of(order_out_value, ada_policy_id, ada_asset_name)
-      round_two_amount_out == actual_amount_out && ada_amount == output_ada
+      amount_out == actual_amount_out && ada_amount == output_ada
     }
-  expect is_valid_pool_one && is_valid_pool_two && is_valid_amount_out
+  expect is_valid_amount_out
   True
 }
 
@@ -752,7 +875,7 @@ pub fn apply_orders(
                   pool_state: pool_state,
                 )
               }
-              SwapMultiRouting(_, _, _) -> fail
+              SwapMultiRouting(_, _) -> fail
             }
           apply_orders(
             all_outputs: all_outputs,
