@@ -796,7 +796,7 @@ pub fn apply_orders(
                   trading_fee_denominator: trading_fee_denominator,
                   pool_state: pool_state,
                   checking_slippage_fn: fn(amount_out) {
-                    amount_out >= minimum_receive && amount_out <= stop_loss_receive
+                    amount_out >= minimum_receive || amount_out <= stop_loss_receive
                   },
                 )
               }
