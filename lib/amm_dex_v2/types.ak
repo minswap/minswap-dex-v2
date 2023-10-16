@@ -1,5 +1,5 @@
 use aiken/hash.{Blake2b_224, Blake2b_256, Hash}
-use aiken/transaction/credential.{Address, Credential, Script, VerificationKey}
+use aiken/transaction/credential.{Address, Script, VerificationKey}
 use aiken/transaction/value.{AssetName, PolicyId}
 
 pub type CustomDatumHash =
@@ -19,7 +19,7 @@ pub type Asset {
 pub type ProfitSharing {
   fee_sharing_numerator: Int,
   fee_sharing_denominator: Int,
-  fee_to: Credential,
+  fee_to: Address,
   fee_to_datum_hash_opt: Option<CustomDatumHash>,
 }
 
@@ -28,6 +28,7 @@ pub type PoolDatum {
   asset_b: Asset,
   total_liquidity: Int,
   root_k_last: Int,
+  liquidity_share: Int,
   trading_fee_numerator: Int,
   trading_fee_denominator: Int,
   order_hash: ValidatorHash,
@@ -35,23 +36,46 @@ pub type PoolDatum {
 }
 
 pub type PoolRedeemer {
-  ApplyPool {
+  Batching {
     batcher_address: Address,
     input_indexes: List<Int>,
     license_index: Int,
   }
-  MultiRouting { batcher_address: Address, license_index: Int }
+  MultiRouting {
+    batcher_address: Address,
+    license_index: Int,
+    routing_in_indexes: List<Int>,
+    routing_out_indexes: List<Int>,
+  }
   UpdateFeeTo { admin_index: Int }
   WithdrawLiquidityShare { admin_index: Int, fee_to_index: Int }
 }
 
+pub type OrderDirection {
+  AToB
+  BToA
+}
+
+pub type SwapRouting {
+  lp_asset: Asset,
+  direction: OrderDirection,
+}
+
+// TODO: handle MultiRouting Order
 pub type OrderStep {
-  SwapExactIn { a_to_b_direction: Bool, minimum_receive: Int }
-  SwapExactOut { a_to_b_direction: Bool, expected_receive: Int }
+  SwapExactIn { direction: OrderDirection, minimum_receive: Int }
+  // TODO: SwapExactInStopLoss & SwapExactInOCO: Find another way that's easier to understand for users
+  SwapExactInStopLoss { direction: OrderDirection, stop_loss_receive: Int }
+  SwapExactInOCO {
+    direction: OrderDirection,
+    minimum_receive: Int,
+    stop_loss_receive: Int,
+  }
+  SwapExactOut { direction: OrderDirection, expected_receive: Int }
   Deposit { minimum_lp: Int }
   Withdraw { minimum_asset_a: Int, minimum_asset_b: Int }
-  ZapIn { a_to_b_direction: Bool, minimum_lp: Int }
-  ZapOut { a_to_b_direction: Bool, minimum_receive: Int }
+  ZapOut { direction: OrderDirection, minimum_receive: Int }
+  SwapMultiRouting { routings: List<SwapRouting>, minimum_receive: Int }
 }
 
 pub type OrderDatum {
@@ -83,4 +107,26 @@ pub type AuthenRedeemer {
   MintFactoryAuthen
   CreatePool
   MintLiquidity
+}
+
+pub type BatchingPool {
+  asset_a: Asset,
+  asset_b: Asset,
+  lp_asset: Asset,
+  trading_fee_numerator: Int,
+  trading_fee_denominator: Int,
+  profit_sharing: Option<ProfitSharing>,
+  order_hash: ValidatorHash,
+  address: Address,
+  pool_state_in: PoolState,
+  pool_state_out: PoolState,
+}
+
+pub type PoolState {
+  reserve_a: Int,
+  reserve_b: Int,
+  root_k_last: Int,
+  total_liquidity: Int,
+  liquidity_share: Int,
+  remaining_liquidity_supply: Int,
 }
