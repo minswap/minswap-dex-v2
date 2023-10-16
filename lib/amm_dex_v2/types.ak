@@ -64,6 +64,13 @@ pub type SwapRouting {
 // TODO: handle MultiRouting Order
 pub type OrderStep {
   SwapExactIn { direction: OrderDirection, minimum_receive: Int }
+  // TODO: SwapExactInStopLoss & SwapExactInOCO: Find another way that's easier to understand for users
+  SwapExactInStopLoss { direction: OrderDirection, stop_loss_receive: Int }
+  SwapExactInOCO {
+    direction: OrderDirection,
+    minimum_receive: Int,
+    stop_loss_receive: Int,
+  }
   SwapExactOut { direction: OrderDirection, expected_receive: Int }
   Deposit { minimum_lp: Int }
   Withdraw { minimum_asset_a: Int, minimum_asset_b: Int }

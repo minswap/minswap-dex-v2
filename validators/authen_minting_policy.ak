@@ -1,6 +1,4 @@
-use aiken/bytearray
 use aiken/dict
-use aiken/hash
 use aiken/list
 use aiken/transaction.{
   Input, Mint, Output, OutputReference, ScriptContext, Spend, Transaction,

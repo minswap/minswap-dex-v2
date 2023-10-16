@@ -177,22 +177,18 @@ fn validate_mint(
       0,
       fn(v, acc) {
         let (pid, an, am) = v
-        if acc < 0 {
-          acc
-        } else {
-          if pid != authen_policy_id {
-            -1
+        if pid == authen_policy_id {
+          if an == factory_auth_asset_name && am == 1 {
+            acc + 1
+          } else if an == pool_auth_asset_name && am == 1 {
+            acc + 1
+          } else if an == lp_asset_name && am == 9223372036854775807 {
+            acc + 1
           } else {
-            if an == factory_auth_asset_name && am == 1 {
-              acc + 1
-            } else if an == pool_auth_asset_name && am == 1 {
-              acc + 1
-            } else if an == lp_asset_name && am == 9223372036854775807 {
-              acc + 1
-            } else {
-              -1
-            }
+            fail
           }
+        } else {
+          fail
         }
       },
     )

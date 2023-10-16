@@ -128,6 +128,11 @@ pub fn calculate_profit_sharing(
 
 // Calculate which amount will be swapped to supply enough amount for depositing
 // Refer: https://blog.alphafinance.io/onesideduniswap/
+// Final formular:
+//    swap_amount ^ 2 * ( 1 - f ) * ( amount_out + reserve_out )
+//      + swap_amount * ( 2 - f ) * reserve_in * ( amount_out + reserve_out )
+//      + ( reserve_in ^ 2 * amount_out + reserve_in * reserve_out * amount_out )
+//    = 0
 pub fn calculate_swap_amount(
   amount_in: Int,
   amount_out: Int,
@@ -142,13 +147,11 @@ pub fn calculate_swap_amount(
       amount_out * calculate_pow(reserve_in) - amount_in * reserve_in * reserve_out
     )
   let z = 2 * ( amount_out + reserve_out )
+  let b = ( 2 * trading_fee_denominator - trading_fee_numerator ) * x
   let a =
-    calculate_pow(x) * calculate_pow(
-      2 * trading_fee_denominator - trading_fee_numerator,
-    ) - y * trading_fee_denominator * (
+    calculate_pow(b) - y * trading_fee_denominator * (
       trading_fee_denominator - trading_fee_numerator
     )
-  let b = ( 2 * trading_fee_denominator - trading_fee_numerator ) * x
   let numerator = calculate_sqrt(a) - b
   let denominator = z * ( trading_fee_denominator - trading_fee_numerator )
   (numerator, denominator)
@@ -185,8 +188,9 @@ pub fn calculate_deposit_amount(
         trading_fee_numerator: trading_fee_numerator,
         trading_fee_denominator: trading_fee_denominator,
       )
+    // TODO: should +1?
     let reserve_product_after_swap =
-      ( reserve_a * swap_amount_a_denominator - swap_amount_a_numerator ) * (
+      ( reserve_a * swap_amount_a_denominator + swap_amount_a_numerator ) * (
         reserve_b * receive_amount_b_denominator - receive_amount_b_numerator
       ) / ( swap_amount_a_denominator * receive_amount_b_denominator ) + 1
     let lp_amount =
@@ -215,7 +219,7 @@ pub fn calculate_deposit_amount(
         trading_fee_denominator: trading_fee_denominator,
       )
     let reserve_product_after_swap =
-      ( reserve_b * swap_amount_b_denominator - swap_amount_b_numerator ) * (
+      ( reserve_b * swap_amount_b_denominator + swap_amount_b_numerator ) * (
         reserve_a * receive_amount_a_denominator - receive_amount_a_numerator
       ) / ( swap_amount_b_denominator * receive_amount_a_denominator ) + 1
     let lp_amount =

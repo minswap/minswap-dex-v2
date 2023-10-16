@@ -117,6 +117,7 @@ fn find_pool_input_and_output_in_batching(
   inputs: List<Input>,
   outputs: List<Output>,
 ) -> (Input, Output) {
+  // TODO: validate pool size
   let pool_inputs =
     list.filter(
       inputs,

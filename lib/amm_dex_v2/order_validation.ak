@@ -7,7 +7,8 @@ use aiken/transaction/value.{Value, ada_asset_name, ada_policy_id}
 use amm_dex_v2/math
 use amm_dex_v2/types.{
   AToB, Asset, BToA, BatchingPool, Deposit, OrderDatum, PoolState, ProfitSharing,
-  SwapExactIn, SwapExactOut, SwapMultiRouting, SwapRouting, Withdraw, ZapOut,
+  SwapExactIn, SwapExactInOCO, SwapExactInStopLoss, SwapExactOut,
+  SwapMultiRouting, SwapRouting, Withdraw, ZapOut,
 }
 use amm_dex_v2/utils
 
@@ -15,7 +16,6 @@ fn validate_swap_exact_in(
   order_in_value: Value,
   order_out_value: Value,
   a_to_b_direction: Bool,
-  minimum_receive: Int,
   asset_a: Asset,
   asset_b: Asset,
   batcher_fee: Int,
@@ -23,6 +23,7 @@ fn validate_swap_exact_in(
   trading_fee_numerator: Int,
   trading_fee_denominator: Int,
   pool_state: (Int, Int, Int, Int, Int),
+  checking_slippage_fn: fn(Int) -> Bool,
 ) -> (Int, Int, Int, Int, Int) {
   let (reserve_a, reserve_b, total_liquidity, liquidity_share, root_k_last) =
     pool_state
@@ -53,7 +54,7 @@ fn validate_swap_exact_in(
       trading_fee_numerator: trading_fee_numerator,
       trading_fee_denominator: trading_fee_denominator,
     )
-  let not_over_slippage = amount_out >= minimum_receive
+  let not_over_slippage = checking_slippage_fn(amount_out)
   let actual_amount_out =
     value.quantity_of(
       order_out_value,
@@ -196,7 +197,7 @@ fn validate_deposit(
     lp_asset
   let temp_amount_a =
     value.quantity_of(order_in_value, asset_a_policy_id, asset_a_asset_name)
-  let temp_amount_b =
+  let amount_b =
     value.quantity_of(order_in_value, asset_b_policy_id, asset_b_asset_name)
   let amount_a =
     if utils.is_ada_asset(asset_a_policy_id, asset_a_asset_name) {
@@ -204,13 +205,8 @@ fn validate_deposit(
     } else {
       temp_amount_a
     }
-  let amount_b =
-    if utils.is_ada_asset(asset_b_policy_id, asset_b_asset_name) {
-      temp_amount_b - ( batcher_fee + output_ada )
-    } else {
-      temp_amount_b
-    }
-  let has_enough_amount_in = amount_a > 0 && amount_b > 0
+  let has_enough_amount_in =
+    amount_a >= 0 && amount_b >= 0 && amount_a + amount_b > 0
   let (reserve_product_after_swap, lp_amount) =
     math.calculate_deposit_amount(
       amount_a: amount_a,
@@ -300,10 +296,6 @@ fn validate_withdraw(
   let is_valid_amount_out =
     if utils.is_ada_asset(asset_a_policy_id, asset_a_asset_name) {
       actual_amount_a_out == amount_a_out + output_ada && actual_amount_b_out == amount_b_out
-    } else if
-    utils.is_ada_asset(asset_b_policy_id, asset_b_asset_name){
-    
-      actual_amount_b_out == amount_b_out + output_ada && actual_amount_a_out == amount_a_out
     } else {
       ada_amount_out == output_ada && actual_amount_a_out == amount_a_out && actual_amount_b_out == amount_b_out
     }
@@ -685,6 +677,7 @@ pub fn validate_swap_multi_routing_order(
   True
 }
 
+// TODO: validate order input value size
 pub fn apply_orders(
   all_outputs: List<Output>,
   datum_dict: Dict<Hash<Blake2b_256, Data>, Data>,
@@ -749,7 +742,6 @@ pub fn apply_orders(
                   order_in_value: order_in_value,
                   order_out_value: order_out_value,
                   a_to_b_direction: a_to_b_direction,
-                  minimum_receive: minimum_receive,
                   asset_a: asset_a,
                   asset_b: asset_b,
                   batcher_fee: batcher_fee,
@@ -757,6 +749,55 @@ pub fn apply_orders(
                   trading_fee_numerator: trading_fee_numerator,
                   trading_fee_denominator: trading_fee_denominator,
                   pool_state: pool_state,
+                  checking_slippage_fn: fn(amount_out) {
+                    amount_out >= minimum_receive
+                  },
+                )
+              }
+              SwapExactInStopLoss(direction, stop_loss_receive) -> {
+                expect stop_loss_receive > 0
+                let a_to_b_direction =
+                  when direction is {
+                    AToB -> True
+                    BToA -> False
+                  }
+                validate_swap_exact_in(
+                  order_in_value: order_in_value,
+                  order_out_value: order_out_value,
+                  a_to_b_direction: a_to_b_direction,
+                  asset_a: asset_a,
+                  asset_b: asset_b,
+                  batcher_fee: batcher_fee,
+                  output_ada: output_ada,
+                  trading_fee_numerator: trading_fee_numerator,
+                  trading_fee_denominator: trading_fee_denominator,
+                  pool_state: pool_state,
+                  checking_slippage_fn: fn(amount_out) {
+                    amount_out <= stop_loss_receive
+                  },
+                )
+              }
+              SwapExactInOCO(direction, minimum_receive, stop_loss_receive) -> {
+                expect minimum_receive > 0 && stop_loss_receive > 0
+                let a_to_b_direction =
+                  when direction is {
+                    AToB -> True
+                    BToA -> False
+                  }
+                validate_swap_exact_in(
+                  order_in_value: order_in_value,
+                  order_out_value: order_out_value,
+                  a_to_b_direction: a_to_b_direction,
+                  asset_a: asset_a,
+                  asset_b: asset_b,
+                  batcher_fee: batcher_fee,
+                  output_ada: output_ada,
+                  trading_fee_numerator: trading_fee_numerator,
+                  trading_fee_denominator: trading_fee_denominator,
+                  pool_state: pool_state,
+                  checking_slippage_fn: fn(amount_out) {
+                    amount_out >= minimum_receive || amount_out <= stop_loss_receive
+                  },
                 )
               }
               SwapExactOut(direction, expected_receive) -> {
