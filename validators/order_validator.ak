@@ -14,10 +14,10 @@ validator(pool_hash: ValidatorHash) {
     context: ScriptContext,
   ) {
     let ScriptContext { transaction, purpose } = context
-    let Transaction { inputs, extra_signatories, .. } = transaction
     expect Spend(_) = purpose
     when redeemer is {
       ApplyOrder -> {
+        let Transaction { inputs, .. } = transaction
         // TODO: Consider this line
         let has_pool_input =
           list.length(
@@ -41,6 +41,7 @@ validator(pool_hash: ValidatorHash) {
         has_pool_input
       }
       CancelOrder -> {
+        let Transaction { extra_signatories, .. } = transaction
         expect order_datum: OrderDatum = raw_datum
         let OrderDatum { sender: Address { payment_credential, .. }, .. } =
           order_datum

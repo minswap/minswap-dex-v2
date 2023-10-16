@@ -143,7 +143,6 @@ validator(
       pool_datum_order_hash == order_hash
     // Order Hash in Pool Datum must be matched with Order Hash in parameters
     let remaining_liquidity = 9223372036854775807 - total_liquidity
-
     // Remaining Liquidity must be MAX_LIQUIDITY - total_liquidity
     expect
       value.quantity_of(pool_output_value, authen_policy_id, lp_asset_name) == remaining_liquidity
@@ -178,22 +177,18 @@ fn validate_mint(
       0,
       fn(v, acc) {
         let (pid, an, am) = v
-        if acc < 0 {
-          acc
-        } else {
-          if pid != authen_policy_id {
-            -1
+        if pid == authen_policy_id {
+          if an == factory_auth_asset_name && am == 1 {
+            acc + 1
+          } else if an == pool_auth_asset_name && am == 1 {
+            acc + 1
+          } else if an == lp_asset_name && am == 9223372036854775807 {
+            acc + 1
           } else {
-            if an == factory_auth_asset_name && am == 1 {
-              acc + 1
-            } else if an == pool_auth_asset_name && am == 1 {
-              acc + 1
-            } else if an == lp_asset_name && am == 9223372036854775807 {
-              acc + 1
-            } else {
-              -1
-            }
+            fail
           }
+        } else {
+          fail
         }
       },
     )

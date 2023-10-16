@@ -1,3 +1,4 @@
+use aiken/dict.{Dict}
 use aiken/list
 use aiken/transaction.{
   DatumHash, Input, NoDatum, Output, OutputReference, ScriptContext, Spend,
@@ -8,8 +9,8 @@ use aiken/transaction/value.{AssetName, PolicyId}
 use amm_dex_v2/order_validation
 use amm_dex_v2/pool_validation
 use amm_dex_v2/types.{
-  Asset, Batching, MultiRouting, OrderDatum, PoolDatum, PoolRedeemer,
-  ProfitSharing, SwapMultiRouting, UpdateFeeTo, ValidatorHash,
+  Asset, Batching, BatchingPool, CustomDatumHash, MultiRouting, OrderDatum,
+  PoolDatum, PoolRedeemer, PoolState, SwapMultiRouting, UpdateFeeTo,
   WithdrawLiquidityShare,
 }
 use amm_dex_v2/utils
@@ -29,67 +30,86 @@ validator(
     let ScriptContext { transaction, purpose } = context
     expect Spend(pool_input_ref) = purpose
     when redeemer is {
-      Batching(batcher_address, input_indexes, license_index) ->
+      Batching(batcher_address, input_indexes, license_index) -> {
+        let Transaction {
+          inputs,
+          outputs,
+          datums,
+          extra_signatories,
+          validity_range,
+          mint,
+          ..
+        } = transaction
+        expect
+          pool_validation.validate_common_batching(
+            inputs: inputs,
+            validity_range: validity_range,
+            extra_signatories: extra_signatories,
+            batcher_address: batcher_address,
+            license_policy_id: license_policy_id,
+            license_index: license_index,
+            maximum_deadline_range: maximum_deadline_range,
+            mint: mint,
+          )
         validate_batching(
           authen_policy_id: authen_policy_id,
-          license_policy_id: license_policy_id,
           pool_auth_asset_name: pool_auth_asset_name,
-          maximum_deadline_range: maximum_deadline_range,
-          transaction: transaction,
+          all_inputs: inputs,
+          all_outputs: outputs,
+          all_datums: datums,
           pool_input_ref: pool_input_ref,
           pool_in_datum: datum,
           batcher_address: batcher_address,
           input_indexes: input_indexes,
-          license_index: license_index,
         )
+      }
       MultiRouting(
         batcher_address,
         license_index,
-        pool_one_in_index,
-        pool_two_in_index,
-        pool_one_out_index,
-        pool_two_out_index,
-      ) ->
+        routing_in_indexes,
+        routing_out_indexes,
+      ) -> {
+        let routing_in_indexes_len = list.length(routing_in_indexes)
+        let routing_out_indexes_len = list.length(routing_out_indexes)
+        // TODO: Validate distinct indexes
+        expect
+          routing_in_indexes_len == routing_out_indexes_len && routing_out_indexes_len >= 2
+        let Transaction {
+          inputs,
+          outputs,
+          datums,
+          extra_signatories,
+          validity_range,
+          mint,
+          ..
+        } = transaction
+        expect
+          pool_validation.validate_common_batching(
+            inputs: inputs,
+            validity_range: validity_range,
+            extra_signatories: extra_signatories,
+            batcher_address: batcher_address,
+            license_policy_id: license_policy_id,
+            license_index: license_index,
+            maximum_deadline_range: maximum_deadline_range,
+            mint: mint,
+          )
         validate_swap_multi_routing(
           authen_policy_id: authen_policy_id,
-          license_policy_id: license_policy_id,
           pool_auth_asset_name: pool_auth_asset_name,
-          maximum_deadline_range: maximum_deadline_range,
-          transaction: transaction,
+          all_inputs: inputs,
+          all_outputs: outputs,
+          all_datums: datums,
           pool_input_ref: pool_input_ref,
           batcher_address: batcher_address,
-          license_index: license_index,
-          pool_one_in_index: pool_one_in_index,
-          pool_two_in_index: pool_two_in_index,
-          pool_one_out_index: pool_one_out_index,
-          pool_two_out_index: pool_two_out_index,
+          routing_in_indexes: routing_in_indexes,
+          routing_out_indexes: routing_out_indexes,
         )
+      }
       UpdateFeeTo(_admin_index) -> True
       WithdrawLiquidityShare(_admin_index, _fee_to_index) -> True
     }
   }
-}
-
-type BatchingPool {
-  asset_a: Asset,
-  asset_b: Asset,
-  lp_asset: Asset,
-  trading_fee_numerator: Int,
-  trading_fee_denominator: Int,
-  profit_sharing: Option<ProfitSharing>,
-  order_hash: ValidatorHash,
-  address: Address,
-  pool_state_in: PoolState,
-  pool_state_out: PoolState,
-}
-
-type PoolState {
-  reserve_a: Int,
-  reserve_b: Int,
-  root_k_last: Int,
-  total_liquidity: Int,
-  liquidity_share: Int,
-  remaining_liquidity_supply: Int,
 }
 
 fn find_pool_input_and_output_in_batching(
@@ -97,6 +117,7 @@ fn find_pool_input_and_output_in_batching(
   inputs: List<Input>,
   outputs: List<Output>,
 ) -> (Input, Output) {
+  // TODO: validate pool size
   let pool_inputs =
     list.filter(
       inputs,
@@ -255,30 +276,20 @@ fn get_batching_pool(
 
 fn validate_batching(
   authen_policy_id: PolicyId,
-  license_policy_id: PolicyId,
   pool_auth_asset_name: AssetName,
-  maximum_deadline_range: Int,
-  transaction: Transaction,
+  all_inputs: List<Input>,
+  all_outputs: List<Output>,
+  all_datums: Dict<CustomDatumHash, Data>,
   pool_input_ref: OutputReference,
   pool_in_datum: PoolDatum,
   batcher_address: Address,
   input_indexes: List<Int>,
-  license_index: Int,
 ) -> Bool {
-  let Transaction {
-    inputs,
-    outputs,
-    extra_signatories,
-    validity_range,
-    mint,
-    datums,
-    ..
-  } = transaction
   let (pool_input, pool_output) =
     find_pool_input_and_output_in_batching(
       pool_input_ref: pool_input_ref,
-      inputs: inputs,
-      outputs: outputs,
+      inputs: all_inputs,
+      outputs: all_outputs,
     )
   let BatchingPool {
     asset_a,
@@ -299,19 +310,9 @@ fn validate_batching(
       pool_auth_asset_name: pool_auth_asset_name,
       pool_in_datum: pool_in_datum,
     )
-  expect
-    pool_validation.validate_batcher(
-      inputs: inputs,
-      validity_range: validity_range,
-      extra_signatories: extra_signatories,
-      batcher_address: batcher_address,
-      license_policy_id: license_policy_id,
-      license_index: license_index,
-      maximum_deadline_range: maximum_deadline_range,
-    )
   let user_inputs =
     list.filter(
-      inputs,
+      all_inputs,
       fn(input) {
         let Input { output: out, .. } = input
         let Output { address: addr, .. } = out
@@ -340,7 +341,7 @@ fn validate_batching(
   // Their ordering must be the same with @sorted_order_inputs, so @order_outputs at index i is the output if @sorted_order_inputs at index i
   let user_outputs =
     list.filter(
-      outputs,
+      all_outputs,
       fn(output) {
         let Output { address: addr, .. } = output
         addr != pool_address && addr != batcher_address
@@ -377,8 +378,8 @@ fn validate_batching(
     new_root_k_last,
   ) =
     order_validation.apply_orders(
-      all_outputs: outputs,
-      datum_dict: datums,
+      all_outputs: all_outputs,
+      datum_dict: all_datums,
       asset_a: asset_a,
       asset_b: asset_b,
       lp_asset: lp_asset,
@@ -399,13 +400,13 @@ fn validate_batching(
   let delta_total_liquidity = total_liquidity_out - total_liquidity_in
   let delta_liquidity_share = liquidity_share_out - liquidity_share_in
   let delta_remaining_liquidity_supply =
-    remaining_liquidity_supply_in - remaining_liquidity_supply_out
+    remaining_liquidity_supply_out - remaining_liquidity_supply_in
 
   // Total Liquidity contains both share of Liquidity Provider and Minswap Labs
   // Batching transaction transfers Liquidity Provider share to their addresses and keep Minswap Labs share
   // Minswap Labs share is stored in @liquidity_share variable in Pool Datum 
   let is_liquidity_correct =
-    delta_total_liquidity == delta_liquidity_share + delta_remaining_liquidity_supply
+    delta_total_liquidity == delta_liquidity_share - delta_remaining_liquidity_supply
 
   // Validate the Pool State (reserve_a, reserve_b, total_liquidity, liquidity_share, root_k_last) must be the same with the calculated amount after applying through all orders
   expect
@@ -415,24 +416,19 @@ fn validate_batching(
     new_liquidity_share == liquidity_share_out && // New Liquidity Share must be equals with @liquidity_share variable in Pool Out Datum
     new_root_k_last == root_k_last_out && // New RootKLast must be equals with @root_k_last variable in Pool Out Datum
     is_liquidity_correct
-  let mint_value = value.from_minted_value(mint)
-  expect [] = value.flatten(mint_value)
   True
 }
 
 fn validate_swap_multi_routing(
   authen_policy_id: PolicyId,
-  license_policy_id: PolicyId,
   pool_auth_asset_name: AssetName,
-  maximum_deadline_range: Int,
-  transaction: Transaction,
+  all_inputs: List<Input>,
+  all_outputs: List<Output>,
+  all_datums: Dict<CustomDatumHash, Data>,
   pool_input_ref: OutputReference,
   batcher_address: Address,
-  license_index: Int,
-  pool_one_in_index: Int,
-  pool_two_in_index: Int,
-  pool_one_out_index: Int,
-  pool_two_out_index: Int,
+  routing_in_indexes: List<Int>,
+  routing_out_indexes: List<Int>,
 ) -> Bool {
   // 1. Find Pool Payment Credential
   // 2. Find all Pool Inputs and expect only 2 pool Inputs
@@ -440,85 +436,27 @@ fn validate_swap_multi_routing(
   // 4. Find SwapMultiRouting Order and expect only 1 Order
   // 5. Verify that LP Asset of 2 Pools in order is matched
   // 6. Detect Pool 1 & Pool 2 of these pools above and apply Order via them
-  let Transaction {
-    inputs,
-    outputs,
-    extra_signatories,
-    validity_range,
-    mint,
-    datums,
-    ..
-  } = transaction
-
-  let mint_value = value.from_minted_value(mint)
-  expect [] = value.flatten(mint_value)
-  expect
-    pool_validation.validate_batcher(
-      inputs: inputs,
-      validity_range: validity_range,
-      extra_signatories: extra_signatories,
-      batcher_address: batcher_address,
-      license_policy_id: license_policy_id,
-      license_index: license_index,
-      maximum_deadline_range: maximum_deadline_range,
-    )
-  let (pool_one_in, pool_two_in, pool_one_out, pool_two_out) =
-    find_pool_inputs_and_outputs_in_multi_routing(
+  let batching_pools =
+    find_multi_routing_pools(
+      authen_policy_id: authen_policy_id,
+      pool_auth_asset_name: pool_auth_asset_name,
       pool_input_ref: pool_input_ref,
-      inputs: inputs,
-      outputs: outputs,
-      pool_one_in_index: pool_one_in_index,
-      pool_two_in_index: pool_two_in_index,
-      pool_one_out_index: pool_one_out_index,
-      pool_two_out_index: pool_two_out_index,
+      inputs: all_inputs,
+      outputs: all_outputs,
+      routing_in_indexes: routing_in_indexes,
+      routing_out_indexes: routing_out_indexes,
     )
-  let Input { output: Output { datum: pool_one_in_datum_raw, .. }, .. } =
-    pool_one_in
-  let pool_one_in_datum = utils.parse_pool_datum(pool_one_in_datum_raw)
-  let Input { output: Output { datum: pool_two_in_datum_raw, .. }, .. } =
-    pool_two_in
-  let pool_two_in_datum = utils.parse_pool_datum(pool_two_in_datum_raw)
+
   let BatchingPool {
-    asset_a: pool_one_asset_a,
-    asset_b: pool_one_asset_b,
-    lp_asset: pool_one_lp_asset,
-    trading_fee_numerator: pool_one_trading_fee_numerator,
-    trading_fee_denominator: pool_one_trading_fee_denominator,
-    order_hash: pool_one_order_hash,
-    address: pool_one_address,
-    pool_state_in: pool_one_pool_state_in,
-    pool_state_out: pool_one_pool_state_out,
+    order_hash,
+    address: Address { payment_credential: pool_payment_credential, .. },
+    lp_asset: pool_lp_asset,
     ..
-  } =
-    get_batching_pool(
-      pool_input: pool_one_in,
-      pool_output: pool_one_out,
-      authen_policy_id: authen_policy_id,
-      pool_auth_asset_name: pool_auth_asset_name,
-      pool_in_datum: pool_one_in_datum,
-    )
-  let BatchingPool {
-    asset_a: pool_two_asset_a,
-    asset_b: pool_two_asset_b,
-    lp_asset: pool_two_lp_asset,
-    trading_fee_numerator: pool_two_trading_fee_numerator,
-    trading_fee_denominator: pool_two_trading_fee_denominator,
-    address: pool_two_address,
-    pool_state_in: pool_two_pool_state_in,
-    pool_state_out: pool_two_pool_state_out,
-    ..
-  } =
-    get_batching_pool(
-      pool_input: pool_two_in,
-      pool_output: pool_two_out,
-      authen_policy_id: authen_policy_id,
-      pool_auth_asset_name: pool_auth_asset_name,
-      pool_in_datum: pool_two_in_datum,
-    )
+  } = utils.list_at_index(batching_pools, 0)
 
   let order_inputs =
     list.filter(
-      inputs,
+      all_inputs,
       fn(input) {
         let Input {
           output: Output {
@@ -528,7 +466,7 @@ fn validate_swap_multi_routing(
           ..
         } = input
         when payment_cred is {
-          ScriptCredential(hash) -> hash == pool_one_order_hash
+          ScriptCredential(hash) -> hash == order_hash
           _ -> False
         }
       },
@@ -536,10 +474,11 @@ fn validate_swap_multi_routing(
   expect [order_input] = order_inputs
   let order_outputs =
     list.filter(
-      outputs,
+      all_outputs,
       fn(output) {
         let Output { address: addr, .. } = output
-        addr != pool_one_address && addr != pool_two_address && addr != batcher_address
+        let Address { payment_credential: payment_cred, .. } = addr
+        addr != batcher_address && payment_cred != pool_payment_credential
       },
     )
   expect [order_output] = order_outputs
@@ -559,7 +498,7 @@ fn validate_swap_multi_routing(
     output_ada,
     lp_asset: order_lp_asset,
     ..
-  } = utils.must_find_order_datum(outputs, datums, order_in_output)
+  } = utils.must_find_order_datum(all_outputs, all_datums, order_in_output)
   let is_valid_receiver_datum_hash =
     when receiver_datum_hash_opt is {
       Some(datum_hash) -> {
@@ -569,45 +508,13 @@ fn validate_swap_multi_routing(
       None -> order_output_datum == NoDatum
     }
   expect
-    receiver == output_address && batcher_fee > 0 && output_ada > 0 && is_valid_receiver_datum_hash && pool_one_lp_asset == order_lp_asset
+    receiver == output_address && batcher_fee > 0 && output_ada > 0 && is_valid_receiver_datum_hash && pool_lp_asset == order_lp_asset
   when order_step is {
-    SwapMultiRouting(target_lp_asset, route_one_direction, minimum_receive) -> {
-      expect target_lp_asset == pool_two_lp_asset && minimum_receive > 0
-      let PoolState {
-        reserve_a: pool_one_reserve_a_in,
-        reserve_b: pool_one_reserve_b_in,
-        ..
-      } = pool_one_pool_state_in
-      let PoolState {
-        reserve_a: pool_one_reserve_a_out,
-        reserve_b: pool_one_reserve_b_out,
-        ..
-      } = pool_one_pool_state_out
-      let PoolState {
-        reserve_a: pool_two_reserve_a_in,
-        reserve_b: pool_two_reserve_b_in,
-        ..
-      } = pool_two_pool_state_in
-      let PoolState {
-        reserve_a: pool_two_reserve_a_out,
-        reserve_b: pool_two_reserve_b_out,
-        ..
-      } = pool_two_pool_state_out
-
+    SwapMultiRouting(routings, minimum_receive) -> {
+      expect minimum_receive > 0
       order_validation.validate_swap_multi_routing_order(
-        pool_one_in_state: (pool_one_reserve_a_in, pool_one_reserve_b_in),
-        pool_one_out_state: (pool_one_reserve_a_out, pool_one_reserve_b_out),
-        pool_two_in_state: (pool_two_reserve_a_in, pool_two_reserve_b_in),
-        pool_two_out_state: (pool_two_reserve_a_out, pool_two_reserve_b_out),
-        pool_one_trading_fee_numerator: pool_one_trading_fee_numerator,
-        pool_one_trading_fee_denominator: pool_one_trading_fee_denominator,
-        pool_two_trading_fee_numerator: pool_two_trading_fee_numerator,
-        pool_two_trading_fee_denominator: pool_two_trading_fee_denominator,
-        pool_one_asset_a: pool_one_asset_a,
-        pool_one_asset_b: pool_one_asset_b,
-        pool_two_asset_a: pool_two_asset_a,
-        pool_two_asset_b: pool_two_asset_b,
-        route_one_direction: route_one_direction,
+        pools: batching_pools,
+        routings: routings,
         order_in_value: order_in_value,
         order_out_value: order_out_value,
         minimum_receive: minimum_receive,
@@ -620,21 +527,22 @@ fn validate_swap_multi_routing(
 }
 
 // TODO: We need carefully verify these logic below 
-fn find_pool_inputs_and_outputs_in_multi_routing(
+fn find_multi_routing_pools(
+  authen_policy_id: PolicyId,
+  pool_auth_asset_name: AssetName,
   pool_input_ref: OutputReference,
   inputs: List<Input>,
   outputs: List<Output>,
-  pool_one_in_index: Int,
-  pool_two_in_index: Int,
-  pool_one_out_index: Int,
-  pool_two_out_index: Int,
-) -> (Input, Input, Output, Output) {
-  expect
-    pool_one_in_index != pool_two_in_index && pool_one_out_index != pool_two_out_index
-  let pool_one_in = utils.list_at_index(inputs, pool_one_in_index)
-  let pool_one_out = utils.list_at_index(outputs, pool_one_out_index)
-  let pool_two_in = utils.list_at_index(inputs, pool_two_in_index)
-  let pool_two_out = utils.list_at_index(outputs, pool_two_out_index)
+  routing_in_indexes: List<Int>,
+  routing_out_indexes: List<Int>,
+) -> List<BatchingPool> {
+  let pool_ins =
+    list.map(routing_in_indexes, fn(idx) { utils.list_at_index(inputs, idx) })
+
+  let pool_outs =
+    list.map(routing_out_indexes, fn(idx) { utils.list_at_index(outputs, idx) })
+
+  let pool_len = list.length(pool_ins)
 
   // find input of current script
   expect [own_pool_input] =
@@ -665,7 +573,7 @@ fn find_pool_inputs_and_outputs_in_multi_routing(
           payment_credential == own_pool_payment_credential
         },
       ),
-    ) == 2
+    ) == pool_len
   // verify that there's only 2 pools the outputs
   expect
     list.length(
@@ -677,46 +585,34 @@ fn find_pool_inputs_and_outputs_in_multi_routing(
           payment_credential == own_pool_payment_credential
         },
       ),
-    ) == 2
-  let Input {
-    output: Output {
-      address: pool_one_in_address,
-      datum: pool_one_in_datum_raw,
-      ..
-    },
-    output_reference: pool_one_in_out_ref,
-  } = pool_one_in
-  let Input {
-    output: Output {
-      address: pool_two_in_address,
-      datum: pool_two_in_datum_raw,
-      ..
-    },
-    output_reference: pool_two_in_out_ref,
-  } = pool_two_in
-  expect
-    pool_one_in_out_ref == pool_input_ref || pool_two_in_out_ref == pool_input_ref
-  let Output {
-    address: pool_one_out_address,
-    datum: pool_one_out_datum_raw,
-    ..
-  } = pool_one_out
-  let pool_one_in_datum = utils.parse_pool_datum(pool_one_in_datum_raw)
-  let pool_one_out_datum = utils.parse_pool_datum(pool_one_out_datum_raw)
+    ) == pool_len
+  utils.zip_with(
+    pool_ins,
+    pool_outs,
+    fn(pool_in, pool_out) {
+      let Input {
+        output: Output {
+          address: pool_in_address,
+          datum: pool_in_datum_raw,
+          ..
+        },
+        ..
+      } = pool_in
+      let Output { address: pool_out_address, datum: pool_out_datum_raw, .. } =
+        pool_out
+      let pool_in_datum = utils.parse_pool_datum(pool_in_datum_raw)
+      let pool_out_datum = utils.parse_pool_datum(pool_out_datum_raw)
 
-  expect
-    pool_one_in_address == pool_one_out_address && // hehe
-    utils.compare_pool_datum(pool_one_in_datum, pool_one_out_datum)
-  let Output {
-    address: pool_two_out_address,
-    datum: pool_two_out_datum_raw,
-    ..
-  } = pool_two_out
-  let pool_two_in_datum = utils.parse_pool_datum(pool_two_in_datum_raw)
-  let pool_two_out_datum = utils.parse_pool_datum(pool_two_out_datum_raw)
-
-  expect
-    pool_two_in_address == pool_two_out_address && // hehe
-    utils.compare_pool_datum(pool_two_in_datum, pool_two_out_datum)
-  (pool_one_in, pool_two_in, pool_one_out, pool_two_out)
+      expect
+        pool_in_address == pool_out_address && // hehe
+        utils.compare_pool_datum(pool_in_datum, pool_out_datum)
+      get_batching_pool(
+        pool_input: pool_in,
+        pool_output: pool_out,
+        authen_policy_id: authen_policy_id,
+        pool_auth_asset_name: pool_auth_asset_name,
+        pool_in_datum: pool_in_datum,
+      )
+    },
+  )
 }

@@ -1,6 +1,4 @@
-use aiken/bytearray
 use aiken/dict
-use aiken/hash
 use aiken/list
 use aiken/transaction.{
   Input, Mint, Output, OutputReference, ScriptContext, Spend, Transaction,
@@ -91,8 +89,10 @@ validator(
             redeemer_list,
             fn(r) {
               let (p, _) = r
-              expect Spend(ref) = p
-              factory_input_ref == ref
+              when p is {
+                Spend(ref) -> factory_input_ref == ref
+                _ -> False
+              }
             },
           )
         expect factory_redeemer: FactoryRedeemer = raw_factory_redeemer
@@ -105,15 +105,15 @@ validator(
           policy_id: asset_b_policy_id,
           asset_name: asset_b_asset_name,
         } = asset_b
-
         // todo, consider whether we need this logic or not?
         expect utils.sorted_asset(asset_a, asset_b)
-        let asset_a_ident =
-          bytearray.concat(asset_a_policy_id, asset_a_asset_name)
-        let asset_b_ident =
-          bytearray.concat(asset_b_policy_id, asset_b_asset_name)
-        let pair_ident = bytearray.concat(asset_a_ident, asset_b_ident)
-        let lp_asset_name = hash.sha3_256(pair_ident)
+        let lp_asset_name =
+          utils.compute_lp_asset_name(
+            asset_a_policy_id,
+            asset_a_asset_name,
+            asset_b_policy_id,
+            asset_b_asset_name,
+          )
         expect
           value.quantity_of(mint_value, authen_policy_id, lp_asset_name) == 9223372036854775807
         expect list.length(value.flatten(mint_value)) == 3
