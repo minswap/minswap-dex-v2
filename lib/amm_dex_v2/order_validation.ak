@@ -778,7 +778,7 @@ pub fn apply_orders(
                 )
               }
               SwapExactInOCO(direction, minimum_receive, stop_loss_receive) -> {
-                expect minimum_receive > 0
+                expect minimum_receive > 0 && stop_loss_receive > 0
                 let a_to_b_direction =
                   when direction is {
                     AToB -> True
