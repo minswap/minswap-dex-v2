@@ -1,14 +1,15 @@
-use aiken/dict.{Dict}
-use aiken/hash.{Blake2b_256, Hash}
+use aiken/builtin
+use aiken/hash
 use aiken/list
-use aiken/transaction.{DatumHash, Input, NoDatum, Output}
-use aiken/transaction/credential
+use aiken/transaction.{DatumHash, InlineDatum, Input, NoDatum, Output}
+use aiken/transaction/credential.{Address}
 use aiken/transaction/value.{Value, ada_asset_name, ada_policy_id}
 use amm_dex_v2/math
 use amm_dex_v2/types.{
-  AToB, Asset, BToA, BatchingPool, Deposit, OrderDatum, PoolState, ProfitSharing,
-  SwapExactIn, SwapExactInOCO, SwapExactInStopLoss, SwapExactOut,
-  SwapMultiRouting, SwapRouting, Withdraw, ZapOut,
+  AToB, Asset, BToA, BatchingPool, CustomDatumHash, DatumMap, Deposit,
+  OrderDatum, PoolState, ProfitSharing, SwapExactIn, SwapExactInOCO,
+  SwapExactInStopLoss, SwapExactOut, SwapMultiRouting, SwapRouting, Withdraw,
+  ZapOut,
 }
 use amm_dex_v2/utils
 
@@ -677,10 +678,31 @@ pub fn validate_swap_multi_routing_order(
   True
 }
 
+pub fn validate_order_receiver(
+  receiver: Address,
+  receiver_datum_hash_opt: Option<CustomDatumHash>,
+  output: Output,
+) -> Bool {
+  let Output { address: output_address, datum: raw_order_output_datum, .. } =
+    output
+  let is_valid_receiver_datum =
+    when receiver_datum_hash_opt is {
+      Some(receiver_datum_hash) ->
+        when raw_order_output_datum is {
+          NoDatum -> fail
+          DatumHash(dh) -> dh == receiver_datum_hash
+          InlineDatum(dat) ->
+            hash.blake2b_256(builtin.serialise_data(dat)) == receiver_datum_hash
+        }
+      None -> raw_order_output_datum == NoDatum
+    }
+  expect receiver == output_address && is_valid_receiver_datum
+  True
+}
+
 // TODO: validate order input value size
 pub fn apply_orders(
-  all_outputs: List<Output>,
-  datum_dict: Dict<Hash<Blake2b_256, Data>, Data>,
+  datum_map: DatumMap,
   asset_a: Asset,
   asset_b: Asset,
   lp_asset: Asset,
@@ -697,14 +719,15 @@ pub fn apply_orders(
       when order_outputs is {
         [] -> pool_state
         [output, ..outputs] -> {
-          let Input { output: order_in_output, .. } = input
-          let Output { value: order_in_value, .. } = order_in_output
-          let Output {
-            value: order_out_value,
-            address: output_address,
-            datum: order_output_datum,
+          let Input {
+            output: Output {
+              value: order_in_value,
+              datum: raw_order_in_datum,
+              ..
+            },
             ..
-          } = output
+          } = input
+          let Output { value: order_out_value, .. } = output
           let OrderDatum {
             receiver,
             receiver_datum_hash_opt,
@@ -713,22 +736,15 @@ pub fn apply_orders(
             output_ada,
             lp_asset: order_lp_asset,
             ..
-          } =
-            utils.must_find_order_datum(
-              all_outputs,
-              datum_dict,
-              order_in_output,
+          } = utils.must_find_order_datum(datum_map, raw_order_in_datum)
+          let is_valid_receiver =
+            validate_order_receiver(
+              receiver: receiver,
+              receiver_datum_hash_opt: receiver_datum_hash_opt,
+              output: output,
             )
-          let is_valid_receiver_datum_hash =
-            when receiver_datum_hash_opt is {
-              Some(datum_hash) -> {
-                expect DatumHash(output_datum_hash) = order_output_datum
-                output_datum_hash == datum_hash
-              }
-              None -> order_output_datum == NoDatum
-            }
           expect
-            receiver == output_address && batcher_fee > 0 && output_ada > 0 && is_valid_receiver_datum_hash && lp_asset == order_lp_asset
+            batcher_fee > 0 && output_ada > 0 && is_valid_receiver && lp_asset == order_lp_asset
           let new_state =
             when order_step is {
               SwapExactIn(direction, minimum_receive) -> {
@@ -878,8 +894,7 @@ pub fn apply_orders(
               SwapMultiRouting(_, _) -> fail
             }
           apply_orders(
-            all_outputs: all_outputs,
-            datum_dict: datum_dict,
+            datum_map: datum_map,
             asset_a: asset_a,
             asset_b: asset_b,
             lp_asset: lp_asset,

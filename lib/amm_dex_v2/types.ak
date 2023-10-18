@@ -1,3 +1,4 @@
+use aiken/dict.{Dict}
 use aiken/hash.{Blake2b_224, Blake2b_256, Hash}
 use aiken/transaction/credential.{Address, Script, VerificationKey}
 use aiken/transaction/value.{AssetName, PolicyId}
@@ -15,6 +16,9 @@ pub type Asset {
   policy_id: PolicyId,
   asset_name: AssetName,
 }
+
+pub type DatumMap =
+  Dict<Hash<Blake2b_256, Data>, Data>
 
 pub type ProfitSharing {
   fee_sharing_numerator: Int,
@@ -63,6 +67,7 @@ pub type SwapRouting {
 
 // TODO: handle MultiRouting Order
 pub type OrderStep {
+  // TODO: Combine SwapExactIn, SwapExactInStopLoss & SwapExactInOCO to single one
   SwapExactIn { direction: OrderDirection, minimum_receive: Int }
   // TODO: SwapExactInStopLoss & SwapExactInOCO: Find another way that's easier to understand for users
   SwapExactInStopLoss { direction: OrderDirection, stop_loss_receive: Int }

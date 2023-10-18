@@ -1,18 +1,16 @@
 use aiken/builtin
 use aiken/bytearray
 use aiken/cbor
-use aiken/dict.{Dict}
-use aiken/hash.{Blake2b_256, Hash}
+use aiken/dict
+use aiken/hash
 use aiken/interval.{Finite}
 use aiken/list
 use aiken/string
-use aiken/transaction.{
-  Datum, DatumHash, InlineDatum, NoDatum, Output, ValidityRange,
-}
+use aiken/transaction.{Datum, DatumHash, InlineDatum, NoDatum, ValidityRange}
 use aiken/transaction/value.{
   AssetName, PolicyId, Value, ada_asset_name, ada_policy_id,
 }
-use amm_dex_v2/types.{Asset, FactoryDatum, OrderDatum, PoolDatum}
+use amm_dex_v2/types.{Asset, DatumMap, FactoryDatum, OrderDatum, PoolDatum}
 
 const minus_ascii_code = 45
 
@@ -225,41 +223,33 @@ pub fn find_posix_time_range(time_rage: ValidityRange) -> (Int, Int) {
   (t1, t2)
 }
 
-pub fn must_find_script_datum(
-  outputs: List<Output>,
-  datums: Dict<Hash<Blake2b_256, Data>, Data>,
-  output: Output,
-) -> Data {
-  let data_option =
-    when output.datum is {
-      NoDatum -> None
-      DatumHash(dh) -> transaction.find_datum(outputs, datums, dh)
-      InlineDatum(dat) -> Some(dat)
-    }
-  must_parse_option(data_option)
+pub fn find_script_datum(datums: DatumMap, datum: Datum) -> Option<Data> {
+  when datum is {
+    NoDatum -> None
+    DatumHash(dh) ->
+      datums
+        |> dict.get(dh)
+    InlineDatum(dat) -> Some(dat)
+  }
 }
 
-pub fn must_find_order_datum(
-  outputs: List<Output>,
-  datums: Dict<Hash<Blake2b_256, Data>, Data>,
-  output: Output,
-) -> OrderDatum {
-  expect order_datum: OrderDatum =
-    must_find_script_datum(outputs, datums, output)
+fn must_find_script_datum(datums: DatumMap, datum: Datum) -> Data {
+  let datum_opt = find_script_datum(datums, datum)
+  must_parse_option(datum_opt)
+}
+
+pub fn must_find_order_datum(datums: DatumMap, datum: Datum) -> OrderDatum {
+  expect order_datum: OrderDatum = must_find_script_datum(datums, datum)
   order_datum
 }
 
-// TODO: Support both normal & inline datum
-pub fn parse_pool_datum(datum: Datum) -> PoolDatum {
-  expect InlineDatum(data) = datum
-  expect pool_datum: PoolDatum = data
+pub fn must_find_pool_datum(datums: DatumMap, datum: Datum) -> PoolDatum {
+  expect pool_datum: PoolDatum = must_find_script_datum(datums, datum)
   pool_datum
 }
 
-// TODO: Support both normal & inline datum
-pub fn parse_factory_datum(datum: Datum) -> FactoryDatum {
-  expect InlineDatum(data) = datum
-  expect factory_datum: FactoryDatum = data
+pub fn must_find_factory_datum(datums: DatumMap, datum: Datum) -> FactoryDatum {
+  expect factory_datum: FactoryDatum = must_find_script_datum(datums, datum)
   factory_datum
 }
 
