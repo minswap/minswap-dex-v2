@@ -80,6 +80,13 @@ pub type OrderStep {
   Deposit { minimum_lp: Int }
   Withdraw { minimum_asset_a: Int, minimum_asset_b: Int }
   ZapOut { direction: OrderDirection, minimum_receive: Int }
+  PartialSwap {
+    direction: OrderDirection,
+    io_ratio_numerator: Int,
+    io_ratio_denominator: Int,
+    hops: Int,
+    minimum_swap_amount_required: Int,
+  }
   SwapMultiRouting { routings: List<SwapRouting>, minimum_receive: Int }
 }
 
@@ -123,15 +130,15 @@ pub type BatchingPool {
   profit_sharing: Option<ProfitSharing>,
   order_hash: ValidatorHash,
   address: Address,
+  delta_remaining_liquidity_supply: Int,
   pool_state_in: PoolState,
   pool_state_out: PoolState,
 }
 
-pub type PoolState {
-  reserve_a: Int,
-  reserve_b: Int,
-  root_k_last: Int,
-  total_liquidity: Int,
-  liquidity_share: Int,
-  remaining_liquidity_supply: Int,
-}
+// Reserve A 
+// Reserve B
+// Total Liquidity
+// Liquidity Share
+// Root K Last
+pub type PoolState =
+  (Int, Int, Int, Int, Int)

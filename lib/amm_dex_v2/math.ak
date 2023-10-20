@@ -62,6 +62,21 @@ pub fn calculate_amount_out(
   numerator / denominator
 }
 
+pub fn calculate_max_in_swap(
+  reserve_in: Int,
+  reserve_out: Int,
+  trading_fee_numerator: Int,
+  trading_fee_denominator: Int,
+  io_ratio_numerator: Int,
+  io_ratio_denominator: Int,
+) -> Int {
+  let diff = trading_fee_denominator - trading_fee_numerator
+  let numerator =
+    io_ratio_numerator * diff * reserve_out - io_ratio_denominator * trading_fee_denominator * reserve_in
+  let denominator = io_ratio_denominator * diff
+  numerator / denominator
+}
+
 pub fn calculate_amount_out_fraction(
   reserve_in: Int,
   reserve_out: Int,
