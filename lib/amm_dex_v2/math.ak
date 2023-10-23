@@ -74,7 +74,9 @@ pub fn calculate_max_in_swap(
   let numerator =
     io_ratio_numerator * diff * reserve_out - io_ratio_denominator * trading_fee_denominator * reserve_in
   let denominator = io_ratio_denominator * diff
-  numerator / denominator
+  let max_in_swap = numerator / denominator
+  expect max_in_swap > 0
+  max_in_swap
 }
 
 pub fn calculate_amount_out_fraction(
@@ -98,16 +100,12 @@ pub fn calculate_amount_in(
   amount_out: Int,
   trading_fee_numerator: Int,
   trading_fee_denominator: Int,
-) -> Option<Int> {
-  if amount_out >= reserve_out {
-    None
-  } else {
-    let diff = trading_fee_denominator - trading_fee_numerator
-    let numerator = reserve_in * amount_out * trading_fee_denominator
-    let denominator = ( reserve_out - amount_out ) * diff
-    let amount_in = numerator / denominator + 1
-    Some(amount_in)
-  }
+) -> Int {
+  expect amount_out < reserve_out
+  let diff = trading_fee_denominator - trading_fee_numerator
+  let numerator = reserve_in * amount_out * trading_fee_denominator
+  let denominator = ( reserve_out - amount_out ) * diff
+  numerator / denominator + 1
 }
 
 // Calculate liquidity amount which will be minted for profit sharing

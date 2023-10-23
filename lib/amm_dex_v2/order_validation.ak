@@ -124,7 +124,7 @@ fn validate_swap_exact_out(
       temp_amount_in
     }
   let has_enough_amount_in = maximum_amount_in > 0
-  let necessary_amount_in_opt =
+  let necessary_amount_in =
     math.calculate_amount_in(
       reserve_in,
       reserve_out,
@@ -132,7 +132,6 @@ fn validate_swap_exact_out(
       trading_fee_numerator,
       trading_fee_denominator,
     )
-  let necessary_amount_in = utils.must_parse_option(necessary_amount_in_opt)
   let not_over_slippage = necessary_amount_in <= maximum_amount_in
   let actual_amount_out =
     value.quantity_of(
