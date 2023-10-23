@@ -28,6 +28,7 @@ validator(
     expect Spend(pool_input_ref) = purpose
     when redeemer is {
       Batching(batcher_address, input_indexes, license_index) -> {
+        expect license_index >= 0 && list.length(input_indexes) > 0
         let Transaction {
           inputs,
           outputs,
@@ -70,7 +71,7 @@ validator(
         let routing_out_indexes_len = list.length(routing_out_indexes)
         // TODO: Validate distinct indexes
         expect
-          routing_in_indexes_len == routing_out_indexes_len && routing_out_indexes_len >= 2
+          license_index >= 0 && routing_in_indexes_len == routing_out_indexes_len && routing_out_indexes_len >= 2
         let Transaction {
           inputs,
           outputs,
