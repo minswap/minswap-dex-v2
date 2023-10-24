@@ -1,3 +1,4 @@
+use aiken/dict.{Dict}
 use aiken/hash.{Blake2b_224, Blake2b_256, Hash}
 use aiken/transaction/credential.{Address, Script, VerificationKey}
 use aiken/transaction/value.{AssetName, PolicyId}
@@ -15,6 +16,9 @@ pub type Asset {
   policy_id: PolicyId,
   asset_name: AssetName,
 }
+
+pub type DatumMap =
+  Dict<Hash<Blake2b_256, Data>, Data>
 
 pub type ProfitSharing {
   fee_sharing_numerator: Int,
@@ -63,6 +67,7 @@ pub type SwapRouting {
 
 // TODO: handle MultiRouting Order
 pub type OrderStep {
+  // TODO: Combine SwapExactIn, SwapExactInStopLoss & SwapExactInOCO to single one
   SwapExactIn { direction: OrderDirection, minimum_receive: Int }
   // TODO: SwapExactInStopLoss & SwapExactInOCO: Find another way that's easier to understand for users
   SwapExactInStopLoss { direction: OrderDirection, stop_loss_receive: Int }
@@ -75,6 +80,13 @@ pub type OrderStep {
   Deposit { minimum_lp: Int }
   Withdraw { minimum_asset_a: Int, minimum_asset_b: Int }
   ZapOut { direction: OrderDirection, minimum_receive: Int }
+  PartialSwap {
+    direction: OrderDirection,
+    io_ratio_numerator: Int,
+    io_ratio_denominator: Int,
+    hops: Int,
+    minimum_swap_amount_required: Int,
+  }
   SwapMultiRouting { routings: List<SwapRouting>, minimum_receive: Int }
 }
 
@@ -118,15 +130,15 @@ pub type BatchingPool {
   profit_sharing: Option<ProfitSharing>,
   order_hash: ValidatorHash,
   address: Address,
+  delta_remaining_liquidity_supply: Int,
   pool_state_in: PoolState,
   pool_state_out: PoolState,
 }
 
-pub type PoolState {
-  reserve_a: Int,
-  reserve_b: Int,
-  root_k_last: Int,
-  total_liquidity: Int,
-  liquidity_share: Int,
-  remaining_liquidity_supply: Int,
-}
+// Reserve A 
+// Reserve B
+// Total Liquidity
+// Liquidity Share
+// Root K Last
+pub type PoolState =
+  (Int, Int, Int, Int, Int)

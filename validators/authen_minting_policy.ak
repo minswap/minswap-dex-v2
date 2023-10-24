@@ -20,7 +20,7 @@ validator(
     expect Mint(authen_policy_id) = purpose
     when redeemer is {
       MintFactoryAuthen -> {
-        let Transaction { inputs, mint, outputs, .. } = transaction
+        let Transaction { inputs, mint, outputs, datums, .. } = transaction
 
         // Transaction must has @out_ref in the input to make sure that this redeemer can only be executed once
         expect [_] =
@@ -52,7 +52,7 @@ validator(
         expect [factory_output] = factory_outputs
         let Output { datum: factory_raw_datum, .. } = factory_output
         let FactoryDatum { head, tail } =
-          utils.parse_factory_datum(factory_raw_datum)
+          utils.must_find_factory_datum(datums, factory_raw_datum)
         expect
           head == #"00" && tail == #"ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff00"
         True

@@ -1,14 +1,15 @@
-use aiken/dict.{Dict}
-use aiken/hash.{Blake2b_256, Hash}
+use aiken/builtin
+use aiken/hash
 use aiken/list
-use aiken/transaction.{DatumHash, Input, NoDatum, Output}
-use aiken/transaction/credential
+use aiken/transaction.{DatumHash, InlineDatum, Input, NoDatum, Output}
+use aiken/transaction/credential.{Address, ScriptCredential}
 use aiken/transaction/value.{Value, ada_asset_name, ada_policy_id}
 use amm_dex_v2/math
 use amm_dex_v2/types.{
-  AToB, Asset, BToA, BatchingPool, Deposit, OrderDatum, PoolState, ProfitSharing,
-  SwapExactIn, SwapExactInOCO, SwapExactInStopLoss, SwapExactOut,
-  SwapMultiRouting, SwapRouting, Withdraw, ZapOut,
+  AToB, Asset, BToA, BatchingPool, CustomDatumHash, DatumMap, Deposit,
+  OrderDatum, PartialSwap, PoolState, ProfitSharing, SwapExactIn, SwapExactInOCO,
+  SwapExactInStopLoss, SwapExactOut, SwapMultiRouting, SwapRouting, Withdraw,
+  ZapOut,
 }
 use amm_dex_v2/utils
 
@@ -22,9 +23,9 @@ fn validate_swap_exact_in(
   output_ada: Int,
   trading_fee_numerator: Int,
   trading_fee_denominator: Int,
-  pool_state: (Int, Int, Int, Int, Int),
+  pool_state: PoolState,
   checking_slippage_fn: fn(Int) -> Bool,
-) -> (Int, Int, Int, Int, Int) {
+) -> PoolState {
   let (reserve_a, reserve_b, total_liquidity, liquidity_share, root_k_last) =
     pool_state
   let (asset_in, asset_out, reserve_in, reserve_out) =
@@ -100,8 +101,8 @@ fn validate_swap_exact_out(
   output_ada: Int,
   trading_fee_numerator: Int,
   trading_fee_denominator: Int,
-  pool_state: (Int, Int, Int, Int, Int),
-) -> (Int, Int, Int, Int, Int) {
+  pool_state: PoolState,
+) -> PoolState {
   let (reserve_a, reserve_b, total_liquidity, liquidity_share, root_k_last) =
     pool_state
   let (asset_in, asset_out, reserve_in, reserve_out) =
@@ -123,7 +124,7 @@ fn validate_swap_exact_out(
       temp_amount_in
     }
   let has_enough_amount_in = maximum_amount_in > 0
-  let necessary_amount_in_opt =
+  let necessary_amount_in =
     math.calculate_amount_in(
       reserve_in,
       reserve_out,
@@ -131,7 +132,6 @@ fn validate_swap_exact_out(
       trading_fee_numerator,
       trading_fee_denominator,
     )
-  let necessary_amount_in = utils.must_parse_option(necessary_amount_in_opt)
   let not_over_slippage = necessary_amount_in <= maximum_amount_in
   let actual_amount_out =
     value.quantity_of(
@@ -185,8 +185,8 @@ fn validate_deposit(
   profit_sharing_opt: Option<ProfitSharing>,
   trading_fee_numerator: Int,
   trading_fee_denominator: Int,
-  pool_state: (Int, Int, Int, Int, Int),
-) -> (Int, Int, Int, Int, Int) {
+  pool_state: PoolState,
+) -> PoolState {
   let (reserve_a, reserve_b, total_liquidity, liquidity_share, root_k_last) =
     pool_state
   let Asset { policy_id: asset_a_policy_id, asset_name: asset_a_asset_name } =
@@ -266,8 +266,8 @@ fn validate_withdraw(
   lp_asset: Asset,
   output_ada: Int,
   profit_sharing_opt: Option<ProfitSharing>,
-  pool_state: (Int, Int, Int, Int, Int),
-) -> (Int, Int, Int, Int, Int) {
+  pool_state: PoolState,
+) -> PoolState {
   let (reserve_a, reserve_b, total_liquidity, liquidity_share, root_k_last) =
     pool_state
   let Asset { policy_id: asset_a_policy_id, asset_name: asset_a_asset_name } =
@@ -341,8 +341,8 @@ fn validate_zap_out(
   profit_sharing_opt: Option<ProfitSharing>,
   trading_fee_numerator: Int,
   trading_fee_denominator: Int,
-  pool_state: (Int, Int, Int, Int, Int),
-) -> (Int, Int, Int, Int, Int) {
+  pool_state: PoolState,
+) -> PoolState {
   let (reserve_a, reserve_b, total_liquidity, liquidity_share, root_k_last) =
     pool_state
   let asset_out =
@@ -426,6 +426,115 @@ fn validate_zap_out(
   }
 }
 
+fn validate_partial_swap(
+  order_in_value: Value,
+  order_out_value: Value,
+  a_to_b_direction: Bool,
+  io_ratio_numerator: Int,
+  io_ratio_denominator: Int,
+  hops: Int,
+  minimum_swap_amount_required: Int,
+  asset_a: Asset,
+  asset_b: Asset,
+  batcher_fee: Int,
+  output_ada: Int,
+  trading_fee_numerator: Int,
+  trading_fee_denominator: Int,
+  pool_state: PoolState,
+) -> (Int, Int, Int, Int, Int, Bool) {
+  let (reserve_a, reserve_b, total_liquidity, liquidity_share, root_k_last) =
+    pool_state
+  let (asset_in, asset_out, reserve_in, reserve_out) =
+    if a_to_b_direction {
+      (asset_a, asset_b, reserve_a, reserve_b)
+    } else {
+      (asset_b, asset_a, reserve_b, reserve_a)
+    }
+  let Asset { policy_id: asset_in_policy_id, asset_name: asset_in_asset_name } =
+    asset_in
+  let Asset { policy_id: asset_out_policy_id, asset_name: asset_out_asset_name } =
+    asset_out
+  let ada_in_require = batcher_fee * hops + output_ada
+  let temp_amount_in =
+    value.quantity_of(order_in_value, asset_in_policy_id, asset_in_asset_name)
+  let amount_in =
+    if utils.is_ada_asset(asset_in_policy_id, asset_in_asset_name) {
+      temp_amount_in - ada_in_require
+    } else {
+      temp_amount_in
+    }
+  let has_enough_amount_in = amount_in > 0
+  let max_in_swap =
+    math.calculate_max_in_swap(
+      reserve_in: reserve_in,
+      reserve_out: reserve_out,
+      trading_fee_numerator: trading_fee_numerator,
+      trading_fee_denominator: trading_fee_denominator,
+      io_ratio_numerator: io_ratio_numerator,
+      io_ratio_denominator: io_ratio_denominator,
+    )
+  let (swap_amount_in, remaining_amount_in) =
+    if amount_in <= max_in_swap {
+      (amount_in, 0)
+    } else {
+      (max_in_swap, amount_in - max_in_swap)
+    }
+  expect swap_amount_in > 0 && swap_amount_in >= minimum_swap_amount_required
+  let amount_out =
+    math.calculate_amount_out(
+      reserve_in: reserve_in,
+      reserve_out: reserve_out,
+      amount_in: swap_amount_in,
+      trading_fee_numerator: trading_fee_numerator,
+      trading_fee_denominator: trading_fee_denominator,
+    )
+  let ada_out_require = batcher_fee * ( hops - 1 ) + output_ada
+  let old_amount_out =
+    value.quantity_of(order_in_value, asset_out_policy_id, asset_out_asset_name)
+  let new_amount_out =
+    value.quantity_of(
+      order_out_value,
+      asset_out_policy_id,
+      asset_out_asset_name,
+    )
+  let new_amount_in =
+    value.quantity_of(order_out_value, asset_in_policy_id, asset_in_asset_name)
+  let is_valid_out_value =
+    if utils.is_ada_asset(asset_in_policy_id, asset_in_asset_name) {
+      new_amount_in == remaining_amount_in + ada_out_require && new_amount_out == old_amount_out + amount_out
+    } else if
+    utils.is_ada_asset(asset_out_policy_id, asset_out_asset_name){
+    
+      new_amount_in == remaining_amount_in && new_amount_out == old_amount_out + amount_out * ada_out_require
+    } else {
+      let ada_amount =
+        value.quantity_of(order_out_value, ada_policy_id, ada_asset_name)
+      new_amount_in == remaining_amount_in && new_amount_out == old_amount_out + amount_out && ada_out_require == ada_amount
+    }
+  expect has_enough_amount_in && is_valid_out_value
+  let has_next_swap =
+    hops - 1 > 0 && remaining_amount_in >= minimum_swap_amount_required
+  if a_to_b_direction {
+    (
+      reserve_a + swap_amount_in,
+      reserve_b - amount_out,
+      total_liquidity,
+      liquidity_share,
+      root_k_last,
+      has_next_swap,
+    )
+  } else {
+    (
+      reserve_a - amount_out,
+      reserve_b + swap_amount_in,
+      total_liquidity,
+      liquidity_share,
+      root_k_last,
+      has_next_swap,
+    )
+  }
+}
+
 fn get_multi_routing_swap_amount_out(
   amount_in: Int,
   pool: BatchingPool,
@@ -439,10 +548,8 @@ fn get_multi_routing_swap_amount_out(
     trading_fee_denominator,
     ..
   } = pool
-  let PoolState { reserve_a: old_reserve_a, reserve_b: old_reserve_b, .. } =
-    pool_state_in
-  let PoolState { reserve_a: new_reserve_a, reserve_b: new_reserve_b, .. } =
-    pool_state_out
+  let (old_reserve_a, old_reserve_b, _, _, _) = pool_state_in
+  let (new_reserve_a, new_reserve_b, _, _, _) = pool_state_out
   let SwapRouting { lp_asset: routing_lp_asset, direction } = routing
   expect pool_lp_asset == routing_lp_asset
   let (reserve_in, reserve_out) =
@@ -510,23 +617,11 @@ test test_validate_swap_multi_routing_order() {
       asset_name: #"6c3ea488e6ff940bb6fb1b18fd605b5931d9fefde6440117015ba484cf321200",
     }
   let pool_1_pool_state_in =
-    PoolState {
-      reserve_a: 27877961987941,
-      reserve_b: 414804973691450,
-      root_k_last: 0,
-      total_liquidity: 106241703280080,
-      liquidity_share: 0,
-      remaining_liquidity_supply: 9223372036854775807 - 106241703280080,
-    }
+    (27877961987941, 414804973691450, 106241703280080, 0, 0)
+
   let pool_1_pool_state_out =
-    PoolState {
-      reserve_a: 27871263020717,
-      reserve_b: 414904973691450,
-      root_k_last: 0,
-      total_liquidity: 106241703280080,
-      liquidity_share: 0,
-      remaining_liquidity_supply: 9223372036854775807 - 106241703280080,
-    }
+    (27871263020717, 414904973691450, 106241703280080, 0, 0)
+
   let pool1 =
     BatchingPool {
       asset_a: pool_1_asset_a,
@@ -539,6 +634,7 @@ test test_validate_swap_multi_routing_order() {
       address: credential.from_script(
         #"11f3fb05033cb08e95f5c6d4b11891003dc762a46828a4b6f164efe2",
       ),
+      delta_remaining_liquidity_supply: 0,
       pool_state_in: pool_1_pool_state_in,
       pool_state_out: pool_1_pool_state_out,
     }
@@ -554,24 +650,9 @@ test test_validate_swap_multi_routing_order() {
       policy_id: #"1a919d30617fcbc8a92c337c59c3aecb6c4ded8f154e4c24528ccea2",
       asset_name: #"452089abb5bf8cc59b678a2cd7b9ee952346c6c0aa1cf27df324310a70d02fc3",
     }
-  let pool_2_pool_state_in =
-    PoolState {
-      reserve_a: 5281584632864,
-      reserve_b: 1432277778019,
-      root_k_last: 0,
-      total_liquidity: 2450077671602,
-      liquidity_share: 0,
-      remaining_liquidity_supply: 9223372036854775807 - 2450077671602,
-    }
+  let pool_2_pool_state_in = (5281584632864, 1432277778019, 2450077671602, 0, 0)
   let pool_2_pool_state_out =
-    PoolState {
-      reserve_a: 5288283600088,
-      reserve_b: 1430468867110,
-      root_k_last: 0,
-      total_liquidity: 2450077671602,
-      liquidity_share: 0,
-      remaining_liquidity_supply: 9223372036854775807 - 2450077671602,
-    }
+    (5288283600088, 1430468867110, 2450077671602, 0, 0)
   let pool2 =
     BatchingPool {
       asset_a: pool_2_asset_a,
@@ -584,6 +665,7 @@ test test_validate_swap_multi_routing_order() {
       address: credential.from_script(
         #"11f3fb05033cb08e95f5c6d4b11891003dc762a46828a4b6f164efe2",
       ),
+      delta_remaining_liquidity_supply: 0,
       pool_state_in: pool_2_pool_state_in,
       pool_state_out: pool_2_pool_state_out,
     }
@@ -677,62 +759,79 @@ pub fn validate_swap_multi_routing_order(
   True
 }
 
+pub fn validate_order_receiver(
+  receiver: Address,
+  receiver_datum_hash_opt: Option<CustomDatumHash>,
+  output: Output,
+) -> Bool {
+  let Output { address: output_address, datum: raw_order_output_datum, .. } =
+    output
+  let is_valid_receiver_datum =
+    when receiver_datum_hash_opt is {
+      Some(receiver_datum_hash) ->
+        when raw_order_output_datum is {
+          NoDatum -> fail
+          DatumHash(dh) -> dh == receiver_datum_hash
+          InlineDatum(dat) ->
+            hash.blake2b_256(builtin.serialise_data(dat)) == receiver_datum_hash
+        }
+      None -> raw_order_output_datum == NoDatum
+    }
+  expect receiver == output_address && is_valid_receiver_datum
+  True
+}
+
 // TODO: validate order input value size
 pub fn apply_orders(
-  all_outputs: List<Output>,
-  datum_dict: Dict<Hash<Blake2b_256, Data>, Data>,
+  datum_map: DatumMap,
   asset_a: Asset,
   asset_b: Asset,
   lp_asset: Asset,
   trading_fee_numerator: Int,
   trading_fee_denominator: Int,
+  order_hash: ByteArray,
   profit_sharing_opt: Option<ProfitSharing>,
   order_inputs: List<Input>,
   order_outputs: List<Output>,
-  pool_state: (Int, Int, Int, Int, Int),
-) -> (Int, Int, Int, Int, Int) {
+  pool_state: PoolState,
+) -> PoolState {
   when order_inputs is {
     [] -> pool_state
     [input, ..inputs] ->
       when order_outputs is {
         [] -> pool_state
         [output, ..outputs] -> {
-          let Input { output: order_in_output, .. } = input
-          let Output { value: order_in_value, .. } = order_in_output
-          let Output {
-            value: order_out_value,
-            address: output_address,
-            datum: order_output_datum,
+          let Input {
+            output: Output {
+              value: order_in_value,
+              datum: raw_order_in_datum,
+              ..
+            },
             ..
-          } = output
+          } = input
+          let Output { value: order_out_value, .. } = output
+          let order_in_datum =
+            utils.must_find_order_datum(datum_map, raw_order_in_datum)
           let OrderDatum {
+            sender,
             receiver,
             receiver_datum_hash_opt,
             step: order_step,
             batcher_fee,
             output_ada,
             lp_asset: order_lp_asset,
-            ..
-          } =
-            utils.must_find_order_datum(
-              all_outputs,
-              datum_dict,
-              order_in_output,
-            )
-          let is_valid_receiver_datum_hash =
-            when receiver_datum_hash_opt is {
-              Some(datum_hash) -> {
-                expect DatumHash(output_datum_hash) = order_output_datum
-                output_datum_hash == datum_hash
-              }
-              None -> order_output_datum == NoDatum
-            }
-          expect
-            receiver == output_address && batcher_fee > 0 && output_ada > 0 && is_valid_receiver_datum_hash && lp_asset == order_lp_asset
+          } = order_in_datum
+          expect batcher_fee > 0 && output_ada > 0 && lp_asset == order_lp_asset
           let new_state =
             when order_step is {
               SwapExactIn(direction, minimum_receive) -> {
                 expect minimum_receive > 0
+                expect
+                  validate_order_receiver(
+                    receiver: receiver,
+                    receiver_datum_hash_opt: receiver_datum_hash_opt,
+                    output: output,
+                  )
                 let a_to_b_direction =
                   when direction is {
                     AToB -> True
@@ -756,6 +855,12 @@ pub fn apply_orders(
               }
               SwapExactInStopLoss(direction, stop_loss_receive) -> {
                 expect stop_loss_receive > 0
+                expect
+                  validate_order_receiver(
+                    receiver: receiver,
+                    receiver_datum_hash_opt: receiver_datum_hash_opt,
+                    output: output,
+                  )
                 let a_to_b_direction =
                   when direction is {
                     AToB -> True
@@ -779,6 +884,12 @@ pub fn apply_orders(
               }
               SwapExactInOCO(direction, minimum_receive, stop_loss_receive) -> {
                 expect minimum_receive > 0 && stop_loss_receive > 0
+                expect
+                  validate_order_receiver(
+                    receiver: receiver,
+                    receiver_datum_hash_opt: receiver_datum_hash_opt,
+                    output: output,
+                  )
                 let a_to_b_direction =
                   when direction is {
                     AToB -> True
@@ -802,6 +913,12 @@ pub fn apply_orders(
               }
               SwapExactOut(direction, expected_receive) -> {
                 expect expected_receive > 0
+                expect
+                  validate_order_receiver(
+                    receiver: receiver,
+                    receiver_datum_hash_opt: receiver_datum_hash_opt,
+                    output: output,
+                  )
                 let a_to_b_direction =
                   when direction is {
                     AToB -> True
@@ -823,6 +940,12 @@ pub fn apply_orders(
               }
               Deposit(minimum_lp) -> {
                 expect minimum_lp > 0
+                expect
+                  validate_order_receiver(
+                    receiver: receiver,
+                    receiver_datum_hash_opt: receiver_datum_hash_opt,
+                    output: output,
+                  )
                 validate_deposit(
                   order_in_value: order_in_value,
                   order_out_value: order_out_value,
@@ -840,6 +963,12 @@ pub fn apply_orders(
               }
               Withdraw(minimum_asset_a, minimum_asset_b) -> {
                 expect minimum_asset_a > 0 && minimum_asset_b > 0
+                expect
+                  validate_order_receiver(
+                    receiver: receiver,
+                    receiver_datum_hash_opt: receiver_datum_hash_opt,
+                    output: output,
+                  )
                 validate_withdraw(
                   order_in_value: order_in_value,
                   order_out_value: order_out_value,
@@ -855,6 +984,12 @@ pub fn apply_orders(
               }
               ZapOut(direction, minimum_receive) -> {
                 expect minimum_receive > 0
+                expect
+                  validate_order_receiver(
+                    receiver: receiver,
+                    receiver_datum_hash_opt: receiver_datum_hash_opt,
+                    output: output,
+                  )
                 let a_to_b_direction =
                   when direction is {
                     AToB -> True
@@ -875,16 +1010,113 @@ pub fn apply_orders(
                   pool_state: pool_state,
                 )
               }
+              PartialSwap(
+                direction,
+                io_ratio_numerator,
+                io_ratio_denominator,
+                hops,
+                minimum_swap_amount_required,
+              ) -> {
+                expect
+                  io_ratio_numerator > 0 && io_ratio_numerator > 0 && hops > 0
+                let a_to_b_direction =
+                  when direction is {
+                    AToB -> True
+                    BToA -> False
+                  }
+                let (
+                  new_reserve_a,
+                  new_reserve_b,
+                  new_total_liquidity,
+                  new_liquidity_share,
+                  new_root_k_last,
+                  has_next_swap,
+                ) =
+                  validate_partial_swap(
+                    order_in_value: order_in_value,
+                    order_out_value: order_out_value,
+                    a_to_b_direction: a_to_b_direction,
+                    io_ratio_numerator: io_ratio_numerator,
+                    io_ratio_denominator: io_ratio_denominator,
+                    hops: hops,
+                    minimum_swap_amount_required: minimum_swap_amount_required,
+                    asset_a: asset_a,
+                    asset_b: asset_b,
+                    batcher_fee: batcher_fee,
+                    output_ada: output_ada,
+                    trading_fee_numerator: trading_fee_numerator,
+                    trading_fee_denominator: trading_fee_denominator,
+                    pool_state: pool_state,
+                  )
+                expect
+                  if has_next_swap {
+                    let Output {
+                      address: Address {
+                        payment_credential: order_out_payment_cred,
+                        ..
+                      },
+                      datum: raw_order_out_datum,
+                      ..
+                    } = output
+                    expect ScriptCredential(order_out_script_hash) =
+                      order_out_payment_cred
+                    let OrderDatum {
+                      sender: order_out_sender,
+                      receiver: order_out_receiver,
+                      receiver_datum_hash_opt: order_out_receiver_datum_hash_opt,
+                      step: order_out_step,
+                      batcher_fee: order_out_batcher_fee,
+                      output_ada: order_out_output_ada,
+                      lp_asset: order_out_lp_asset,
+                    } =
+                      utils.must_find_order_datum(
+                        datum_map,
+                        raw_order_out_datum,
+                      )
+                    expect PartialSwap(
+                      order_out_step_direction,
+                      order_out_io_ratio_numerator,
+                      order_out_io_ratio_denominator,
+                      order_out_hops,
+                      order_out_minimum_swap_amount_required,
+                    ) = order_out_step
+                    order_out_script_hash == order_hash && // hihi
+                    sender == order_out_sender && // hihi
+                    receiver == order_out_receiver && // hihi
+                    receiver_datum_hash_opt == order_out_receiver_datum_hash_opt && // hihi
+                    batcher_fee == order_out_batcher_fee && // hihi
+                    output_ada == order_out_output_ada && // hihi
+                    order_lp_asset == order_out_lp_asset && // hihi
+                    direction == order_out_step_direction && // hihi
+                    io_ratio_numerator == order_out_io_ratio_numerator && // hihi
+                    io_ratio_denominator == order_out_io_ratio_denominator && // hihi
+                    hops - 1 == order_out_hops && // hihi
+                    minimum_swap_amount_required == order_out_minimum_swap_amount_required
+                  } else {
+                    validate_order_receiver(
+                      receiver: receiver,
+                      receiver_datum_hash_opt: receiver_datum_hash_opt,
+                      output: output,
+                    )
+                  }
+                (
+                  new_reserve_a,
+                  new_reserve_b,
+                  new_total_liquidity,
+                  new_liquidity_share,
+                  new_root_k_last,
+                )
+              }
               SwapMultiRouting(_, _) -> fail
             }
           apply_orders(
-            all_outputs: all_outputs,
-            datum_dict: datum_dict,
+            datum_map: datum_map,
             asset_a: asset_a,
             asset_b: asset_b,
             lp_asset: lp_asset,
             trading_fee_numerator: trading_fee_numerator,
             trading_fee_denominator: trading_fee_denominator,
+            order_hash: order_hash,
             profit_sharing_opt: profit_sharing_opt,
             order_inputs: inputs,
             order_outputs: outputs,

@@ -23,7 +23,7 @@ validator(
   ) {
     let ScriptContext { transaction, purpose } = context
     expect Spend(factory_ref) = purpose
-    let Transaction { inputs, mint, outputs, .. } = transaction
+    let Transaction { inputs, mint, outputs, datums, .. } = transaction
     let FactoryRedeemer { asset_a, asset_b } = redeemer
     let FactoryDatum { head: current_head, tail: current_tail } = datum
     let Asset { policy_id: asset_a_policy_id, asset_name: asset_a_asset_name } =
@@ -73,9 +73,9 @@ validator(
     let Output { datum: factory_output_1_raw_datum, .. } = factory_output_1
     let Output { datum: factory_output_2_raw_datum, .. } = factory_output_2
     let FactoryDatum { head: new_head_1, tail: new_tail_1 } =
-      utils.parse_factory_datum(factory_output_1_raw_datum)
+      utils.must_find_factory_datum(datums, factory_output_1_raw_datum)
     let FactoryDatum { head: new_head_2, tail: new_tail_2 } =
-      utils.parse_factory_datum(factory_output_2_raw_datum)
+      utils.must_find_factory_datum(datums, factory_output_2_raw_datum)
     // Transaction must put new hash between old hashes, (current_head, current_tail) -> (current_head, new_hash) && (new_hash, current_tail)
     expect
       builtin.less_than_bytearray(new_head_1, new_tail_1) && builtin.less_than_bytearray(
@@ -112,7 +112,7 @@ validator(
       trading_fee_denominator: pool_datum_trading_fee_denominator,
       order_hash: pool_datum_order_hash,
       profit_sharing_opt: pool_datum_profit_sharing_opt,
-    } = utils.parse_pool_datum(pool_output_raw_datum)
+    } = utils.must_find_pool_datum(datums, pool_output_raw_datum)
     expect None = pool_datum_profit_sharing_opt
     let estimated_amount_a =
       value.quantity_of(
