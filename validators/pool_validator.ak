@@ -8,7 +8,8 @@ use amm_dex_v2/order_validation
 use amm_dex_v2/pool_validation
 use amm_dex_v2/types.{
   Asset, Batching, BatchingPool, DatumMap, MultiRouting, OrderDatum, PoolDatum,
-  PoolRedeemer, SwapMultiRouting, UpdateFeeTo, WithdrawLiquidityShare,
+  PoolRedeemer, ProfitSharing, SwapMultiRouting, UpdateFeeTo,
+  WithdrawLiquidityShare,
 }
 use amm_dex_v2/utils
 
@@ -184,8 +185,8 @@ fn get_batching_pool(
     asset_a: pool_in_asset_a,
     asset_b: pool_in_asset_b,
     total_liquidity: pool_in_total_liquidity,
-    root_k_last: pool_in_root_k_last,
-    liquidity_share: pool_in_liquidity_share,
+    reserve_a: pool_in_reserve_a,
+    reserve_b: pool_in_reserve_b,
     trading_fee_numerator: pool_in_trading_fee_numerator,
     trading_fee_denominator: pool_in_trading_fee_denominator,
     order_hash: pool_in_order_hash,
@@ -194,8 +195,8 @@ fn get_batching_pool(
   let pool_out_datum = utils.must_find_pool_datum(datum_map, pool_out_datum_raw)
   let PoolDatum {
     total_liquidity: pool_out_total_liquidity,
-    root_k_last: pool_out_root_k_last,
-    liquidity_share: pool_out_liquidity_share,
+    reserve_a: pool_out_reserve_a,
+    reserve_b: pool_out_reserve_b,
     ..
   } = pool_out_datum
 
@@ -240,30 +241,39 @@ fn get_batching_pool(
     value.quantity_of(pool_in_value, authen_policy_id, lp_asset_name)
   let remaining_liquidity_supply_out =
     value.quantity_of(pool_out_value, authen_policy_id, lp_asset_name)
-
+  expect
+    remaining_liquidity_supply_out - remaining_liquidity_supply_in == pool_in_total_liquidity - pool_out_total_liquidity
+  let profit_sharing_opt: Option<(Int, Int)> =
+    when pool_in_profit_sharing_opt is {
+      Some(profit_sharing) -> {
+        let ProfitSharing { fee_sharing_numerator, fee_sharing_denominator, .. } =
+          profit_sharing
+        Some((fee_sharing_numerator, fee_sharing_denominator))
+      }
+      None -> None
+    }
   BatchingPool {
     asset_a: pool_in_asset_a,
     asset_b: pool_in_asset_b,
     lp_asset,
     trading_fee_numerator: pool_in_trading_fee_numerator,
     trading_fee_denominator: pool_in_trading_fee_denominator,
-    profit_sharing: pool_in_profit_sharing_opt,
+    profit_sharing: profit_sharing_opt,
     order_hash: pool_in_order_hash,
     address: pool_in_address,
-    delta_remaining_liquidity_supply: remaining_liquidity_supply_out - remaining_liquidity_supply_in,
     pool_state_in: (
+      pool_in_reserve_a,
+      pool_in_reserve_b,
       reserve_a_in,
       reserve_b_in,
       pool_in_total_liquidity,
-      pool_in_liquidity_share,
-      pool_in_root_k_last,
     ),
     pool_state_out: (
+      pool_out_reserve_a,
+      pool_out_reserve_b,
       reserve_a_out,
       reserve_b_out,
       pool_out_total_liquidity,
-      pool_out_liquidity_share,
-      pool_out_root_k_last,
     ),
   }
 }
@@ -294,7 +304,6 @@ fn validate_batching(
     profit_sharing,
     order_hash,
     address: pool_address,
-    delta_remaining_liquidity_supply,
     pool_state_in,
     pool_state_out,
   } =
@@ -350,50 +359,19 @@ fn validate_batching(
     // User Inputs and Outputs must have the same length
     list.length(sorted_user_inputs) == list.length(user_outputs)
   expect list.length(sorted_user_inputs) == list.length(user_outputs)
-  let (_, _, total_liquidity_in, liquidity_share_in, _) = pool_state_in
-  let (
-    reserve_a_out,
-    reserve_b_out,
-    total_liquidity_out,
-    liquidity_share_out,
-    root_k_last_out,
-  ) = pool_state_out
-  let (
-    new_reserve_a,
-    new_reserve_b,
-    new_total_liquidity,
-    new_liquidity_share,
-    new_root_k_last,
-  ) =
-    order_validation.apply_orders(
-      datum_map: all_datums,
-      asset_a: asset_a,
-      asset_b: asset_b,
-      lp_asset: lp_asset,
-      trading_fee_numerator: trading_fee_numerator,
-      trading_fee_denominator: trading_fee_denominator,
-      order_hash: order_hash,
-      profit_sharing_opt: profit_sharing,
-      order_inputs: sorted_user_inputs,
-      order_outputs: user_outputs,
-      pool_state: pool_state_in,
-    )
-  let delta_total_liquidity = total_liquidity_out - total_liquidity_in
-  let delta_liquidity_share = liquidity_share_out - liquidity_share_in
-  // Total Liquidity contains both share of Liquidity Provider and Minswap Labs
-  // Batching transaction transfers Liquidity Provider share to their addresses and keep Minswap Labs share
-  // Minswap Labs share is stored in @liquidity_share variable in Pool Datum 
-  let is_liquidity_correct =
-    delta_total_liquidity == delta_liquidity_share - delta_remaining_liquidity_supply
-  // Validate the Pool State (reserve_a, reserve_b, total_liquidity, liquidity_share, root_k_last) must be the same with the calculated amount after applying through all orders
-  expect
-    new_reserve_a == reserve_a_out && // New Reserve A must be equals amount of Asset A in Pool Value
-    new_reserve_b == reserve_b_out && // New Reserve B must be equals amount of Asset B in Pool Value
-    new_total_liquidity == total_liquidity_out && // New Total Liquidity must be equals with @total_liquidity variable in Pool Out Datum
-    new_liquidity_share == liquidity_share_out && // New Liquidity Share must be equals with @liquidity_share variable in Pool Out Datum
-    new_root_k_last == root_k_last_out && // New RootKLast must be equals with @root_k_last variable in Pool Out Datum
-    is_liquidity_correct
-  True
+  pool_state_out == order_validation.apply_orders(
+    datum_map: all_datums,
+    asset_a: asset_a,
+    asset_b: asset_b,
+    lp_asset: lp_asset,
+    trading_fee_numerator: trading_fee_numerator,
+    trading_fee_denominator: trading_fee_denominator,
+    order_hash: order_hash,
+    profit_sharing_opt: profit_sharing,
+    order_inputs: sorted_user_inputs,
+    order_outputs: user_outputs,
+    pool_state: pool_state_in,
+  )
 }
 
 fn validate_swap_multi_routing(

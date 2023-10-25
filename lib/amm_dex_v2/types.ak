@@ -31,8 +31,8 @@ pub type PoolDatum {
   asset_a: Asset,
   asset_b: Asset,
   total_liquidity: Int,
-  root_k_last: Int,
-  liquidity_share: Int,
+  reserve_a: Int,
+  reserve_b: Int,
   trading_fee_numerator: Int,
   trading_fee_denominator: Int,
   order_hash: ValidatorHash,
@@ -70,8 +70,8 @@ pub type OrderStep {
   // TODO: Combine SwapExactIn, SwapExactInStopLoss & SwapExactInOCO to single one
   SwapExactIn { direction: OrderDirection, minimum_receive: Int }
   // TODO: SwapExactInStopLoss & SwapExactInOCO: Find another way that's easier to understand for users
-  SwapExactInStopLoss { direction: OrderDirection, stop_loss_receive: Int }
-  SwapExactInOCO {
+  StopLoss { direction: OrderDirection, stop_loss_receive: Int }
+  OCO {
     direction: OrderDirection,
     minimum_receive: Int,
     stop_loss_receive: Int,
@@ -127,18 +127,17 @@ pub type BatchingPool {
   lp_asset: Asset,
   trading_fee_numerator: Int,
   trading_fee_denominator: Int,
-  profit_sharing: Option<ProfitSharing>,
+  profit_sharing: Option<(Int, Int)>,
   order_hash: ValidatorHash,
   address: Address,
-  delta_remaining_liquidity_supply: Int,
   pool_state_in: PoolState,
   pool_state_out: PoolState,
 }
 
-// Reserve A 
-// Reserve B
+// Datum Reserve A 
+// Datum Reserve B
+// Value Reserve A
+// Value Reserve B
 // Total Liquidity
-// Liquidity Share
-// Root K Last
 pub type PoolState =
   (Int, Int, Int, Int, Int)

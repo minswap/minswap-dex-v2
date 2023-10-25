@@ -6,10 +6,9 @@ use aiken/transaction/credential.{Address, ScriptCredential}
 use aiken/transaction/value.{Value, ada_asset_name, ada_policy_id}
 use amm_dex_v2/math
 use amm_dex_v2/types.{
-  AToB, Asset, BToA, BatchingPool, CustomDatumHash, DatumMap, Deposit,
-  OrderDatum, PartialSwap, PoolState, ProfitSharing, SwapExactIn, SwapExactInOCO,
-  SwapExactInStopLoss, SwapExactOut, SwapMultiRouting, SwapRouting, Withdraw,
-  ZapOut,
+  AToB, Asset, BToA, BatchingPool, CustomDatumHash, DatumMap, Deposit, OCO,
+  OrderDatum, PartialSwap, PoolState, StopLoss, SwapExactIn, SwapExactOut,
+  SwapMultiRouting, SwapRouting, Withdraw, ZapOut,
 }
 use amm_dex_v2/utils
 
@@ -23,16 +22,22 @@ fn validate_swap_exact_in(
   output_ada: Int,
   trading_fee_numerator: Int,
   trading_fee_denominator: Int,
+  profit_sharing_opt: Option<(Int, Int)>,
   pool_state: PoolState,
   checking_slippage_fn: fn(Int) -> Bool,
 ) -> PoolState {
-  let (reserve_a, reserve_b, total_liquidity, liquidity_share, root_k_last) =
-    pool_state
+  let (
+    datum_reserve_a,
+    datum_reserve_b,
+    value_reserve_a,
+    value_reserve_b,
+    total_liquidity,
+  ) = pool_state
   let (asset_in, asset_out, reserve_in, reserve_out) =
     if a_to_b_direction {
-      (asset_a, asset_b, reserve_a, reserve_b)
+      (asset_a, asset_b, datum_reserve_a, datum_reserve_b)
     } else {
-      (asset_b, asset_a, reserve_b, reserve_a)
+      (asset_b, asset_a, datum_reserve_b, datum_reserve_a)
     }
   let Asset { policy_id: asset_in_policy_id, asset_name: asset_in_asset_name } =
     asset_in
@@ -55,6 +60,18 @@ fn validate_swap_exact_in(
       trading_fee_numerator: trading_fee_numerator,
       trading_fee_denominator: trading_fee_denominator,
     )
+  let earned_fee_in =
+    when profit_sharing_opt is {
+      Some((fee_sharing_numerator, fee_sharing_denominator)) ->
+        math.calculate_earned_fee_in(
+          amount_in: amount_in,
+          trading_fee_numerator: trading_fee_numerator,
+          trading_fee_denominator: trading_fee_denominator,
+          fee_sharing_numerator: fee_sharing_numerator,
+          fee_sharing_denominator: fee_sharing_denominator,
+        )
+      None -> 0
+    }
   let not_over_slippage = checking_slippage_fn(amount_out)
   let actual_amount_out =
     value.quantity_of(
@@ -73,19 +90,19 @@ fn validate_swap_exact_in(
   expect has_enough_amount_in && not_over_slippage && is_valid_amount_out
   if a_to_b_direction {
     (
-      reserve_a + amount_in,
-      reserve_b - amount_out,
+      datum_reserve_a + amount_in - earned_fee_in,
+      datum_reserve_b - amount_out,
+      value_reserve_a + amount_in,
+      value_reserve_b - amount_out,
       total_liquidity,
-      liquidity_share,
-      root_k_last,
     )
   } else {
     (
-      reserve_a - amount_out,
-      reserve_b + amount_in,
+      datum_reserve_a - amount_out,
+      datum_reserve_b + amount_in - earned_fee_in,
+      value_reserve_a - amount_out,
+      value_reserve_b + amount_in,
       total_liquidity,
-      liquidity_share,
-      root_k_last,
     )
   }
 }
@@ -101,15 +118,21 @@ fn validate_swap_exact_out(
   output_ada: Int,
   trading_fee_numerator: Int,
   trading_fee_denominator: Int,
+  profit_sharing_opt: Option<(Int, Int)>,
   pool_state: PoolState,
 ) -> PoolState {
-  let (reserve_a, reserve_b, total_liquidity, liquidity_share, root_k_last) =
-    pool_state
+  let (
+    datum_reserve_a,
+    datum_reserve_b,
+    value_reserve_a,
+    value_reserve_b,
+    total_liquidity,
+  ) = pool_state
   let (asset_in, asset_out, reserve_in, reserve_out) =
     if a_to_b_direction {
-      (asset_a, asset_b, reserve_a, reserve_b)
+      (asset_a, asset_b, datum_reserve_a, datum_reserve_b)
     } else {
-      (asset_b, asset_a, reserve_b, reserve_a)
+      (asset_b, asset_a, datum_reserve_b, datum_reserve_a)
     }
   let Asset { policy_id: asset_in_policy_id, asset_name: asset_in_asset_name } =
     asset_in
@@ -132,6 +155,18 @@ fn validate_swap_exact_out(
       trading_fee_numerator,
       trading_fee_denominator,
     )
+  let earned_fee_in =
+    when profit_sharing_opt is {
+      Some((fee_sharing_numerator, fee_sharing_denominator)) ->
+        math.calculate_earned_fee_in(
+          amount_in: necessary_amount_in,
+          trading_fee_numerator: trading_fee_numerator,
+          trading_fee_denominator: trading_fee_denominator,
+          fee_sharing_numerator: fee_sharing_numerator,
+          fee_sharing_denominator: fee_sharing_denominator,
+        )
+      None -> 0
+    }
   let not_over_slippage = necessary_amount_in <= maximum_amount_in
   let actual_amount_out =
     value.quantity_of(
@@ -156,19 +191,19 @@ fn validate_swap_exact_out(
   expect has_enough_amount_in && not_over_slippage && is_valid_amount_out
   if a_to_b_direction {
     (
-      reserve_a + necessary_amount_in,
-      reserve_b - expected_receive,
+      datum_reserve_a + necessary_amount_in - earned_fee_in,
+      datum_reserve_b - expected_receive,
+      value_reserve_a + necessary_amount_in,
+      value_reserve_b - expected_receive,
       total_liquidity,
-      liquidity_share,
-      root_k_last,
     )
   } else {
     (
-      reserve_a - expected_receive,
-      reserve_b + necessary_amount_in,
+      datum_reserve_a - expected_receive,
+      datum_reserve_b + necessary_amount_in - earned_fee_in,
+      value_reserve_a - expected_receive,
+      value_reserve_b + necessary_amount_in,
       total_liquidity,
-      liquidity_share,
-      root_k_last,
     )
   }
 }
@@ -182,13 +217,18 @@ fn validate_deposit(
   lp_asset: Asset,
   batcher_fee: Int,
   output_ada: Int,
-  profit_sharing_opt: Option<ProfitSharing>,
+  profit_sharing_opt: Option<(Int, Int)>,
   trading_fee_numerator: Int,
   trading_fee_denominator: Int,
   pool_state: PoolState,
 ) -> PoolState {
-  let (reserve_a, reserve_b, total_liquidity, liquidity_share, root_k_last) =
-    pool_state
+  let (
+    datum_reserve_a,
+    datum_reserve_b,
+    value_reserve_a,
+    value_reserve_b,
+    total_liquidity,
+  ) = pool_state
   let Asset { policy_id: asset_a_policy_id, asset_name: asset_a_asset_name } =
     asset_a
   let Asset { policy_id: asset_b_policy_id, asset_name: asset_b_asset_name } =
@@ -207,15 +247,16 @@ fn validate_deposit(
     }
   let has_enough_amount_in =
     amount_a >= 0 && amount_b >= 0 && amount_a + amount_b > 0
-  let (reserve_product_after_swap, lp_amount) =
+  let (earned_fee_a, earned_fee_b, lp_amount) =
     math.calculate_deposit_amount(
       amount_a: amount_a,
       amount_b: amount_b,
-      reserve_a: reserve_a,
-      reserve_b: reserve_b,
+      reserve_a: datum_reserve_a,
+      reserve_b: datum_reserve_b,
       total_liquidity: total_liquidity,
       trading_fee_numerator: trading_fee_numerator,
       trading_fee_denominator: trading_fee_denominator,
+      profit_sharing_opt: profit_sharing_opt,
     )
   let not_over_slippage = lp_amount >= minimum_lp
   let lp_amount_out =
@@ -225,34 +266,13 @@ fn validate_deposit(
 
   let is_valid_amount_out =
     ada_amount_out == output_ada && lp_amount_out == lp_amount
-  let new_reserve_a = reserve_a + amount_a
-  let new_reserve_b = reserve_b + amount_b
-
-  let (delta_liquidity_share, new_root_k_last) =
-    when profit_sharing_opt is {
-      Some(profit_sharing) -> {
-        let ProfitSharing { fee_sharing_numerator, fee_sharing_denominator, .. } =
-          profit_sharing
-        let delta_liquidity_share =
-          math.calculate_profit_sharing(
-            root_k_last,
-            reserve_product_after_swap,
-            total_liquidity,
-            fee_sharing_numerator,
-            fee_sharing_denominator,
-          )
-        let new_root_k_last = math.calculate_sqrt(new_reserve_a * new_reserve_b)
-        (delta_liquidity_share, new_root_k_last)
-      }
-      None -> (0, root_k_last)
-    }
   expect has_enough_amount_in && not_over_slippage && is_valid_amount_out
   (
-    new_reserve_a,
-    new_reserve_b,
-    total_liquidity + lp_amount + delta_liquidity_share,
-    liquidity_share + delta_liquidity_share,
-    new_root_k_last,
+    datum_reserve_a + amount_a - earned_fee_a,
+    datum_reserve_b + amount_b - earned_fee_b,
+    value_reserve_a + amount_a,
+    value_reserve_b + amount_b,
+    total_liquidity + lp_amount,
   )
 }
 
@@ -265,11 +285,15 @@ fn validate_withdraw(
   asset_b: Asset,
   lp_asset: Asset,
   output_ada: Int,
-  profit_sharing_opt: Option<ProfitSharing>,
   pool_state: PoolState,
 ) -> PoolState {
-  let (reserve_a, reserve_b, total_liquidity, liquidity_share, root_k_last) =
-    pool_state
+  let (
+    datum_reserve_a,
+    datum_reserve_b,
+    value_reserve_a,
+    value_reserve_b,
+    total_liquidity,
+  ) = pool_state
   let Asset { policy_id: asset_a_policy_id, asset_name: asset_a_asset_name } =
     asset_a
   let Asset { policy_id: asset_b_policy_id, asset_name: asset_b_asset_name } =
@@ -280,8 +304,8 @@ fn validate_withdraw(
   let has_enough_amount_in = withdrawal_lp_amount > 0
   let (amount_a_out, amount_b_out) =
     math.calculate_withdraw(
-      reserve_a,
-      reserve_b,
+      datum_reserve_a,
+      datum_reserve_b,
       withdrawal_lp_amount,
       total_liquidity,
     )
@@ -299,33 +323,13 @@ fn validate_withdraw(
     } else {
       ada_amount_out == output_ada && actual_amount_a_out == amount_a_out && actual_amount_b_out == amount_b_out
     }
-  let new_reserve_a = reserve_a - amount_a_out
-  let new_reserve_b = reserve_b - amount_b_out
-  let (delta_liquidity_share, new_root_k_last) =
-    when profit_sharing_opt is {
-      Some(profit_sharing) -> {
-        let ProfitSharing { fee_sharing_numerator, fee_sharing_denominator, .. } =
-          profit_sharing
-        let delta_liquidity_share =
-          math.calculate_profit_sharing(
-            root_k_last,
-            reserve_a * reserve_b,
-            total_liquidity,
-            fee_sharing_numerator,
-            fee_sharing_denominator,
-          )
-        let new_root_k_last = math.calculate_sqrt(new_reserve_a * new_reserve_b)
-        (delta_liquidity_share, new_root_k_last)
-      }
-      None -> (0, root_k_last)
-    }
   expect has_enough_amount_in && not_over_slippage && is_valid_amount_out
   (
-    new_reserve_a,
-    new_reserve_b,
-    total_liquidity - withdrawal_lp_amount + delta_liquidity_share,
-    liquidity_share + delta_liquidity_share,
-    new_root_k_last,
+    datum_reserve_a - amount_a_out,
+    datum_reserve_b - amount_b_out,
+    value_reserve_a - amount_a_out,
+    value_reserve_b - amount_b_out,
+    total_liquidity - withdrawal_lp_amount,
   )
 }
 
@@ -338,13 +342,18 @@ fn validate_zap_out(
   asset_b: Asset,
   lp_asset: Asset,
   output_ada: Int,
-  profit_sharing_opt: Option<ProfitSharing>,
+  profit_sharing_opt: Option<(Int, Int)>,
   trading_fee_numerator: Int,
   trading_fee_denominator: Int,
   pool_state: PoolState,
 ) -> PoolState {
-  let (reserve_a, reserve_b, total_liquidity, liquidity_share, root_k_last) =
-    pool_state
+  let (
+    datum_reserve_a,
+    datum_reserve_b,
+    value_reserve_a,
+    value_reserve_b,
+    total_liquidity,
+  ) = pool_state
   let asset_out =
     if a_to_b_direction {
       asset_b
@@ -362,35 +371,17 @@ fn validate_zap_out(
     )
   let has_enough_amount_in = withdrawal_lp_amount > 0
 
-  let (reserve_product_after_withdraw, amount_out) =
+  let (earned_fee_a, earned_fee_b, amount_out) =
     math.calculate_zap_out(
       withdrawal_lp_amount: withdrawal_lp_amount,
-      reserve_a: reserve_a,
-      reserve_b: reserve_b,
+      reserve_a: datum_reserve_a,
+      reserve_b: datum_reserve_b,
       total_liquidity: total_liquidity,
       a_to_b_direction: a_to_b_direction,
       trading_fee_numerator: trading_fee_numerator,
       trading_fee_denominator: trading_fee_denominator,
+      profit_sharing_opt: profit_sharing_opt,
     )
-  let (delta_liquidity_share, new_root_k_last) =
-    when profit_sharing_opt is {
-      Some(profit_sharing) -> {
-        let ProfitSharing { fee_sharing_numerator, fee_sharing_denominator, .. } =
-          profit_sharing
-        let delta_liquidity_share =
-          math.calculate_profit_sharing(
-            root_k_last,
-            reserve_a * reserve_b,
-            total_liquidity,
-            fee_sharing_numerator,
-            fee_sharing_denominator,
-          )
-        let new_root_k_last =
-          math.calculate_sqrt(reserve_product_after_withdraw)
-        (delta_liquidity_share, new_root_k_last)
-      }
-      None -> (0, root_k_last)
-    }
   let not_over_slippage = amount_out >= minimum_receive
   let ada_amount =
     value.quantity_of(order_out_value, ada_policy_id, ada_asset_name)
@@ -409,19 +400,19 @@ fn validate_zap_out(
   expect has_enough_amount_in && not_over_slippage && is_valid_amount_out
   if a_to_b_direction {
     (
-      reserve_a,
-      reserve_b - amount_out,
-      total_liquidity - withdrawal_lp_amount + delta_liquidity_share,
-      liquidity_share + delta_liquidity_share,
-      new_root_k_last,
+      datum_reserve_a - earned_fee_a,
+      datum_reserve_b - earned_fee_b - amount_out,
+      value_reserve_a,
+      value_reserve_b - amount_out,
+      total_liquidity - withdrawal_lp_amount,
     )
   } else {
     (
-      reserve_a - amount_out,
-      reserve_b,
-      total_liquidity - withdrawal_lp_amount + delta_liquidity_share,
-      liquidity_share + delta_liquidity_share,
-      new_root_k_last,
+      datum_reserve_a - amount_out - earned_fee_a,
+      datum_reserve_b - earned_fee_b,
+      value_reserve_a - amount_out,
+      value_reserve_b,
+      total_liquidity - withdrawal_lp_amount,
     )
   }
 }
@@ -440,15 +431,21 @@ fn validate_partial_swap(
   output_ada: Int,
   trading_fee_numerator: Int,
   trading_fee_denominator: Int,
+  profit_sharing_opt: Option<(Int, Int)>,
   pool_state: PoolState,
 ) -> (Int, Int, Int, Int, Int, Bool) {
-  let (reserve_a, reserve_b, total_liquidity, liquidity_share, root_k_last) =
-    pool_state
+  let (
+    datum_reserve_a,
+    datum_reserve_b,
+    value_reserve_a,
+    value_reserve_b,
+    total_liquidity,
+  ) = pool_state
   let (asset_in, asset_out, reserve_in, reserve_out) =
     if a_to_b_direction {
-      (asset_a, asset_b, reserve_a, reserve_b)
+      (asset_a, asset_b, datum_reserve_a, datum_reserve_b)
     } else {
-      (asset_b, asset_a, reserve_b, reserve_a)
+      (asset_b, asset_a, datum_reserve_b, datum_reserve_a)
     }
   let Asset { policy_id: asset_in_policy_id, asset_name: asset_in_asset_name } =
     asset_in
@@ -488,6 +485,18 @@ fn validate_partial_swap(
       trading_fee_numerator: trading_fee_numerator,
       trading_fee_denominator: trading_fee_denominator,
     )
+  let earned_fee_in =
+    when profit_sharing_opt is {
+      Some((fee_sharing_numerator, fee_sharing_denominator)) ->
+        math.calculate_earned_fee_in(
+          amount_in: swap_amount_in,
+          trading_fee_numerator: trading_fee_numerator,
+          trading_fee_denominator: trading_fee_denominator,
+          fee_sharing_numerator: fee_sharing_numerator,
+          fee_sharing_denominator: fee_sharing_denominator,
+        )
+      None -> 0
+    }
   let ada_out_require = batcher_fee * ( hops - 1 ) + output_ada
   let old_amount_out =
     value.quantity_of(order_in_value, asset_out_policy_id, asset_out_asset_name)
@@ -516,20 +525,20 @@ fn validate_partial_swap(
     hops - 1 > 0 && remaining_amount_in >= minimum_swap_amount_required
   if a_to_b_direction {
     (
-      reserve_a + swap_amount_in,
-      reserve_b - amount_out,
+      datum_reserve_a + swap_amount_in - earned_fee_in,
+      datum_reserve_b - amount_out,
+      value_reserve_a + swap_amount_in,
+      value_reserve_b - amount_out,
       total_liquidity,
-      liquidity_share,
-      root_k_last,
       has_next_swap,
     )
   } else {
     (
-      reserve_a - amount_out,
-      reserve_b + swap_amount_in,
+      datum_reserve_a - amount_out,
+      datum_reserve_b + swap_amount_in - earned_fee_in,
+      value_reserve_a - amount_out,
+      value_reserve_b + swap_amount_in,
       total_liquidity,
-      liquidity_share,
-      root_k_last,
       has_next_swap,
     )
   }
@@ -546,16 +555,29 @@ fn get_multi_routing_swap_amount_out(
     lp_asset: pool_lp_asset,
     trading_fee_numerator,
     trading_fee_denominator,
+    profit_sharing,
     ..
   } = pool
-  let (old_reserve_a, old_reserve_b, _, _, _) = pool_state_in
-  let (new_reserve_a, new_reserve_b, _, _, _) = pool_state_out
+  let (
+    old_datum_reserve_a,
+    old_datum_reserve_b,
+    old_value_reserve_a,
+    old_value_reserve_b,
+    _,
+  ) = pool_state_in
+  let (
+    new_datum_reserve_a,
+    new_datum_reserve_b,
+    new_value_reserve_a,
+    new_value_reserve_b,
+    _,
+  ) = pool_state_out
   let SwapRouting { lp_asset: routing_lp_asset, direction } = routing
   expect pool_lp_asset == routing_lp_asset
   let (reserve_in, reserve_out) =
     when direction is {
-      AToB -> (old_reserve_a, old_reserve_b)
-      BToA -> (old_reserve_b, old_reserve_a)
+      AToB -> (old_datum_reserve_a, old_datum_reserve_b)
+      BToA -> (old_datum_reserve_b, old_datum_reserve_a)
     }
 
   expect amount_in > 0
@@ -567,14 +589,34 @@ fn get_multi_routing_swap_amount_out(
       trading_fee_numerator: trading_fee_numerator,
       trading_fee_denominator: trading_fee_denominator,
     )
+  let earned_fee_in =
+    when profit_sharing is {
+      Some((fee_sharing_numerator, fee_sharing_denominator)) ->
+        math.calculate_earned_fee_in(
+          amount_in: amount_in,
+          trading_fee_numerator: trading_fee_numerator,
+          trading_fee_denominator: trading_fee_denominator,
+          fee_sharing_numerator: fee_sharing_numerator,
+          fee_sharing_denominator: fee_sharing_denominator,
+        )
+      None -> 0
+    }
   expect amount_out > 0
   expect
     when direction is {
       AToB ->
-        old_reserve_a + amount_in == new_reserve_a && old_reserve_b - amount_out == new_reserve_b
+        old_datum_reserve_a + amount_in - earned_fee_in == new_datum_reserve_a && // hihi
+        old_datum_reserve_b - amount_out == new_datum_reserve_b && // hihi
+        old_value_reserve_a + amount_in == new_value_reserve_a && // hihi
+        old_value_reserve_b - amount_out == new_value_reserve_b
+      // hihi
       BToA ->
-        old_reserve_a - amount_out == new_reserve_a && old_reserve_b + amount_in == new_reserve_b
+        old_datum_reserve_a - amount_out == new_datum_reserve_a && // hihi
+        old_datum_reserve_b + amount_in - earned_fee_in == new_datum_reserve_b && // hihi
+        old_value_reserve_a - amount_out == new_value_reserve_a && // hihi
+        old_value_reserve_b + amount_in == new_value_reserve_b
     }
+  // hihi 
   amount_out
 }
 
@@ -601,88 +643,6 @@ pub fn get_swap_multi_amount_out(
         }
       }
   }
-}
-
-test test_validate_swap_multi_routing_order() {
-  let pool_1_asset_a =
-    Asset { policy_id: ada_policy_id, asset_name: ada_asset_name }
-  let pool_1_asset_b =
-    Asset {
-      policy_id: #"e16c2dc8ae937e8d3790c7fd7168d7b994621ba14ca11415f39fed72",
-      asset_name: #"4d494e",
-    }
-  let pool_1_lp_asset =
-    Asset {
-      policy_id: #"1a919d30617fcbc8a92c337c59c3aecb6c4ded8f154e4c24528ccea2",
-      asset_name: #"6c3ea488e6ff940bb6fb1b18fd605b5931d9fefde6440117015ba484cf321200",
-    }
-  let pool_1_pool_state_in =
-    (27877961987941, 414804973691450, 106241703280080, 0, 0)
-
-  let pool_1_pool_state_out =
-    (27871263020717, 414904973691450, 106241703280080, 0, 0)
-
-  let pool1 =
-    BatchingPool {
-      asset_a: pool_1_asset_a,
-      asset_b: pool_1_asset_b,
-      lp_asset: pool_1_lp_asset,
-      trading_fee_numerator: 3,
-      trading_fee_denominator: 1000,
-      profit_sharing: None,
-      order_hash: #"6dc232f0f5832da2070a232ad2f58433883b9a277577048b40d17673",
-      address: credential.from_script(
-        #"11f3fb05033cb08e95f5c6d4b11891003dc762a46828a4b6f164efe2",
-      ),
-      delta_remaining_liquidity_supply: 0,
-      pool_state_in: pool_1_pool_state_in,
-      pool_state_out: pool_1_pool_state_out,
-    }
-  let pool_2_asset_a =
-    Asset { policy_id: ada_policy_id, asset_name: ada_asset_name }
-  let pool_2_asset_b =
-    Asset {
-      policy_id: #"f66d78b4a3cb3d37afa0ec36461e51ecbde00f26c8f0a68f94b69880",
-      asset_name: #"69555344",
-    }
-  let pool_2_lp_asset =
-    Asset {
-      policy_id: #"1a919d30617fcbc8a92c337c59c3aecb6c4ded8f154e4c24528ccea2",
-      asset_name: #"452089abb5bf8cc59b678a2cd7b9ee952346c6c0aa1cf27df324310a70d02fc3",
-    }
-  let pool_2_pool_state_in = (5281584632864, 1432277778019, 2450077671602, 0, 0)
-  let pool_2_pool_state_out =
-    (5288283600088, 1430468867110, 2450077671602, 0, 0)
-  let pool2 =
-    BatchingPool {
-      asset_a: pool_2_asset_a,
-      asset_b: pool_2_asset_b,
-      lp_asset: pool_2_lp_asset,
-      trading_fee_numerator: 3,
-      trading_fee_denominator: 1000,
-      profit_sharing: None,
-      order_hash: #"6dc232f0f5832da2070a232ad2f58433883b9a277577048b40d17673",
-      address: credential.from_script(
-        #"11f3fb05033cb08e95f5c6d4b11891003dc762a46828a4b6f164efe2",
-      ),
-      delta_remaining_liquidity_supply: 0,
-      pool_state_in: pool_2_pool_state_in,
-      pool_state_out: pool_2_pool_state_out,
-    }
-  let pools =
-    [pool1, pool2]
-  let routing1 = SwapRouting { lp_asset: pool_1_lp_asset, direction: BToA }
-  let routing2 = SwapRouting { lp_asset: pool_2_lp_asset, direction: AToB }
-  let routings =
-    [routing1, routing2]
-  let amount_out =
-    get_swap_multi_amount_out(
-      amount_in: 100000000000,
-      current_amount_out: 0,
-      all_pools: pools,
-      all_routings: routings,
-    )
-  amount_out == 1808910909
 }
 
 pub fn validate_swap_multi_routing_order(
@@ -790,7 +750,7 @@ pub fn apply_orders(
   trading_fee_numerator: Int,
   trading_fee_denominator: Int,
   order_hash: ByteArray,
-  profit_sharing_opt: Option<ProfitSharing>,
+  profit_sharing_opt: Option<(Int, Int)>,
   order_inputs: List<Input>,
   order_outputs: List<Output>,
   pool_state: PoolState,
@@ -847,13 +807,14 @@ pub fn apply_orders(
                   output_ada: output_ada,
                   trading_fee_numerator: trading_fee_numerator,
                   trading_fee_denominator: trading_fee_denominator,
+                  profit_sharing_opt: profit_sharing_opt,
                   pool_state: pool_state,
                   checking_slippage_fn: fn(amount_out) {
                     amount_out >= minimum_receive
                   },
                 )
               }
-              SwapExactInStopLoss(direction, stop_loss_receive) -> {
+              StopLoss(direction, stop_loss_receive) -> {
                 expect stop_loss_receive > 0
                 expect
                   validate_order_receiver(
@@ -876,13 +837,14 @@ pub fn apply_orders(
                   output_ada: output_ada,
                   trading_fee_numerator: trading_fee_numerator,
                   trading_fee_denominator: trading_fee_denominator,
+                  profit_sharing_opt: profit_sharing_opt,
                   pool_state: pool_state,
                   checking_slippage_fn: fn(amount_out) {
                     amount_out <= stop_loss_receive
                   },
                 )
               }
-              SwapExactInOCO(direction, minimum_receive, stop_loss_receive) -> {
+              OCO(direction, minimum_receive, stop_loss_receive) -> {
                 expect minimum_receive > 0 && stop_loss_receive > 0
                 expect
                   validate_order_receiver(
@@ -905,6 +867,7 @@ pub fn apply_orders(
                   output_ada: output_ada,
                   trading_fee_numerator: trading_fee_numerator,
                   trading_fee_denominator: trading_fee_denominator,
+                  profit_sharing_opt: profit_sharing_opt,
                   pool_state: pool_state,
                   checking_slippage_fn: fn(amount_out) {
                     amount_out >= minimum_receive || amount_out <= stop_loss_receive
@@ -935,6 +898,7 @@ pub fn apply_orders(
                   output_ada: output_ada,
                   trading_fee_numerator: trading_fee_numerator,
                   trading_fee_denominator: trading_fee_denominator,
+                  profit_sharing_opt: profit_sharing_opt,
                   pool_state: pool_state,
                 )
               }
@@ -978,7 +942,6 @@ pub fn apply_orders(
                   asset_b: asset_b,
                   lp_asset: lp_asset,
                   output_ada: output_ada,
-                  profit_sharing_opt: profit_sharing_opt,
                   pool_state: pool_state,
                 )
               }
@@ -1046,6 +1009,7 @@ pub fn apply_orders(
                     output_ada: output_ada,
                     trading_fee_numerator: trading_fee_numerator,
                     trading_fee_denominator: trading_fee_denominator,
+                    profit_sharing_opt: profit_sharing_opt,
                     pool_state: pool_state,
                   )
                 expect
@@ -1125,4 +1089,258 @@ pub fn apply_orders(
         }
       }
   }
+}
+
+test test_validate_swap_exact_in_with_no_fee_sharing() {
+  let asset_a = Asset { policy_id: ada_policy_id, asset_name: ada_asset_name }
+  let asset_b =
+    Asset {
+      policy_id: #"e16c2dc8ae937e8d3790c7fd7168d7b994621ba14ca11415f39fed72",
+      asset_name: #"4d494e",
+    }
+  let batcher_fee = 2000000
+  let output_ada = 2000000
+  let amount_in = 1000000000
+  let amount_out = 14834146387
+  let order_in_value =
+    value.zero()
+      |> value.add(
+           ada_policy_id,
+           ada_asset_name,
+           batcher_fee + output_ada + amount_in,
+         )
+  let order_out_value =
+    value.zero()
+      |> value.add(ada_policy_id, ada_asset_name, output_ada)
+      |> value.add(
+           #"e16c2dc8ae937e8d3790c7fd7168d7b994621ba14ca11415f39fed72",
+           #"4d494e",
+           amount_out,
+         )
+  let new_pool_state =
+    validate_swap_exact_in(
+      order_in_value: order_in_value,
+      order_out_value: order_out_value,
+      a_to_b_direction: True,
+      asset_a: asset_a,
+      asset_b: asset_b,
+      batcher_fee: batcher_fee,
+      output_ada: output_ada,
+      trading_fee_numerator: 3,
+      trading_fee_denominator: 1000,
+      profit_sharing_opt: None,
+      pool_state: (
+        27877961987941,
+        414804973691450,
+        27877961987941,
+        414804973691450,
+        106241703280080,
+      ),
+      checking_slippage_fn: fn(o) { o > 1 },
+    )
+  // let fee_share = amount_in * 3 / ( 1000 * 6 )
+  new_pool_state == (
+    27878961987941,
+    414790139545063,
+    27878961987941,
+    414790139545063,
+    106241703280080,
+  )
+}
+
+test test_validate_swap_exact_in_with_fee_sharing() {
+  let asset_a = Asset { policy_id: ada_policy_id, asset_name: ada_asset_name }
+  let asset_b =
+    Asset {
+      policy_id: #"e16c2dc8ae937e8d3790c7fd7168d7b994621ba14ca11415f39fed72",
+      asset_name: #"4d494e",
+    }
+  let batcher_fee = 2000000
+  let output_ada = 2000000
+  let amount_in = 1000000000
+  let amount_out = 16200168971
+  let order_in_value =
+    value.zero()
+      |> value.add(
+           ada_policy_id,
+           ada_asset_name,
+           batcher_fee + output_ada + amount_in,
+         )
+  let order_out_value =
+    value.zero()
+      |> value.add(ada_policy_id, ada_asset_name, output_ada)
+      |> value.add(
+           #"e16c2dc8ae937e8d3790c7fd7168d7b994621ba14ca11415f39fed72",
+           #"4d494e",
+           amount_out,
+         )
+  let new_pool_state =
+    validate_swap_exact_in(
+      order_in_value: order_in_value,
+      order_out_value: order_out_value,
+      a_to_b_direction: True,
+      asset_a: asset_a,
+      asset_b: asset_b,
+      batcher_fee: batcher_fee,
+      output_ada: output_ada,
+      trading_fee_numerator: 3,
+      trading_fee_denominator: 1000,
+      profit_sharing_opt: Some((1, 6)),
+      pool_state: (
+        25434557769208,
+        413300185707175,
+        25434557769208,
+        413300185707175,
+        101211362398220,
+      ),
+      checking_slippage_fn: fn(o) { o > 1 },
+    )
+  let fee_share = amount_in * 3 / ( 1000 * 6 )
+  new_pool_state == (
+    25434557769208 + amount_in - fee_share,
+    413300185707175 - amount_out,
+    25434557769208 + amount_in,
+    413300185707175 - amount_out,
+    101211362398220,
+  )
+}
+
+test test_validate_swap_multi_routing_order() {
+  let pool_1_asset_a =
+    Asset { policy_id: ada_policy_id, asset_name: ada_asset_name }
+  let pool_1_asset_b =
+    Asset {
+      policy_id: #"e16c2dc8ae937e8d3790c7fd7168d7b994621ba14ca11415f39fed72",
+      asset_name: #"4d494e",
+    }
+  let pool_1_lp_asset =
+    Asset {
+      policy_id: #"1a919d30617fcbc8a92c337c59c3aecb6c4ded8f154e4c24528ccea2",
+      asset_name: #"6c3ea488e6ff940bb6fb1b18fd605b5931d9fefde6440117015ba484cf321200",
+    }
+  let pool_1_pool_state_in =
+    (
+      27877961987941,
+      414804973691450,
+      27877961987941,
+      414804973691450,
+      106241703280080,
+    )
+
+  let pool_1_pool_state_out =
+    (
+      27871263020717,
+      414904973691450,
+      27871263020717,
+      414904973691450,
+      106241703280080,
+    )
+
+  let pool1 =
+    BatchingPool {
+      asset_a: pool_1_asset_a,
+      asset_b: pool_1_asset_b,
+      lp_asset: pool_1_lp_asset,
+      trading_fee_numerator: 3,
+      trading_fee_denominator: 1000,
+      profit_sharing: None,
+      order_hash: #"6dc232f0f5832da2070a232ad2f58433883b9a277577048b40d17673",
+      address: credential.from_script(
+        #"11f3fb05033cb08e95f5c6d4b11891003dc762a46828a4b6f164efe2",
+      ),
+      pool_state_in: pool_1_pool_state_in,
+      pool_state_out: pool_1_pool_state_out,
+    }
+  let pool_2_asset_a =
+    Asset { policy_id: ada_policy_id, asset_name: ada_asset_name }
+  let pool_2_asset_b =
+    Asset {
+      policy_id: #"f66d78b4a3cb3d37afa0ec36461e51ecbde00f26c8f0a68f94b69880",
+      asset_name: #"69555344",
+    }
+  let pool_2_lp_asset =
+    Asset {
+      policy_id: #"1a919d30617fcbc8a92c337c59c3aecb6c4ded8f154e4c24528ccea2",
+      asset_name: #"452089abb5bf8cc59b678a2cd7b9ee952346c6c0aa1cf27df324310a70d02fc3",
+    }
+  let pool_2_pool_state_in =
+    (5281584632864, 1432277778019, 5281584632864, 1432277778019, 2450077671602)
+  let pool_2_pool_state_out =
+    (5288283600088, 1430468867110, 5288283600088, 1430468867110, 2450077671602)
+  let pool2 =
+    BatchingPool {
+      asset_a: pool_2_asset_a,
+      asset_b: pool_2_asset_b,
+      lp_asset: pool_2_lp_asset,
+      trading_fee_numerator: 3,
+      trading_fee_denominator: 1000,
+      profit_sharing: None,
+      order_hash: #"6dc232f0f5832da2070a232ad2f58433883b9a277577048b40d17673",
+      address: credential.from_script(
+        #"11f3fb05033cb08e95f5c6d4b11891003dc762a46828a4b6f164efe2",
+      ),
+      pool_state_in: pool_2_pool_state_in,
+      pool_state_out: pool_2_pool_state_out,
+    }
+  let pools =
+    [pool1, pool2]
+  let routing1 = SwapRouting { lp_asset: pool_1_lp_asset, direction: BToA }
+  let routing2 = SwapRouting { lp_asset: pool_2_lp_asset, direction: AToB }
+  let routings =
+    [routing1, routing2]
+  let amount_out =
+    get_swap_multi_amount_out(
+      amount_in: 100000000000,
+      current_amount_out: 0,
+      all_pools: pools,
+      all_routings: routings,
+    )
+  amount_out == 1808910909
+}
+
+test test_validate_deposit() {
+  let asset_a = Asset { policy_id: ada_policy_id, asset_name: ada_asset_name }
+  let asset_b =
+    Asset {
+      policy_id: #"e16c2dc8ae937e8d3790c7fd7168d7b994621ba14ca11415f39fed72",
+      asset_name: #"4d494e",
+    }
+  let lp_asset =
+    Asset {
+      policy_id: #"51eee5fe126a1337497dd4d0a43efb31c9f791436b74472a4fc4536a",
+      asset_name: #"6c3ea488e6ff940bb6fb1b18fd605b5931d9fefde6440117015ba484cf321200",
+    }
+  let batcher_fee = 2000000
+  let output_ada = 2000000
+  let amount_a = 1000000
+  let amount_b = 123112
+  let amount_out = 867556
+  let order_in_value =
+    value.zero()
+      |> value.add(
+           ada_policy_id,
+           ada_asset_name,
+           batcher_fee + output_ada + amount_a,
+         )
+      |> value.add(asset_b.policy_id, asset_b.asset_name, amount_b)
+  let order_out_value =
+    value.zero()
+      |> value.add(ada_policy_id, ada_asset_name, output_ada)
+      |> value.add(lp_asset.policy_id, lp_asset.asset_name, amount_out)
+  let new_pool_state =
+    validate_deposit(
+      order_in_value: order_in_value,
+      order_out_value: order_out_value,
+      minimum_lp: amount_out,
+      asset_a: asset_a,
+      asset_b: asset_b,
+      lp_asset: lp_asset,
+      batcher_fee: batcher_fee,
+      output_ada: output_ada,
+      trading_fee_numerator: 1,
+      trading_fee_denominator: 100,
+      profit_sharing_opt: None,
+      pool_state: (1000000, 4000000, 1000000, 4000000, 2000000),
+    )
+  new_pool_state == (2000000, 4123112, 2000000, 4123112, 2867556)
 }
