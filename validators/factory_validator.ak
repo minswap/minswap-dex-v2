@@ -106,8 +106,8 @@ validator(
       asset_a: pool_datum_asset_a,
       asset_b: pool_datum_asset_b,
       total_liquidity: pool_datum_total_liquidity,
-      root_k_last: pool_datum_root_k_last,
-      liquidity_share: pool_datum_liquidity_share,
+      reserve_a: pool_datum_reserve_a,
+      reserve_b: pool_datum_reserve_b,
       trading_fee_numerator: pool_datum_trading_fee_numerator,
       trading_fee_denominator: pool_datum_trading_fee_denominator,
       order_hash: pool_datum_order_hash,
@@ -137,8 +137,7 @@ validator(
     expect
       pool_datum_asset_a == asset_a && pool_datum_asset_b == asset_b && // Asset A & B must be existed in Pool Datum
       pool_datum_total_liquidity == total_liquidity && // Total Liquidity in PoolDatum must be sqrt(amount_a * amount_b)
-      pool_datum_root_k_last == 0 && // RootKLast must be zero
-      pool_datum_liquidity_share == 0 && // Liquidity Share must be zero 
+      pool_datum_reserve_a == amount_a && pool_datum_reserve_b == amount_b && // Pool Reserve must be the same between datum and value 
       pool_datum_trading_fee_numerator > 0 && pool_datum_trading_fee_denominator > 0 && pool_datum_trading_fee_numerator < pool_datum_trading_fee_denominator && // Trading Fee Numenator & Denominator must be positive, Trading Fee Numenator must be less than Trading Fee Denominator
       pool_datum_order_hash == order_hash
     // Order Hash in Pool Datum must be matched with Order Hash in parameters

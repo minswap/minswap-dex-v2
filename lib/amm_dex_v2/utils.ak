@@ -103,30 +103,26 @@ pub fn compare_pool_datum(datum1: PoolDatum, datum2: PoolDatum) -> Bool {
     asset_a: datum_1_asset_a,
     asset_b: datum_1_asset_b,
     total_liquidity: datum_1_total_liquidity,
-    root_k_last: datum_1_root_k_last,
-    liquidity_share: datum_1_liquidity_share,
     trading_fee_numerator: datum_1_trading_fee_numerator,
     trading_fee_denominator: datum_1_trading_fee_denominator,
     order_hash: datum_1_order_hash,
     profit_sharing_opt: datum_1_profit_sharing_opt,
+    ..
   } = datum1
 
   let PoolDatum {
     asset_a: datum_2_asset_a,
     asset_b: datum_2_asset_b,
     total_liquidity: datum_2_total_liquidity,
-    root_k_last: datum_2_root_k_last,
-    liquidity_share: datum_2_liquidity_share,
     trading_fee_numerator: datum_2_trading_fee_numerator,
     trading_fee_denominator: datum_2_trading_fee_denominator,
     order_hash: datum_2_order_hash,
     profit_sharing_opt: datum_2_profit_sharing_opt,
+    ..
   } = datum2
   datum_1_asset_a == datum_2_asset_a && // hehe
   datum_1_asset_b == datum_2_asset_b && // hehe
   datum_1_total_liquidity == datum_2_total_liquidity && // hehe
-  datum_1_root_k_last == datum_2_root_k_last && // hehe
-  datum_1_liquidity_share == datum_2_liquidity_share && // hehe
   datum_1_trading_fee_numerator == datum_2_trading_fee_numerator && // hehe
   datum_1_trading_fee_denominator == datum_2_trading_fee_denominator && // hehe
   datum_1_order_hash == datum_2_order_hash && // hehe
