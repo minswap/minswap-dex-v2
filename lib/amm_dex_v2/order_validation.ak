@@ -547,10 +547,8 @@ fn validate_partial_swap(
 fn validate_withdraw_with_ratio(
   order_in_value: Value,
   order_out_value: Value,
-  asset_a_ratio: Int,
-  asset_b_ratio: Int,
-  minimum_amount_a: Int,
-  minimum_amount_b: Int,
+  minimum_ratio_asset_a: Int,
+  minimum_ratio_asset_b: Int,
   asset_a: Asset,
   asset_b: Asset,
   lp_asset: Asset,
@@ -577,8 +575,8 @@ fn validate_withdraw_with_ratio(
   let has_enough_amount_in = withdrawal_lp_amount > 0
   let (earned_fee_a, earned_fee_b, amount_a_out, amount_b_out) =
     math.calculate_withdraw_with_ratio(
-      asset_a_ratio: asset_a_ratio,
-      asset_b_ratio: asset_b_ratio,
+      asset_a_ratio: minimum_ratio_asset_a,
+      asset_b_ratio: minimum_ratio_asset_b,
       reserve_a: datum_reserve_a,
       reserve_b: datum_reserve_b,
       trading_fee_numerator: trading_fee_numerator,
@@ -588,7 +586,7 @@ fn validate_withdraw_with_ratio(
       profit_sharing_opt: profit_sharing_opt,
     )
   let not_over_slippage =
-    amount_a_out >= minimum_amount_a && amount_b_out >= minimum_amount_b
+    amount_a_out >= minimum_ratio_asset_a && amount_b_out >= minimum_ratio_asset_a
   let actual_amount_a_out =
     value.quantity_of(order_out_value, asset_a_policy_id, asset_a_asset_name)
   let actual_amount_b_out =
@@ -1139,13 +1137,11 @@ pub fn apply_orders(
                 )
               }
               WithdrawWithRatio(
-                asset_a_ratio,
-                asset_b_ratio,
-                minimum_amount_a,
-                minimum_amount_b,
+                minimum_ratio_asset_a,
+                minimum_ratio_asset_b,
               ) -> {
                 expect
-                  asset_a_ratio > 0 && asset_b_ratio > 0 && minimum_amount_a > 0 && minimum_amount_b > 0
+                  minimum_ratio_asset_a > 0 && minimum_ratio_asset_b > 0
                 expect
                   validate_order_receiver(
                     receiver: receiver,
@@ -1155,10 +1151,8 @@ pub fn apply_orders(
                 validate_withdraw_with_ratio(
                   order_in_value: order_in_value,
                   order_out_value: order_out_value,
-                  asset_a_ratio: asset_a_ratio,
-                  asset_b_ratio: asset_b_ratio,
-                  minimum_amount_a: minimum_amount_a,
-                  minimum_amount_b: minimum_amount_b,
+                  minimum_ratio_asset_a: minimum_ratio_asset_a,
+                  minimum_ratio_asset_b: minimum_ratio_asset_b,
                   asset_a: asset_a,
                   asset_b: asset_b,
                   lp_asset: lp_asset,
