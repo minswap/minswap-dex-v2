@@ -1136,12 +1136,8 @@ pub fn apply_orders(
                   new_root_k_last,
                 )
               }
-              WithdrawWithRatio(
-                minimum_ratio_asset_a,
-                minimum_ratio_asset_b,
-              ) -> {
-                expect
-                  minimum_ratio_asset_a > 0 && minimum_ratio_asset_b > 0
+              WithdrawWithRatio(minimum_ratio_asset_a, minimum_ratio_asset_b) -> {
+                expect minimum_ratio_asset_a > 0 && minimum_ratio_asset_b > 0
                 expect
                   validate_order_receiver(
                     receiver: receiver,
