@@ -586,8 +586,7 @@ fn validate_withdraw_imbalance(
       total_liquidity: total_liquidity,
       profit_sharing_opt: profit_sharing_opt,
     )
-  let not_over_slippage =
-    amount_a_out >= minimum_amount_a
+  let not_over_slippage = amount_a_out >= minimum_amount_a
   let actual_amount_a_out =
     value.quantity_of(order_out_value, asset_a_policy_id, asset_a_asset_name)
   let actual_amount_b_out =
@@ -1138,7 +1137,8 @@ pub fn apply_orders(
                 )
               }
               WithdrawImbalance(ratio_asset_a, ratio_asset_b, minimum_asset_a) -> {
-                expect ratio_asset_a > 0 && ratio_asset_b > 0 && minimum_asset_a > 0 
+                expect
+                  ratio_asset_a > 0 && ratio_asset_b > 0 && minimum_asset_a > 0
                 expect
                   validate_order_receiver(
                     receiver: receiver,
