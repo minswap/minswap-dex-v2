@@ -1,3 +1,4 @@
+use aiken/builtin
 use aiken/list
 use aiken/transaction.{
   Input, Output, OutputReference, ScriptContext, Spend, Transaction,
@@ -29,7 +30,7 @@ validator(
     expect Spend(pool_input_ref) = purpose
     when redeemer is {
       Batching(batcher_address, input_indexes, license_index) -> {
-        expect license_index >= 0 && list.length(input_indexes) > 0
+        expect license_index >= 0 && !builtin.null_list(input_indexes)
         let Transaction {
           inputs,
           outputs,
