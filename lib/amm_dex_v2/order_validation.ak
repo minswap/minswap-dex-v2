@@ -8,7 +8,7 @@ use amm_dex_v2/math
 use amm_dex_v2/types.{
   AToB, Asset, BToA, BatchingPool, CustomDatumHash, DatumMap, Deposit, OCO,
   OrderDatum, PartialSwap, PoolState, StopLoss, SwapExactIn, SwapExactOut,
-  SwapMultiRouting, SwapRouting, Withdraw, WithdrawWithRatio, ZapOut,
+  SwapMultiRouting, SwapRouting, Withdraw, WithdrawImbalance, ZapOut,
 }
 use amm_dex_v2/utils
 
@@ -544,7 +544,7 @@ fn validate_partial_swap(
   }
 }
 
-fn validate_withdraw_with_ratio(
+fn validate_withdraw_imbalance(
   order_in_value: Value,
   order_out_value: Value,
   minimum_ratio_asset_a: Int,
@@ -1136,7 +1136,7 @@ pub fn apply_orders(
                   new_root_k_last,
                 )
               }
-              WithdrawWithRatio(minimum_ratio_asset_a, minimum_ratio_asset_b) -> {
+              WithdrawImbalance(minimum_ratio_asset_a, minimum_ratio_asset_b) -> {
                 expect minimum_ratio_asset_a > 0 && minimum_ratio_asset_b > 0
                 expect
                   validate_order_receiver(
@@ -1144,7 +1144,7 @@ pub fn apply_orders(
                     receiver_datum_hash_opt: receiver_datum_hash_opt,
                     output: output,
                   )
-                validate_withdraw_with_ratio(
+                validate_withdraw_imbalance(
                   order_in_value: order_in_value,
                   order_out_value: order_out_value,
                   minimum_ratio_asset_a: minimum_ratio_asset_a,
