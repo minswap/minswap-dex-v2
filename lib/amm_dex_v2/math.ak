@@ -404,7 +404,7 @@ fn calculate_withdraw_swap_amount(
 }
 
 // return earning fee(a,b)+ amount out(a,b)
-pub fn calculate_withdraw_with_ratio(
+pub fn calculate_withdraw_imbalance(
   expect_ab_ratio_numerator: Int,
   expect_ab_ratio_denominator: Int,
   reserve_a: Int,
@@ -511,7 +511,7 @@ pub fn calculate_withdraw_with_ratio(
   }
 }
 
-test test_calculate_withdraw_with_ratio() {
+test test_calculate_withdraw_imbalance() {
   let reserve_a = 1_000_000_000
   let reserve_b = 1_000_000_000
   let total_liquidity = 1_000_000_000
@@ -522,7 +522,7 @@ test test_calculate_withdraw_with_ratio() {
   let asset_b_ratio = 1
   let profit_sharing_opt = None
 
-  calculate_withdraw_with_ratio(
+  calculate_withdraw_imbalance(
     expect_ab_ratio_numerator: asset_a_ratio,
     expect_ab_ratio_denominator: asset_b_ratio,
     reserve_a: reserve_a,

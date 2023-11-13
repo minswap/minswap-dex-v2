@@ -574,7 +574,7 @@ fn validate_withdraw_imbalance(
     value.quantity_of(order_in_value, lp_policy_id, lp_asset_name)
   let has_enough_amount_in = withdrawal_lp_amount > 0
   let (earned_fee_a, earned_fee_b, amount_a_out, amount_b_out) =
-    math.calculate_withdraw_with_ratio(
+    math.calculate_withdraw_imbalance(
       expect_ab_ratio_numerator: minimum_ratio_asset_a,
       expect_ab_ratio_denominator: minimum_ratio_asset_b,
       reserve_a: datum_reserve_a,
