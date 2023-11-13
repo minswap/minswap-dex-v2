@@ -367,31 +367,35 @@ pub fn calculate_zap_out(
   }
 }
 
-//    f = trading_fee_numerator/trading_fee_denominator
-//    swap_amount ^ 2 * (asset_out_ratio*(1-f)) + 
-//      + swap_amount * ( asset_in_ratio*(1-f)*(reserve_out+asset_out)-asset_out_ratio *((1-f)*asset_in-reserve_in) )
-//      +  asset_in_ratio* asset_out * reserve_in - asset_out_ratio* asset_in* reserve_in)
-//    = 0
-fn calculate_withdraw_with_ratio_swap_amount(
-  asset_in: Int,
-  asset_out: Int,
+// Base formula:
+// ( amount_in - swap_amount_in) / (amount_out + receive_amount_out) = expect_io_ratio_numerator / expect_io_ratio_denominator (1)
+// receive_amount_out = fee_diff * swap_amount_in * reserve_out / (fee_denominator) * reserve_in + fee_diff * swap_amount_in (2)
+// (1) & (2) =>>>>>
+// a * swap_amount_in ^ 2 + b * swap_amount_in + c = 0
+// Where:
+// - a = fee_diff * expect_io_ratio_denominator
+// - b = expect_io_ratio_numerator * fee_diff ( reserve_out + amount_out ) * expect_io_ratio_denominator * (fee_denominator * reserve_in - fee_diff * amount_in)
+// - c = fee_denominator * (expect_io_ratio_numerator * amount_out - expect_io_ratio_denominator * amount_in) 
+fn calculate_withdraw_swap_amount(
+  amount_in: Int,
+  amount_out: Int,
   reserve_in: Int,
   reserve_out: Int,
-  asset_in_ratio: Int,
-  asset_out_ratio: Int,
+  expect_io_ratio_numerator: Int,
+  expect_io_ratio_denominator: Int,
   trading_fee_numerator: Int,
   trading_fee_denominator: Int,
 ) -> Int {
   let diff = trading_fee_denominator - trading_fee_numerator
-  let a = asset_out_ratio * diff
+  let a = expect_io_ratio_denominator * diff
   let b =
-    asset_in_ratio * diff * ( reserve_out + asset_out ) - asset_out_ratio * (
-      diff * asset_in - reserve_in * trading_fee_denominator
+    expect_io_ratio_numerator * diff * ( reserve_out + amount_out ) + expect_io_ratio_denominator * (
+      reserve_in * trading_fee_denominator - diff * amount_in
     )
   let c =
-    (
-      asset_in_ratio * asset_out * reserve_in - asset_out_ratio * asset_in * reserve_in
-    ) * trading_fee_denominator
+    trading_fee_denominator * reserve_in * (
+      expect_io_ratio_numerator * amount_out - expect_io_ratio_denominator * amount_in
+    )
   // a*x^2+b*x+c=0
   // delta = b^2 - 4ac
   // x = (-b +sqrt(delta))/(2*a) or (-b - sqrt(delta))/(2*a)
@@ -401,8 +405,8 @@ fn calculate_withdraw_with_ratio_swap_amount(
 
 // return earning fee(a,b)+ amount out(a,b)
 pub fn calculate_withdraw_with_ratio(
-  asset_a_ratio: Int,
-  asset_b_ratio: Int,
+  expect_ab_ratio_numerator: Int,
+  expect_ab_ratio_denominator: Int,
   reserve_a: Int,
   reserve_b: Int,
   trading_fee_numerator: Int,
@@ -420,18 +424,18 @@ pub fn calculate_withdraw_with_ratio(
     )
   let reserve_a_after_withdraw = reserve_a - withdrawal_asset_a_amount
   let reserve_b_after_withdraw = reserve_b - withdrawal_asset_b_amount
-  if
-  withdrawal_asset_a_amount * asset_b_ratio > withdrawal_asset_b_amount * asset_a_ratio{
-  
+  let ratio_a = withdrawal_asset_a_amount * expect_ab_ratio_denominator
+  let ratio_b = withdrawal_asset_b_amount * expect_ab_ratio_numerator
+  if ratio_a > ratio_b {
     // swap a-> b
     let swap_amount_a =
-      calculate_withdraw_with_ratio_swap_amount(
-        asset_in: withdrawal_asset_a_amount,
-        asset_out: withdrawal_asset_b_amount,
+      calculate_withdraw_swap_amount(
+        amount_in: withdrawal_asset_a_amount,
+        amount_out: withdrawal_asset_b_amount,
         reserve_in: reserve_a_after_withdraw,
         reserve_out: reserve_b_after_withdraw,
-        asset_in_ratio: asset_a_ratio,
-        asset_out_ratio: asset_b_ratio,
+        expect_io_ratio_numerator: expect_ab_ratio_numerator,
+        expect_io_ratio_denominator: expect_ab_ratio_denominator,
         trading_fee_numerator: trading_fee_numerator,
         trading_fee_denominator: trading_fee_denominator,
       )
@@ -462,16 +466,16 @@ pub fn calculate_withdraw_with_ratio(
       withdrawal_asset_a_amount - swap_amount_a,
       withdrawal_asset_b_amount + receive_amount_b,
     )
-  } else if withdrawal_asset_a_amount * asset_b_ratio < withdrawal_asset_b_amount * asset_a_ratio {
+  } else if ratio_a < ratio_b {
     // swap b-> a
     let swap_amount_b =
-      calculate_withdraw_with_ratio_swap_amount(
-        asset_in: withdrawal_asset_b_amount,
-        asset_out: withdrawal_asset_a_amount,
+      calculate_withdraw_swap_amount(
+        amount_in: withdrawal_asset_b_amount,
+        amount_out: withdrawal_asset_a_amount,
         reserve_in: reserve_b_after_withdraw,
         reserve_out: reserve_a_after_withdraw,
-        asset_in_ratio: asset_b_ratio,
-        asset_out_ratio: asset_a_ratio,
+        expect_io_ratio_numerator: expect_ab_ratio_denominator,
+        expect_io_ratio_denominator: expect_ab_ratio_numerator,
         trading_fee_numerator: trading_fee_numerator,
         trading_fee_denominator: trading_fee_denominator,
       )
@@ -519,8 +523,8 @@ test test_calculate_withdraw_with_ratio() {
   let profit_sharing_opt = None
 
   calculate_withdraw_with_ratio(
-    asset_a_ratio: asset_a_ratio,
-    asset_b_ratio: asset_b_ratio,
+    expect_ab_ratio_numerator: asset_a_ratio,
+    expect_ab_ratio_denominator: asset_b_ratio,
     reserve_a: reserve_a,
     reserve_b: reserve_b,
     trading_fee_numerator: trading_fee_numerator,

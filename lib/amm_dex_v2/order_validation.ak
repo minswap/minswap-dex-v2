@@ -575,8 +575,8 @@ fn validate_withdraw_with_ratio(
   let has_enough_amount_in = withdrawal_lp_amount > 0
   let (earned_fee_a, earned_fee_b, amount_a_out, amount_b_out) =
     math.calculate_withdraw_with_ratio(
-      asset_a_ratio: minimum_ratio_asset_a,
-      asset_b_ratio: minimum_ratio_asset_b,
+      expect_ab_ratio_numerator: minimum_ratio_asset_a,
+      expect_ab_ratio_denominator: minimum_ratio_asset_b,
       reserve_a: datum_reserve_a,
       reserve_b: datum_reserve_b,
       trading_fee_numerator: trading_fee_numerator,
