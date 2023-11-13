@@ -87,6 +87,11 @@ pub type OrderStep {
     hops: Int,
     minimum_swap_amount_required: Int,
   }
+  WithdrawImbalance {
+    ratio_asset_a: Int,
+    ratio_asset_b: Int,
+    minimum_asset_a: Int,
+  }
   SwapMultiRouting { routings: List<SwapRouting>, minimum_receive: Int }
 }
 

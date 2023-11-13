@@ -8,7 +8,7 @@ use amm_dex_v2/math
 use amm_dex_v2/types.{
   AToB, Asset, BToA, BatchingPool, CustomDatumHash, DatumMap, Deposit, OCO,
   OrderDatum, PartialSwap, PoolState, StopLoss, SwapExactIn, SwapExactOut,
-  SwapMultiRouting, SwapRouting, Withdraw, ZapOut,
+  SwapMultiRouting, SwapRouting, Withdraw, WithdrawImbalance, ZapOut,
 }
 use amm_dex_v2/utils
 
@@ -544,6 +544,71 @@ fn validate_partial_swap(
   }
 }
 
+fn validate_withdraw_imbalance(
+  order_in_value: Value,
+  order_out_value: Value,
+  ratio_asset_a: Int,
+  ratio_asset_b: Int,
+  minimum_amount_a: Int,
+  asset_a: Asset,
+  asset_b: Asset,
+  lp_asset: Asset,
+  output_ada: Int,
+  trading_fee_numerator: Int,
+  trading_fee_denominator: Int,
+  profit_sharing_opt: Option<(Int, Int)>,
+  pool_state: PoolState,
+) -> PoolState {
+  let (
+    datum_reserve_a,
+    datum_reserve_b,
+    value_reserve_a,
+    value_reserve_b,
+    total_liquidity,
+  ) = pool_state
+  let Asset { policy_id: asset_a_policy_id, asset_name: asset_a_asset_name } =
+    asset_a
+  let Asset { policy_id: asset_b_policy_id, asset_name: asset_b_asset_name } =
+    asset_b
+  let Asset { policy_id: lp_policy_id, asset_name: lp_asset_name } = lp_asset
+  let withdrawal_lp_amount =
+    value.quantity_of(order_in_value, lp_policy_id, lp_asset_name)
+  let has_enough_amount_in = withdrawal_lp_amount > 0
+  let (earned_fee_a, earned_fee_b, amount_a_out, amount_b_out) =
+    math.calculate_withdraw_imbalance(
+      expect_ab_ratio_numerator: ratio_asset_a,
+      expect_ab_ratio_denominator: ratio_asset_b,
+      reserve_a: datum_reserve_a,
+      reserve_b: datum_reserve_b,
+      trading_fee_numerator: trading_fee_numerator,
+      trading_fee_denominator: trading_fee_denominator,
+      withdrawal_lp_amount: withdrawal_lp_amount,
+      total_liquidity: total_liquidity,
+      profit_sharing_opt: profit_sharing_opt,
+    )
+  let not_over_slippage = amount_a_out >= minimum_amount_a
+  let actual_amount_a_out =
+    value.quantity_of(order_out_value, asset_a_policy_id, asset_a_asset_name)
+  let actual_amount_b_out =
+    value.quantity_of(order_out_value, asset_b_policy_id, asset_b_asset_name)
+  let ada_amount_out =
+    value.quantity_of(order_out_value, ada_policy_id, ada_asset_name)
+  let is_valid_amount_out =
+    if utils.is_ada_asset(asset_a_policy_id, asset_a_asset_name) {
+      actual_amount_a_out == amount_a_out + output_ada && actual_amount_b_out == amount_b_out
+    } else {
+      ada_amount_out == output_ada && actual_amount_a_out == amount_a_out && actual_amount_b_out == amount_b_out
+    }
+  expect has_enough_amount_in && not_over_slippage && is_valid_amount_out
+  (
+    datum_reserve_a - amount_a_out - earned_fee_a,
+    datum_reserve_b - amount_b_out - earned_fee_b,
+    value_reserve_a - amount_a_out,
+    value_reserve_b - amount_b_out,
+    total_liquidity - withdrawal_lp_amount,
+  )
+}
+
 fn get_multi_routing_swap_amount_out(
   amount_in: Int,
   pool: BatchingPool,
@@ -1069,6 +1134,31 @@ pub fn apply_orders(
                   new_total_liquidity,
                   new_liquidity_share,
                   new_root_k_last,
+                )
+              }
+              WithdrawImbalance(ratio_asset_a, ratio_asset_b, minimum_asset_a) -> {
+                expect
+                  ratio_asset_a > 0 && ratio_asset_b > 0 && minimum_asset_a > 0
+                expect
+                  validate_order_receiver(
+                    receiver: receiver,
+                    receiver_datum_hash_opt: receiver_datum_hash_opt,
+                    output: output,
+                  )
+                validate_withdraw_imbalance(
+                  order_in_value: order_in_value,
+                  order_out_value: order_out_value,
+                  ratio_asset_a: ratio_asset_a,
+                  ratio_asset_b: ratio_asset_b,
+                  minimum_amount_a: minimum_asset_a,
+                  asset_a: asset_a,
+                  asset_b: asset_b,
+                  lp_asset: lp_asset,
+                  output_ada: output_ada,
+                  trading_fee_numerator: trading_fee_numerator,
+                  trading_fee_denominator: trading_fee_denominator,
+                  profit_sharing_opt: profit_sharing_opt,
+                  pool_state: pool_state,
                 )
               }
               SwapMultiRouting(_, _) -> fail
