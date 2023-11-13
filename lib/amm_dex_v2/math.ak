@@ -511,12 +511,46 @@ pub fn calculate_withdraw_imbalance(
   }
 }
 
+test test_calculate_withdraw_swap_amount() {
+  let reserve_a = 1_000_000_000
+  let reserve_b = 1_000_000_000
+  let total_liquidity = 1_000_000_000
+  let trading_fee_numerator = 3
+  let trading_fee_denominator = 1000
+  let withdrawal_lp_amount = 1000
+  let asset_a_ratio = 3
+  let asset_b_ratio = 1
+
+  let (withdrawal_asset_a_amount, withdrawal_asset_b_amount) =
+    calculate_withdraw(
+      reserve_a: reserve_a,
+      reserve_b: reserve_b,
+      withdrawal_lp_amount: withdrawal_lp_amount,
+      total_liquidity: total_liquidity,
+    )
+  let reserve_a_after_withdraw = reserve_a - withdrawal_asset_a_amount
+  let reserve_b_after_withdraw = reserve_b - withdrawal_asset_b_amount
+  // b -> a
+  let swap_amount_b =
+    calculate_withdraw_swap_amount(
+      amount_in: withdrawal_asset_b_amount,
+      amount_out: withdrawal_asset_a_amount,
+      reserve_in: reserve_b_after_withdraw,
+      reserve_out: reserve_a_after_withdraw,
+      expect_io_ratio_numerator: asset_b_ratio,
+      expect_io_ratio_denominator: asset_a_ratio,
+      trading_fee_numerator: trading_fee_numerator,
+      trading_fee_denominator: trading_fee_denominator,
+    )
+  swap_amount_b == 500 && withdrawal_asset_a_amount == 1000 && withdrawal_asset_a_amount == 1000
+}
+
 test test_calculate_withdraw_imbalance() {
   let reserve_a = 1_000_000_000
   let reserve_b = 1_000_000_000
   let total_liquidity = 1_000_000_000
-  let trading_fee_numerator = 0
-  let trading_fee_denominator = 1
+  let trading_fee_numerator = 3
+  let trading_fee_denominator = 1000
   let withdrawal_lp_amount = 1000
   let asset_a_ratio = 3
   let asset_b_ratio = 1
@@ -532,5 +566,5 @@ test test_calculate_withdraw_imbalance() {
     withdrawal_lp_amount: withdrawal_lp_amount,
     total_liquidity: total_liquidity,
     profit_sharing_opt: profit_sharing_opt,
-  ) == (0, 0, 1499, 500)
+  ) == (0, 0, 1498, 500)
 }
