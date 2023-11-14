@@ -130,18 +130,19 @@ fn find_pool_input_and_output_in_batching(
   let Input { output: Output { address: pool_in_address, .. }, .. } = pool_input
   let Address { payment_credential: pool_payment_credential, .. } =
     pool_in_address
-  let pool_outputs =
+  // Batching transaction requires single Pool UTxO in both Inputs and Outputs
+  expect [pool_output] =
     list.filter(
       outputs,
       fn(output) {
         let Output { address: addr, .. } = output
-        pool_in_address == addr
+        let Address { payment_credential: payment_cred, .. } = addr
+        pool_payment_credential == payment_cred
       },
     )
 
-  // Batching transaction requires single Pool UTxO in both Inputs and Outputs
-  expect [pool_output] = pool_outputs
-
+  let Output { address: pool_out_address, .. } = pool_output
+  expect pool_out_address == pool_in_address
   // Due to combination with Minswap Stake Address, Pool Contract can have multiple Base Addresses
   // This logic will verify that the transaction is processing in single Pool
   // Verify that having only one Pool Input and Pool Output in the transaction
@@ -151,15 +152,6 @@ fn find_pool_input_and_output_in_batching(
       fn(input) {
         let Input { output: o, .. } = input
         let Output { address: addr, .. } = o
-        let Address { payment_credential: payment_cred, .. } = addr
-        payment_cred == pool_payment_credential
-      },
-    )
-  expect [_] =
-    list.filter(
-      outputs,
-      fn(output) {
-        let Output { address: addr, .. } = output
         let Address { payment_credential: payment_cred, .. } = addr
         payment_cred == pool_payment_credential
       },
@@ -174,6 +166,7 @@ fn get_batching_pool(
   pool_auth_asset_name: AssetName,
   pool_in_datum: PoolDatum,
   datum_map: DatumMap,
+  require_total_liquidity_unchange: Bool,
 ) -> BatchingPool {
   let Input {
     output: Output { address: pool_in_address, value: pool_in_value, .. },
@@ -201,7 +194,12 @@ fn get_batching_pool(
     ..
   } = pool_out_datum
 
-  expect utils.verify_pool_datum_in_batch(pool_in_datum, pool_out_datum)
+  expect
+    utils.verify_pool_datum_in_batch(
+      datum1: pool_in_datum,
+      datum2: pool_out_datum,
+      require_total_liquidity_unchange: require_total_liquidity_unchange,
+    )
   let Asset { policy_id: asset_a_policy_id, asset_name: asset_a_asset_name } =
     pool_in_asset_a
   let Asset { policy_id: asset_b_policy_id, asset_name: asset_b_asset_name } =
@@ -315,6 +313,7 @@ fn validate_batching(
       pool_auth_asset_name: pool_auth_asset_name,
       pool_in_datum: pool_in_datum,
       datum_map: all_datums,
+      require_total_liquidity_unchange: False,
     )
   let user_inputs =
     list.filter(
@@ -551,16 +550,11 @@ fn find_multi_routing_pools(
         },
         ..
       } = pool_in
-      let Output { address: pool_out_address, datum: pool_out_datum_raw, .. } =
-        pool_out
+      let Output { address: pool_out_address, .. } = pool_out
       let pool_in_datum =
         utils.must_find_pool_datum(datum_map, pool_in_datum_raw)
-      let pool_out_datum =
-        utils.must_find_pool_datum(datum_map, pool_out_datum_raw)
 
-      expect
-        pool_in_address == pool_out_address && // hehe
-        utils.compare_pool_datum(pool_in_datum, pool_out_datum)
+      expect pool_in_address == pool_out_address
       get_batching_pool(
         pool_input: pool_in,
         pool_output: pool_out,
@@ -568,6 +562,7 @@ fn find_multi_routing_pools(
         pool_auth_asset_name: pool_auth_asset_name,
         pool_in_datum: pool_in_datum,
         datum_map: datum_map,
+        require_total_liquidity_unchange: True,
       )
     },
   )
