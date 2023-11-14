@@ -69,36 +69,11 @@ pub fn is_ada_asset(pid: PolicyId, name: AssetName) -> Bool {
   pid == ada_policy_id && name == ada_asset_name
 }
 
-pub fn verify_pool_datum_in_batch(datum1: PoolDatum, datum2: PoolDatum) -> Bool {
-  let PoolDatum {
-    asset_a: datum_1_asset_a,
-    asset_b: datum_1_asset_b,
-    trading_fee_numerator: datum_1_trading_fee_numerator,
-    trading_fee_denominator: datum_1_trading_fee_denominator,
-    order_hash: datum_1_order_hash,
-    profit_sharing_opt: datum_1_profit_sharing_opt,
-    ..
-  } = datum1
-
-  let PoolDatum {
-    asset_a: datum_2_asset_a,
-    asset_b: datum_2_asset_b,
-    trading_fee_numerator: datum_2_trading_fee_numerator,
-    trading_fee_denominator: datum_2_trading_fee_denominator,
-    order_hash: datum_2_order_hash,
-    profit_sharing_opt: datum_2_profit_sharing_opt,
-    ..
-  } = datum2
-  datum_1_asset_a == datum_2_asset_a && // hehe
-  datum_1_asset_b == datum_2_asset_b && // hehe
-  datum_1_trading_fee_numerator == datum_2_trading_fee_numerator && // hehe
-  datum_1_trading_fee_denominator == datum_2_trading_fee_denominator && // hehe
-  datum_1_order_hash == datum_2_order_hash && // hehe
-  datum_1_profit_sharing_opt == datum_2_profit_sharing_opt
-  // hehe
-}
-
-pub fn compare_pool_datum(datum1: PoolDatum, datum2: PoolDatum) -> Bool {
+pub fn verify_pool_datum_in_batch(
+  datum1: PoolDatum,
+  datum2: PoolDatum,
+  require_total_liquidity_unchange: Bool,
+) -> Bool {
   let PoolDatum {
     asset_a: datum_1_asset_a,
     asset_b: datum_1_asset_b,
@@ -120,9 +95,14 @@ pub fn compare_pool_datum(datum1: PoolDatum, datum2: PoolDatum) -> Bool {
     profit_sharing_opt: datum_2_profit_sharing_opt,
     ..
   } = datum2
+  expect
+    if require_total_liquidity_unchange {
+      datum_1_total_liquidity == datum_2_total_liquidity
+    } else {
+      True
+    }
   datum_1_asset_a == datum_2_asset_a && // hehe
   datum_1_asset_b == datum_2_asset_b && // hehe
-  datum_1_total_liquidity == datum_2_total_liquidity && // hehe
   datum_1_trading_fee_numerator == datum_2_trading_fee_numerator && // hehe
   datum_1_trading_fee_denominator == datum_2_trading_fee_denominator && // hehe
   datum_1_order_hash == datum_2_order_hash && // hehe
