@@ -20,12 +20,9 @@ pub type Asset {
 pub type DatumMap =
   Dict<Hash<Blake2b_256, Data>, Data>
 
-pub type ProfitSharing {
-  fee_sharing_numerator: Int,
-  fee_sharing_denominator: Int,
-  fee_to: Address,
-  fee_to_datum_hash_opt: Option<CustomDatumHash>,
-}
+// Profit Sharing Numerator & Denominator
+pub type ProfitSharing =
+  (Int, Int)
 
 pub type PoolDatum {
   asset_a: Asset,
@@ -37,6 +34,11 @@ pub type PoolDatum {
   trading_fee_denominator: Int,
   order_hash: ValidatorHash,
   profit_sharing_opt: Option<ProfitSharing>,
+}
+
+pub type UpdatePoolFeeOrStakeCredentialAction {
+  UpdatePoolFee
+  UpdatePoolStakeCredential
 }
 
 pub type PoolRedeemer {
@@ -51,8 +53,11 @@ pub type PoolRedeemer {
     routing_in_indexes: List<Int>,
     routing_out_indexes: List<Int>,
   }
-  UpdateFeeTo { admin_index: Int }
-  WithdrawLiquidityShare { admin_index: Int, fee_to_index: Int }
+  UpdatePoolFeeOrStakeCredential {
+    action: UpdatePoolFeeOrStakeCredentialAction,
+    admin_index: Int,
+  }
+  WithdrawLiquidityShare { admin_index: Int }
 }
 
 pub type OrderDirection {

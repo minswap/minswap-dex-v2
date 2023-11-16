@@ -8,37 +8,35 @@ use amm_dex_v2/types.{
 }
 
 validator(pool_hash: ValidatorHash) {
-  fn validate_order(
-    raw_datum: Data,
-    redeemer: OrderRedeemer,
-    context: ScriptContext,
-  ) {
+  fn validate_order(raw_datum: Data, raw_redeemer: Data, context: ScriptContext) {
     let ScriptContext { transaction, purpose } = context
     expect Spend(_) = purpose
+    expect redeemer: OrderRedeemer = raw_redeemer
     when redeemer is {
       ApplyOrder -> {
         let Transaction { inputs, .. } = transaction
         // TODO: Consider this line
-        let has_pool_input =
-          list.length(
-            list.filter(
-              inputs,
-              fn(i) {
-                let Input {
-                  output: Output {
-                    address: Address { payment_credential, .. },
-                    ..
-                  },
+        when
+          list.filter(
+            inputs,
+            fn(i) {
+              let Input {
+                output: Output {
+                  address: Address { payment_credential, .. },
                   ..
-                } = i
-                when payment_credential is {
-                  ScriptCredential(hash) -> pool_hash == hash
-                  _ -> False
-                }
-              },
-            ),
-          ) > 0
-        has_pool_input
+                },
+                ..
+              } = i
+              when payment_credential is {
+                ScriptCredential(hash) -> pool_hash == hash
+                _ -> False
+              }
+            },
+          )
+        is {
+          [] -> False
+          _ -> True
+        }
       }
       CancelOrder -> {
         let Transaction { extra_signatories, .. } = transaction
