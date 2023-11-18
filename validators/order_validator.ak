@@ -6,6 +6,7 @@ use aiken/transaction/credential.{
 use amm_dex_v2/types.{
   ApplyOrder, CancelOrder, OrderDatum, OrderRedeemer, ValidatorHash,
 }
+use amm_dex_v2/utils
 
 validator(pool_hash: ValidatorHash) {
   fn validate_order(raw_datum: Data, raw_redeemer: Data, context: ScriptContext) {
@@ -13,30 +14,14 @@ validator(pool_hash: ValidatorHash) {
     expect Spend(_) = purpose
     expect redeemer: OrderRedeemer = raw_redeemer
     when redeemer is {
-      ApplyOrder -> {
+      ApplyOrder(pool_input_index) -> {
         let Transaction { inputs, .. } = transaction
-        // TODO: Consider this line
-        when
-          list.filter(
-            inputs,
-            fn(i) {
-              let Input {
-                output: Output {
-                  address: Address { payment_credential, .. },
-                  ..
-                },
-                ..
-              } = i
-              when payment_credential is {
-                ScriptCredential(hash) -> pool_hash == hash
-                _ -> False
-              }
-            },
-          )
-        is {
-          [] -> False
-          _ -> True
-        }
+        let Input {
+          output: Output { address: Address { payment_credential, .. }, .. },
+          ..
+        } = utils.list_at_index(inputs, pool_input_index)
+        expect ScriptCredential(hash) = payment_credential
+        pool_hash == hash
       }
       CancelOrder -> {
         let Transaction { extra_signatories, .. } = transaction

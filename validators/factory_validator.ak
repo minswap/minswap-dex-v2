@@ -145,12 +145,14 @@ validator(
     // Remaining Liquidity must be MAX_LIQUIDITY - total_liquidity
     expect
       value.quantity_of(pool_output_value, authen_policy_id, lp_asset_name) == remaining_liquidity
-    let pool_value_size = list.length(value.flatten(pool_output_value))
+    let flatted_value = value.flatten(pool_output_value)
     expect
       if utils.is_ada_asset(asset_a_policy_id, asset_a_asset_name) {
-        pool_value_size == 4
+        expect [_, _, _, _] = flatted_value
+        True
       } else {
-        pool_value_size == 5
+        expect [_, _, _, _, _] = flatted_value
+        True
       }
     // Transaction must mint only 1 Factory Asset + 1 Pool Asset + MAX INT64 LP Asset
     expect

@@ -3,10 +3,9 @@ use aiken/bytearray
 use aiken/cbor
 use aiken/dict
 use aiken/hash
-use aiken/interval.{Finite}
 use aiken/list
 use aiken/string
-use aiken/transaction.{Datum, DatumHash, InlineDatum, NoDatum, ValidityRange}
+use aiken/transaction.{Datum, DatumHash, InlineDatum, NoDatum}
 use aiken/transaction/value.{
   AssetName, PolicyId, Value, ada_asset_name, ada_policy_id,
 }
@@ -145,18 +144,6 @@ pub fn must_parse_option(op: Option<a>) -> a {
   t
 }
 
-pub fn find_license_deadline(license_symbol: PolicyId, val: Value) -> Int {
-  expect [(tn, am)] =
-    val
-      |> value.tokens(license_symbol)
-      |> dict.to_list()
-  if am == 1 {
-    bytearray_to_int(tn)
-  } else {
-    fail
-  }
-}
-
 pub fn bytearray_to_int(byte_arr: ByteArray) -> Int {
   let byte_len = bytearray.length(byte_arr)
   do_bytearray_to_int(byte_arr, 0, 0, byte_len)
@@ -193,12 +180,6 @@ test test_bytearray_to_int() {
   r1 == 123 && r2 == 111
 }
 
-pub fn find_posix_time_range(time_rage: ValidityRange) -> (Int, Int) {
-  expect Finite(t1) = time_rage.lower_bound.bound_type
-  expect Finite(t2) = time_rage.upper_bound.bound_type
-  (t1, t2)
-}
-
 pub fn find_script_datum(datums: DatumMap, datum: Datum) -> Option<Data> {
   when datum is {
     NoDatum -> None
@@ -209,7 +190,7 @@ pub fn find_script_datum(datums: DatumMap, datum: Datum) -> Option<Data> {
   }
 }
 
-fn must_find_script_datum(datums: DatumMap, datum: Datum) -> Data {
+pub fn must_find_script_datum(datums: DatumMap, datum: Datum) -> Data {
   let datum_opt = find_script_datum(datums, datum)
   must_parse_option(datum_opt)
 }
@@ -252,7 +233,7 @@ fn list_at_index_step(outputs: List<a>, current_index: Int) -> a {
 
 /// Small utility to skip 10 items in a list.
 /// Used by `list_at_index`.
-fn skip_10_items(some_list: List<a>) -> List<a> {
+pub fn skip_10_items(some_list: List<a>) -> List<a> {
   some_list
     |> builtin.tail_list
     |> builtin.tail_list
@@ -537,4 +518,47 @@ pub fn validate_pool_value(
   // trace cbor.diagnostic(value_size)
   // trace cbor.diagnostic(validate_num)
   // validate_num == value_size
+}
+
+pub fn compare_list_length(arr1: List<a>, arr2: List<b>) -> Bool {
+  when arr1 is {
+    [] -> arr2 == []
+    [_, ..xs] ->
+      when arr2 is {
+        [] -> False
+        [_, ..ys] -> compare_list_length(xs, ys)
+      }
+  }
+}
+
+test test_compare_list_length() {
+  let arr1 =
+    [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18]
+  let arr2 =
+    [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18]
+  compare_list_length(arr1, arr2)
+}
+
+test test_compare_list_length_1() {
+  let arr1 =
+    [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18]
+  let arr2 =
+    [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17]
+  !compare_list_length(arr1, arr2)
+}
+
+test test_compare_list_length_2() {
+  let arr1 =
+    []
+  let arr2 =
+    []
+  compare_list_length(arr1, arr2)
+}
+
+test test_compare_list_length_3() {
+  let arr1 =
+    [1]
+  let arr2 =
+    []
+  !compare_list_length(arr1, arr2)
 }

@@ -1,75 +1,45 @@
 use aiken/dict.{Dict}
+use aiken/interval.{Finite, Interval, IntervalBound}
 use aiken/list
 use aiken/transaction.{
-  Input, Output, OutputReference, Redeemer, ScriptPurpose, ValidityRange,
+  InlineDatum, Input, Output, OutputReference, Redeemer, ScriptPurpose,
+  ValidityRange,
 }
-use aiken/transaction/credential.{
-  Address, ScriptCredential, VerificationKeyCredential,
+use aiken/transaction/credential.{Address, ScriptCredential}
+use aiken/transaction/value.{
+  AssetName, MintedValue, PolicyId, ada_asset_name, ada_policy_id,
 }
-use aiken/transaction/value.{AssetName, MintedValue, PolicyId}
 use amm_dex_v2/order_validation
 use amm_dex_v2/types.{
-  Asset, BatchingPool, DatumMap, OrderDatum, PoolDatum, PubKeyHash,
-  SwapMultiRouting, UpdatePoolFee, UpdatePoolFeeOrStakeCredentialAction,
-  UpdatePoolStakeCredential,
+  Asset, BatchingPool, DatumMap, OrderDatum, PoolDatum, SwapMultiRouting,
+  UpdatePoolFee, UpdatePoolFeeOrStakeCredentialAction, UpdatePoolStakeCredential,
 }
 use amm_dex_v2/utils
 
-fn validate_batcher(
-  inputs: List<Input>,
+pub fn validate_batcher_license(
+  license_input: Input,
   validity_range: ValidityRange,
-  extra_signatories: List<PubKeyHash>,
-  batcher_address: Address,
   license_policy_id: PolicyId,
-  license_index: Int,
   maximum_deadline_range: Int,
 ) -> Bool {
-  // Batching Redeemer provides @license_index which help save calculation cost
-  let Input { output: Output { value: license_value, .. }, .. } =
-    utils.must_parse_option(list.at(inputs, license_index))
-  let license_deadline =
-    utils.find_license_deadline(license_policy_id, license_value)
-  let (start_valid_time_range, end_valid_time_range) =
-    utils.find_posix_time_range(validity_range)
+  let Input { output: Output { value: license_value, .. }, .. } = license_input
+  expect [(license_asset_name, license_amount)] =
+    license_value
+      |> value.tokens(license_policy_id)
+      |> dict.to_list()
+  expect license_amount == 1
+  let license_deadline = utils.bytearray_to_int(license_asset_name)
+  let Interval {
+    lower_bound: IntervalBound { bound_type: lower_bound_type, .. },
+    upper_bound: IntervalBound { bound_type: upper_bound_type, .. },
+  } = validity_range
+  expect Finite(start_valid_time_range) = lower_bound_type
+  expect Finite(end_valid_time_range) = upper_bound_type
   // - Only Batcher with valid license token can trigger @ApplyPool redeemer validation.  
   // - A valid license token is the token with @tokenName (representing for expired milliseconds) 
   //   and must be within the time range from current_time to current_time + maximum_deadline_range
-  let Address { payment_credential: batcher_payment_credential, .. } =
-    batcher_address
-  expect VerificationKeyCredential(batcher_pkh) = batcher_payment_credential
-  // Verify Batcher with valid license token must be a signer of transaction
   expect
-    list.has(extra_signatories, batcher_pkh) && license_deadline >= end_valid_time_range && license_deadline <= start_valid_time_range + maximum_deadline_range
-  True
-}
-
-fn validate_mint(mint: MintedValue) -> Bool {
-  let mint_value = value.from_minted_value(mint)
-  expect [] = value.flatten(mint_value)
-  True
-}
-
-pub fn validate_common_batching(
-  inputs: List<Input>,
-  validity_range: ValidityRange,
-  extra_signatories: List<PubKeyHash>,
-  batcher_address: Address,
-  license_policy_id: PolicyId,
-  license_index: Int,
-  maximum_deadline_range: Int,
-  mint: MintedValue,
-) -> Bool {
-  expect validate_mint(mint)
-  expect
-    validate_batcher(
-      inputs: inputs,
-      validity_range: validity_range,
-      extra_signatories: extra_signatories,
-      batcher_address: batcher_address,
-      license_policy_id: license_policy_id,
-      license_index: license_index,
-      maximum_deadline_range: maximum_deadline_range,
-    )
+    license_deadline >= end_valid_time_range && license_deadline <= start_valid_time_range + maximum_deadline_range
   True
 }
 
@@ -78,16 +48,14 @@ fn find_pool_input_and_output_in_batching(
   inputs: List<Input>,
   outputs: List<Output>,
 ) -> (Input, Output) {
-  // TODO: validate pool size
-  let pool_inputs =
-    list.filter(
+  expect Some(pool_input) =
+    list.find(
       inputs,
       fn(input) {
         let Input { output_reference: out_ref, .. } = input
         pool_input_ref == out_ref
       },
     )
-  expect [pool_input] = pool_inputs
   let Input { output: Output { address: pool_in_address, .. }, .. } = pool_input
   let Address { payment_credential: pool_payment_credential, .. } =
     pool_in_address
@@ -128,6 +96,12 @@ fn get_batching_pool(
   pool_in_datum: PoolDatum,
   datum_map: DatumMap,
   require_total_liquidity_unchange: Bool,
+  value_reserve_a_in: Int,
+  value_reserve_b_in: Int,
+  value_remaining_liquidity_in: Int,
+  value_reserve_a_out: Int,
+  value_reserve_b_out: Int,
+  value_remaining_liquidity_out: Int,
 ) -> BatchingPool {
   let Input {
     output: Output { address: pool_in_address, value: pool_in_value, .. },
@@ -147,14 +121,36 @@ fn get_batching_pool(
     order_hash: pool_in_order_hash,
     profit_sharing_opt: pool_in_profit_sharing_opt,
   } = pool_in_datum
-  let pool_out_datum = utils.must_find_pool_datum(datum_map, pool_out_datum_raw)
+  expect pool_out_datum: PoolDatum =
+    when pool_out_datum_raw is {
+      InlineDatum(d) -> d
+      _ -> utils.must_find_script_datum(datum_map, pool_out_datum_raw)
+    }
   let PoolDatum {
+    asset_a: pool_out_asset_a,
+    asset_b: pool_out_asset_b,
     total_liquidity: pool_out_total_liquidity,
     reserve_a: pool_out_reserve_a,
     reserve_b: pool_out_reserve_b,
-    ..
+    trading_fee_numerator: pool_out_trading_fee_numerator,
+    trading_fee_denominator: pool_out_trading_fee_denominator,
+    order_hash: pool_out_order_hash,
+    profit_sharing_opt: pool_out_profit_sharing_opt,
   } = pool_out_datum
 
+  expect
+    if require_total_liquidity_unchange {
+      pool_in_total_liquidity == pool_out_total_liquidity
+    } else {
+      True
+    }
+  expect
+    pool_in_asset_a == pool_out_asset_a && // hehe
+    pool_in_asset_b == pool_out_asset_b && // hehe
+    pool_in_trading_fee_numerator == pool_out_trading_fee_numerator && // hehe
+    pool_in_trading_fee_denominator == pool_out_trading_fee_denominator && // hehe
+    pool_in_order_hash == pool_out_order_hash && // hehe
+    pool_in_profit_sharing_opt == pool_out_profit_sharing_opt
   let Asset { policy_id: asset_a_policy_id, asset_name: asset_a_asset_name } =
     pool_in_asset_a
   let Asset { policy_id: asset_b_policy_id, asset_name: asset_b_asset_name } =
@@ -168,29 +164,120 @@ fn get_batching_pool(
       asset_b_asset_name,
     )
 
+  let lp_asset =
+    Asset { policy_id: authen_policy_id, asset_name: lp_asset_name }
+  let estimate_pool_in_value =
+    value.zero()
+      |> value.add(ada_policy_id, ada_asset_name, 3000000)
+      |> value.add(authen_policy_id, pool_auth_asset_name, 1)
+      |> value.add(asset_a_policy_id, asset_a_asset_name, value_reserve_a_in)
+      |> value.add(asset_b_policy_id, asset_b_asset_name, value_reserve_b_in)
+      |> value.add(authen_policy_id, lp_asset_name, value_remaining_liquidity_in)
+  expect estimate_pool_in_value == pool_in_value
+  let estimate_pool_out_value =
+    value.zero()
+      |> value.add(ada_policy_id, ada_asset_name, 3000000)
+      |> value.add(authen_policy_id, pool_auth_asset_name, 1)
+      |> value.add(asset_a_policy_id, asset_a_asset_name, value_reserve_a_out)
+      |> value.add(asset_b_policy_id, asset_b_asset_name, value_reserve_b_out)
+      |> value.add(authen_policy_id, lp_asset_name, value_remaining_liquidity_out)
+  expect estimate_pool_out_value == pool_out_value
   expect
-    utils.verify_pool_datum_in_batch(
-      datum1: pool_in_datum,
-      datum2: pool_out_datum,
-      require_total_liquidity_unchange: require_total_liquidity_unchange,
-    ) && utils.validate_pool_value(
-      val: pool_in_value,
-      authen_policy_id: authen_policy_id,
-      pool_auth_asset_name: pool_auth_asset_name,
-      lp_asset_name: lp_asset_name,
-      asset_a_policy_id: asset_a_policy_id,
-      asset_a_asset_name: asset_a_asset_name,
-      asset_b_policy_id: asset_b_policy_id,
-      asset_b_asset_name: asset_b_asset_name,
-    ) && utils.validate_pool_value(
-      val: pool_out_value,
-      authen_policy_id: authen_policy_id,
-      pool_auth_asset_name: pool_auth_asset_name,
-      lp_asset_name: lp_asset_name,
-      asset_a_policy_id: asset_a_policy_id,
-      asset_a_asset_name: asset_a_asset_name,
-      asset_b_policy_id: asset_b_policy_id,
-      asset_b_asset_name: asset_b_asset_name,
+    value_remaining_liquidity_out - value_remaining_liquidity_in == pool_in_total_liquidity - pool_out_total_liquidity
+  BatchingPool {
+    asset_a: pool_in_asset_a,
+    asset_b: pool_in_asset_b,
+    lp_asset,
+    trading_fee_numerator: pool_in_trading_fee_numerator,
+    trading_fee_denominator: pool_in_trading_fee_denominator,
+    profit_sharing: pool_in_profit_sharing_opt,
+    order_hash: pool_in_order_hash,
+    address: pool_in_address,
+    pool_state_in: (
+      pool_in_reserve_a,
+      pool_in_reserve_b,
+      value_reserve_a_in,
+      value_reserve_b_in,
+      pool_in_total_liquidity,
+    ),
+    pool_state_out: (
+      pool_out_reserve_a,
+      pool_out_reserve_b,
+      value_reserve_a_out,
+      value_reserve_b_out,
+      pool_out_total_liquidity,
+    ),
+  }
+}
+
+fn get_batching_pool_1(
+  pool_input: Input,
+  pool_output: Output,
+  authen_policy_id: PolicyId,
+  pool_auth_asset_name: AssetName,
+  pool_in_datum: PoolDatum,
+  datum_map: DatumMap,
+  require_total_liquidity_unchange: Bool,
+) -> BatchingPool {
+  let Input {
+    output: Output { address: pool_in_address, value: pool_in_value, .. },
+    ..
+  } = pool_input
+  let Output { value: pool_out_value, datum: pool_out_datum_raw, .. } =
+    pool_output
+
+  let PoolDatum {
+    asset_a: pool_in_asset_a,
+    asset_b: pool_in_asset_b,
+    total_liquidity: pool_in_total_liquidity,
+    reserve_a: pool_in_reserve_a,
+    reserve_b: pool_in_reserve_b,
+    trading_fee_numerator: pool_in_trading_fee_numerator,
+    trading_fee_denominator: pool_in_trading_fee_denominator,
+    order_hash: pool_in_order_hash,
+    profit_sharing_opt: pool_in_profit_sharing_opt,
+  } = pool_in_datum
+  expect pool_out_datum: PoolDatum =
+    when pool_out_datum_raw is {
+      InlineDatum(d) -> d
+      _ -> utils.must_find_script_datum(datum_map, pool_out_datum_raw)
+    }
+  let PoolDatum {
+    asset_a: pool_out_asset_a,
+    asset_b: pool_out_asset_b,
+    total_liquidity: pool_out_total_liquidity,
+    reserve_a: pool_out_reserve_a,
+    reserve_b: pool_out_reserve_b,
+    trading_fee_numerator: pool_out_trading_fee_numerator,
+    trading_fee_denominator: pool_out_trading_fee_denominator,
+    order_hash: pool_out_order_hash,
+    profit_sharing_opt: pool_out_profit_sharing_opt,
+  } = pool_out_datum
+
+  expect
+    if require_total_liquidity_unchange {
+      pool_in_total_liquidity == pool_out_total_liquidity
+    } else {
+      True
+    }
+  expect
+    pool_in_asset_a == pool_out_asset_a && // hehe
+    pool_in_asset_b == pool_out_asset_b && // hehe
+    pool_in_trading_fee_numerator == pool_out_trading_fee_numerator && // hehe
+    pool_in_trading_fee_denominator == pool_out_trading_fee_denominator && // hehe
+    pool_in_order_hash == pool_out_order_hash && // hehe
+    pool_in_profit_sharing_opt == pool_out_profit_sharing_opt
+  let Asset { policy_id: asset_a_policy_id, asset_name: asset_a_asset_name } =
+    pool_in_asset_a
+  let Asset { policy_id: asset_b_policy_id, asset_name: asset_b_asset_name } =
+    pool_in_asset_b
+
+  let lp_asset_name =
+    utils.compute_lp_asset_name(
+      asset_a_policy_id,
+      asset_a_asset_name,
+      asset_b_policy_id,
+      asset_b_asset_name,
     )
   let lp_asset =
     Asset { policy_id: authen_policy_id, asset_name: lp_asset_name }
@@ -259,6 +346,12 @@ pub fn validate_batching(
   pool_in_datum: PoolDatum,
   batcher_address: Address,
   input_indexes: List<Int>,
+  value_reserve_a_in: Int,
+  value_reserve_b_in: Int,
+  value_remaining_liquidity_in: Int,
+  value_reserve_a_out: Int,
+  value_reserve_b_out: Int,
+  value_remaining_liquidity_out: Int,
 ) -> Bool {
   let (pool_input, pool_output) =
     find_pool_input_and_output_in_batching(
@@ -286,6 +379,12 @@ pub fn validate_batching(
       pool_in_datum: pool_in_datum,
       datum_map: all_datums,
       require_total_liquidity_unchange: False,
+      value_reserve_a_in: value_reserve_a_in,
+      value_reserve_b_in: value_reserve_b_in,
+      value_remaining_liquidity_in: value_remaining_liquidity_in,
+      value_reserve_a_out: value_reserve_a_out,
+      value_reserve_b_out: value_reserve_b_out,
+      value_remaining_liquidity_out: value_remaining_liquidity_out,
     )
   let user_inputs =
     list.filter(
@@ -309,9 +408,7 @@ pub fn validate_batching(
     list.foldl(
       unique_input_indexes,
       [],
-      fn(idx, ips) {
-        list.push(ips, utils.must_parse_option(list.at(user_inputs, idx)))
-      },
+      fn(idx, ips) { list.push(ips, utils.list_at_index(user_inputs, idx)) },
     )
 
   // Order Outputs are Outputs which aren't Pool & Batcher UTxOs
@@ -327,10 +424,9 @@ pub fn validate_batching(
 
   expect
     unique_input_indexes == input_indexes && // @input_indexes which is provided by Batcher must be unique array
-    list.length(user_inputs) == list.length(unique_input_indexes) && // @input_indexes and @user_inputs must have the same length
+    utils.compare_list_length(user_inputs, unique_input_indexes) && // @input_indexes and @user_inputs must have the same length
     // User Inputs and Outputs must have the same length
-    list.length(sorted_user_inputs) == list.length(user_outputs)
-  expect list.length(sorted_user_inputs) == list.length(user_outputs)
+    utils.compare_list_length(sorted_user_inputs, user_outputs)
   pool_state_out == order_validation.apply_orders(
     datum_map: all_datums,
     asset_a: asset_a,
@@ -521,7 +617,7 @@ fn find_multi_routing_pools(
         utils.must_find_pool_datum(datum_map, pool_in_datum_raw)
 
       expect pool_in_address == pool_out_address
-      get_batching_pool(
+      get_batching_pool_1(
         pool_input: pool_in,
         pool_output: pool_out,
         authen_policy_id: authen_policy_id,
@@ -562,10 +658,8 @@ pub fn validate_update_pool_datum_or_stake_credential(
   // Only Admin token can trigger this redeemer
   expect
     value.quantity_of(admin_value, license_policy_id, admin_asset_name) == 1
-  let mint_value = value.from_minted_value(all_mints)
   // This Redeemer won't mint anything 
-  expect [] = value.flatten(mint_value)
-
+  expect value.is_zero(value.from_minted_value(all_mints))
   expect [pool_output] =
     list.filter(
       all_outputs,
@@ -731,10 +825,8 @@ pub fn validate_withdraw_liquidity_share(
   // Only Admin token can trigger this redeemer
   expect
     value.quantity_of(admin_value, license_policy_id, admin_asset_name) == 1
-  let mint_value = value.from_minted_value(all_mints)
   // This Redeemer won't mint anything 
-  expect [] = value.flatten(mint_value)
-
+  expect value.is_zero(value.from_minted_value(all_mints))
   let PoolDatum {
     asset_a,
     asset_b,

@@ -116,7 +116,7 @@ validator(
           )
         expect
           value.quantity_of(mint_value, authen_policy_id, lp_asset_name) == 9223372036854775807
-        expect list.length(value.flatten(mint_value)) == 3
+        expect [_, _, _] = value.flatten(mint_value)
         True
       }
       MintLiquidity -> fail

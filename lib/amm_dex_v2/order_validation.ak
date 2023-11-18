@@ -73,21 +73,12 @@ fn validate_swap_exact_in(
       None -> 0
     }
   let not_over_slippage = checking_slippage_fn(amount_out)
-  let actual_amount_out =
-    value.quantity_of(
-      order_out_value,
-      asset_out_policy_id,
-      asset_out_asset_name,
-    )
-  let is_valid_amount_out =
-    if utils.is_ada_asset(asset_out_policy_id, asset_out_asset_name) {
-      amount_out + output_ada == actual_amount_out
-    } else {
-      let ada_amount =
-        value.quantity_of(order_out_value, ada_policy_id, ada_asset_name)
-      amount_out == actual_amount_out && ada_amount == output_ada
-    }
-  expect has_enough_amount_in && not_over_slippage && is_valid_amount_out
+  let expect_order_value_out =
+    value.zero()
+      |> value.add(ada_policy_id, ada_asset_name, output_ada)
+      |> value.add(asset_out_policy_id, asset_out_asset_name, amount_out)
+  expect
+    has_enough_amount_in && not_over_slippage && expect_order_value_out == order_out_value
   if a_to_b_direction {
     (
       datum_reserve_a + amount_in - earned_fee_in,
@@ -168,27 +159,17 @@ fn validate_swap_exact_out(
       None -> 0
     }
   let not_over_slippage = necessary_amount_in <= maximum_amount_in
-  let actual_amount_out =
-    value.quantity_of(
-      order_out_value,
-      asset_out_policy_id,
-      asset_out_asset_name,
-    )
-  let ada_amount =
-    value.quantity_of(order_out_value, ada_policy_id, ada_asset_name)
-  let change_amount_in =
-    value.quantity_of(order_out_value, asset_in_policy_id, asset_in_asset_name)
-  let is_valid_amount_out =
-    if utils.is_ada_asset(asset_in_policy_id, asset_in_asset_name) {
-      actual_amount_out == expected_receive && ada_amount == output_ada + maximum_amount_in - necessary_amount_in
-    } else if
-    utils.is_ada_asset(asset_out_policy_id, asset_out_asset_name){
-    
-      actual_amount_out == expected_receive + output_ada && change_amount_in == maximum_amount_in - necessary_amount_in
-    } else {
-      actual_amount_out == expected_receive && change_amount_in == maximum_amount_in - necessary_amount_in && ada_amount == output_ada
-    }
-  expect has_enough_amount_in && not_over_slippage && is_valid_amount_out
+  let expect_order_value_out =
+    value.zero()
+      |> value.add(ada_policy_id, ada_asset_name, output_ada)
+      |> value.add(asset_out_policy_id, asset_out_asset_name, expected_receive)
+      |> value.add(
+           asset_in_policy_id,
+           asset_in_asset_name,
+           maximum_amount_in - necessary_amount_in,
+         )
+  expect
+    has_enough_amount_in && not_over_slippage && expect_order_value_out == order_out_value
   if a_to_b_direction {
     (
       datum_reserve_a + necessary_amount_in - earned_fee_in,
@@ -259,14 +240,12 @@ fn validate_deposit(
       profit_sharing_opt: profit_sharing_opt,
     )
   let not_over_slippage = lp_amount >= minimum_lp
-  let lp_amount_out =
-    value.quantity_of(order_out_value, lp_asset_policy_id, lp_asset_asset_name)
-  let ada_amount_out =
-    value.quantity_of(order_out_value, ada_policy_id, ada_asset_name)
-
-  let is_valid_amount_out =
-    ada_amount_out == output_ada && lp_amount_out == lp_amount
-  expect has_enough_amount_in && not_over_slippage && is_valid_amount_out
+  let expect_order_value_out =
+    value.zero()
+      |> value.add(ada_policy_id, ada_asset_name, output_ada)
+      |> value.add(lp_asset_policy_id, lp_asset_asset_name, lp_amount)
+  expect
+    has_enough_amount_in && not_over_slippage && expect_order_value_out == order_out_value
   (
     datum_reserve_a + amount_a - earned_fee_a,
     datum_reserve_b + amount_b - earned_fee_b,
@@ -311,19 +290,13 @@ fn validate_withdraw(
     )
   let not_over_slippage =
     amount_a_out >= minimum_amount_a && amount_b_out >= minimum_amount_b
-  let actual_amount_a_out =
-    value.quantity_of(order_out_value, asset_a_policy_id, asset_a_asset_name)
-  let actual_amount_b_out =
-    value.quantity_of(order_out_value, asset_b_policy_id, asset_b_asset_name)
-  let ada_amount_out =
-    value.quantity_of(order_out_value, ada_policy_id, ada_asset_name)
-  let is_valid_amount_out =
-    if utils.is_ada_asset(asset_a_policy_id, asset_a_asset_name) {
-      actual_amount_a_out == amount_a_out + output_ada && actual_amount_b_out == amount_b_out
-    } else {
-      ada_amount_out == output_ada && actual_amount_a_out == amount_a_out && actual_amount_b_out == amount_b_out
-    }
-  expect has_enough_amount_in && not_over_slippage && is_valid_amount_out
+  let expect_order_value_out =
+    value.zero()
+      |> value.add(ada_policy_id, ada_asset_name, output_ada)
+      |> value.add(asset_a_policy_id, asset_a_asset_name, amount_a_out)
+      |> value.add(asset_b_policy_id, asset_b_asset_name, amount_b_out)
+  expect
+    has_enough_amount_in && not_over_slippage && expect_order_value_out == order_out_value
   (
     datum_reserve_a - amount_a_out,
     datum_reserve_b - amount_b_out,
@@ -383,21 +356,12 @@ fn validate_zap_out(
       profit_sharing_opt: profit_sharing_opt,
     )
   let not_over_slippage = amount_out >= minimum_receive
-  let ada_amount =
-    value.quantity_of(order_out_value, ada_policy_id, ada_asset_name)
-  let actual_amount_out =
-    value.quantity_of(
-      order_out_value,
-      asset_out_policy_id,
-      asset_out_asset_name,
-    )
-  let is_valid_amount_out =
-    if utils.is_ada_asset(asset_out_policy_id, asset_out_asset_name) {
-      actual_amount_out == output_ada + amount_out
-    } else {
-      actual_amount_out == amount_out && output_ada == ada_amount
-    }
-  expect has_enough_amount_in && not_over_slippage && is_valid_amount_out
+  let expect_order_value_out =
+    value.zero()
+      |> value.add(ada_policy_id, ada_asset_name, output_ada)
+      |> value.add(asset_out_policy_id, asset_out_asset_name, amount_out)
+  expect
+    has_enough_amount_in && not_over_slippage && expect_order_value_out == order_out_value
   if a_to_b_direction {
     (
       datum_reserve_a - earned_fee_a,
@@ -470,12 +434,13 @@ fn validate_partial_swap(
       io_ratio_numerator: io_ratio_numerator,
       io_ratio_denominator: io_ratio_denominator,
     )
-  let (swap_amount_in, remaining_amount_in) =
+  let swap_amount_in =
     if amount_in <= max_in_swap {
-      (amount_in, 0)
+      amount_in
     } else {
-      (max_in_swap, amount_in - max_in_swap)
+      max_in_swap
     }
+  let remaining_amount_in = amount_in - swap_amount_in
   expect swap_amount_in > 0 && swap_amount_in >= minimum_swap_amount_required
   let amount_out =
     math.calculate_amount_out(
@@ -497,30 +462,19 @@ fn validate_partial_swap(
         )
       None -> 0
     }
-  let ada_out_require = batcher_fee * ( hops - 1 ) + output_ada
   let old_amount_out =
     value.quantity_of(order_in_value, asset_out_policy_id, asset_out_asset_name)
-  let new_amount_out =
-    value.quantity_of(
-      order_out_value,
-      asset_out_policy_id,
-      asset_out_asset_name,
-    )
-  let new_amount_in =
-    value.quantity_of(order_out_value, asset_in_policy_id, asset_in_asset_name)
-  let is_valid_out_value =
-    if utils.is_ada_asset(asset_in_policy_id, asset_in_asset_name) {
-      new_amount_in == remaining_amount_in + ada_out_require && new_amount_out == old_amount_out + amount_out
-    } else if
-    utils.is_ada_asset(asset_out_policy_id, asset_out_asset_name){
-    
-      new_amount_in == remaining_amount_in && new_amount_out == old_amount_out + amount_out * ada_out_require
-    } else {
-      let ada_amount =
-        value.quantity_of(order_out_value, ada_policy_id, ada_asset_name)
-      new_amount_in == remaining_amount_in && new_amount_out == old_amount_out + amount_out && ada_out_require == ada_amount
-    }
-  expect has_enough_amount_in && is_valid_out_value
+  let ada_out_require = batcher_fee * ( hops - 1 ) + output_ada
+  let expect_order_value_out =
+    value.zero()
+      |> value.add(ada_policy_id, ada_asset_name, ada_out_require)
+      |> value.add(
+           asset_out_policy_id,
+           asset_out_asset_name,
+           old_amount_out + amount_out,
+         )
+      |> value.add(asset_in_policy_id, asset_in_asset_name, remaining_amount_in)
+  expect has_enough_amount_in && expect_order_value_out == order_out_value
   let has_next_swap =
     hops - 1 > 0 && remaining_amount_in >= minimum_swap_amount_required
   if a_to_b_direction {
@@ -587,19 +541,13 @@ fn validate_withdraw_imbalance(
       profit_sharing_opt: profit_sharing_opt,
     )
   let not_over_slippage = amount_a_out >= minimum_amount_a
-  let actual_amount_a_out =
-    value.quantity_of(order_out_value, asset_a_policy_id, asset_a_asset_name)
-  let actual_amount_b_out =
-    value.quantity_of(order_out_value, asset_b_policy_id, asset_b_asset_name)
-  let ada_amount_out =
-    value.quantity_of(order_out_value, ada_policy_id, ada_asset_name)
-  let is_valid_amount_out =
-    if utils.is_ada_asset(asset_a_policy_id, asset_a_asset_name) {
-      actual_amount_a_out == amount_a_out + output_ada && actual_amount_b_out == amount_b_out
-    } else {
-      ada_amount_out == output_ada && actual_amount_a_out == amount_a_out && actual_amount_b_out == amount_b_out
-    }
-  expect has_enough_amount_in && not_over_slippage && is_valid_amount_out
+  let expect_order_value_out =
+    value.zero()
+      |> value.add(ada_policy_id, ada_asset_name, output_ada)
+      |> value.add(asset_a_policy_id, asset_a_asset_name, amount_a_out)
+      |> value.add(asset_b_policy_id, asset_b_asset_name, amount_b_out)
+  expect
+    has_enough_amount_in && not_over_slippage && expect_order_value_out == order_out_value
   (
     datum_reserve_a - amount_a_out - earned_fee_a,
     datum_reserve_b - amount_b_out - earned_fee_b,
@@ -835,8 +783,11 @@ pub fn apply_orders(
             ..
           } = input
           let Output { value: order_out_value, .. } = output
-          let order_in_datum =
-            utils.must_find_order_datum(datum_map, raw_order_in_datum)
+          expect order_in_datum: OrderDatum =
+            when raw_order_in_datum is {
+              InlineDatum(d) -> d
+              _ -> utils.must_find_script_datum(datum_map, raw_order_in_datum)
+            }
           let OrderDatum {
             sender,
             receiver,
