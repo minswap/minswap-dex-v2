@@ -131,6 +131,10 @@ pub type AuthenRedeemer {
   MintLiquidity
 }
 
+pub type OrderBatchingRedeemer {
+  pool_input_index: Int,
+}
+
 pub type BatchingPool {
   asset_a: Asset,
   asset_b: Asset,

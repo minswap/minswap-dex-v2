@@ -1,12 +1,14 @@
 use aiken/builtin
 use aiken/list
 use aiken/transaction.{ScriptContext, Spend, Transaction}
+use aiken/transaction/credential.{Address, VerificationKeyCredential}
 use aiken/transaction/value.{AssetName, PolicyId}
 use amm_dex_v2/pool_validation
 use amm_dex_v2/types.{
   Batching, MultiRouting, PoolDatum, PoolRedeemer,
   UpdatePoolFeeOrStakeCredential, WithdrawLiquidityShare,
 }
+use amm_dex_v2/utils
 
 validator(
   authen_policy_id: PolicyId,
@@ -20,11 +22,10 @@ validator(
     redeemer: PoolRedeemer,
     context: ScriptContext,
   ) {
-    let ScriptContext { transaction, purpose } = context
-    expect Spend(pool_input_ref) = purpose
+    expect ScriptContext { transaction, purpose: Spend(pool_input_ref) } =
+      context
     when redeemer is {
       Batching(batcher_address, input_indexes, license_index) -> {
-        expect license_index >= 0 && !builtin.null_list(input_indexes)
         let Transaction {
           inputs,
           outputs,
@@ -34,28 +35,39 @@ validator(
           mint,
           ..
         } = transaction
-        expect
-          pool_validation.validate_common_batching(
-            inputs: inputs,
+        let Address { payment_credential: batcher_payment_credential, .. } =
+          batcher_address
+        expect VerificationKeyCredential(batcher_pkh) =
+          batcher_payment_credential
+        // Batching Redeemer provides @license_index which help save calculation cost
+        let license_input = utils.list_at_index(inputs, license_index)
+        and {
+          // Input indexes must not be empty list
+          !builtin.null_list(input_indexes),
+          // Input indexes must be unique
+          utils.is_list_unique(input_indexes),
+          // Batching transaction won't mint anything
+          value.is_zero(value.from_minted_value(mint)),
+          // Batcher with valid license token must be a signer of transaction
+          list.has(extra_signatories, batcher_pkh),
+          pool_validation.validate_batcher_license(
+            license_input: license_input,
             validity_range: validity_range,
-            extra_signatories: extra_signatories,
-            batcher_address: batcher_address,
             license_policy_id: license_policy_id,
-            license_index: license_index,
             maximum_deadline_range: maximum_deadline_range,
-            mint: mint,
-          )
-        pool_validation.validate_batching(
-          authen_policy_id: authen_policy_id,
-          pool_auth_asset_name: pool_auth_asset_name,
-          all_inputs: inputs,
-          all_outputs: outputs,
-          all_datums: datums,
-          pool_input_ref: pool_input_ref,
-          pool_in_datum: datum,
-          batcher_address: batcher_address,
-          input_indexes: input_indexes,
-        )
+          ),
+          pool_validation.validate_batching(
+            authen_policy_id: authen_policy_id,
+            pool_auth_asset_name: pool_auth_asset_name,
+            all_inputs: inputs,
+            all_outputs: outputs,
+            all_datums: datums,
+            pool_input_ref: pool_input_ref,
+            pool_in_datum: datum,
+            batcher_address: batcher_address,
+            input_indexes: input_indexes,
+          ),
+        }
       }
       MultiRouting(
         batcher_address,
@@ -67,7 +79,7 @@ validator(
         let routing_out_indexes_len = list.length(routing_out_indexes)
         // TODO: Validate distinct indexes
         expect
-          license_index >= 0 && routing_in_indexes_len == routing_out_indexes_len && routing_out_indexes_len >= 2
+          routing_in_indexes_len == routing_out_indexes_len && routing_out_indexes_len >= 2
         let Transaction {
           inputs,
           outputs,
@@ -77,16 +89,22 @@ validator(
           mint,
           ..
         } = transaction
+        // Doesn't mint anything
+        expect value.is_zero(value.from_minted_value(mint))
+        let Address { payment_credential: batcher_payment_credential, .. } =
+          batcher_address
+        expect VerificationKeyCredential(batcher_pkh) =
+          batcher_payment_credential
+        // Verify Batcher with valid license token must be a signer of transaction
+        expect list.has(extra_signatories, batcher_pkh)
+        // Batching Redeemer provides @license_index which help save calculation cost
+        let license_input = utils.list_at_index(inputs, license_index)
         expect
-          pool_validation.validate_common_batching(
-            inputs: inputs,
+          pool_validation.validate_batcher_license(
+            license_input: license_input,
             validity_range: validity_range,
-            extra_signatories: extra_signatories,
-            batcher_address: batcher_address,
             license_policy_id: license_policy_id,
-            license_index: license_index,
             maximum_deadline_range: maximum_deadline_range,
-            mint: mint,
           )
         pool_validation.validate_swap_multi_routing(
           authen_policy_id: authen_policy_id,

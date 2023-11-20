@@ -1,42 +1,25 @@
+use aiken/dict
 use aiken/list
-use aiken/transaction.{Input, Output, ScriptContext, Spend, Transaction}
+use aiken/transaction.{
+  Input, Output, ScriptContext, Spend, Transaction, WithdrawFrom,
+}
 use aiken/transaction/credential.{
-  Address, ScriptCredential, VerificationKeyCredential,
+  Address, ScriptCredential, StakeCredential, VerificationKeyCredential,
 }
 use amm_dex_v2/types.{
-  ApplyOrder, CancelOrder, OrderDatum, OrderRedeemer, ValidatorHash,
+  ApplyOrder, CancelOrder, OrderBatchingRedeemer, OrderDatum, OrderRedeemer,
+  ValidatorHash,
 }
+use amm_dex_v2/utils
 
-validator(pool_hash: ValidatorHash) {
+validator(stake_credential: StakeCredential) {
   fn validate_order(raw_datum: Data, raw_redeemer: Data, context: ScriptContext) {
-    let ScriptContext { transaction, purpose } = context
-    expect Spend(_) = purpose
+    expect ScriptContext { transaction, purpose: Spend(_) } = context
     expect redeemer: OrderRedeemer = raw_redeemer
     when redeemer is {
       ApplyOrder -> {
-        let Transaction { inputs, .. } = transaction
-        // TODO: Consider this line
-        when
-          list.filter(
-            inputs,
-            fn(i) {
-              let Input {
-                output: Output {
-                  address: Address { payment_credential, .. },
-                  ..
-                },
-                ..
-              } = i
-              when payment_credential is {
-                ScriptCredential(hash) -> pool_hash == hash
-                _ -> False
-              }
-            },
-          )
-        is {
-          [] -> False
-          _ -> True
-        }
+        let Transaction { withdrawals, .. } = transaction
+        dict.has_key(withdrawals, stake_credential)
       }
       CancelOrder -> {
         let Transaction { extra_signatories, .. } = transaction
@@ -47,5 +30,23 @@ validator(pool_hash: ValidatorHash) {
         list.has(extra_signatories, owner_pkh)
       }
     }
+  }
+}
+
+validator(pool_hash: ValidatorHash) {
+  fn validate_order_spending_in_batching(
+    redeemer: OrderBatchingRedeemer,
+    context: ScriptContext,
+  ) -> Bool {
+    expect ScriptContext { transaction, purpose: WithdrawFrom(_) } = context
+    let OrderBatchingRedeemer { pool_input_index } = redeemer
+
+    let Transaction { inputs, .. } = transaction
+    let Input {
+      output: Output { address: Address { payment_credential, .. }, .. },
+      ..
+    } = utils.list_at_index(inputs, pool_input_index)
+    expect ScriptCredential(hash) = payment_credential
+    pool_hash == hash
   }
 }
