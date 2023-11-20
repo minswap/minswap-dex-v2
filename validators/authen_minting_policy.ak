@@ -35,9 +35,12 @@ validator(
         expect [(minted_pid, minted_an, minted_amount)] =
           value.flatten(mint_value)
         // Transaction must mint only 1 Factory Auth Asset
-        expect
-          minted_pid == authen_policy_id && minted_an == factory_auth_asset_name && minted_amount == 1
-        let factory_outputs =
+        expect and {
+            minted_pid == authen_policy_id,
+            minted_an == factory_auth_asset_name,
+            minted_amount == 1,
+          }
+        expect [factory_output] =
           list.filter(
             outputs,
             fn(output) {
@@ -49,17 +52,17 @@ validator(
               ) == 1
             },
           )
-        expect [factory_output] = factory_outputs
         let Output { datum: factory_raw_datum, .. } = factory_output
         let FactoryDatum { head, tail } =
           utils.must_find_factory_datum(datums, factory_raw_datum)
-        expect
-          head == #"00" && tail == #"ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff00"
-        True
+        and {
+          head == #"00",
+          tail == #"ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff00",
+        }
       }
       CreatePool -> {
         let Transaction { inputs, mint, redeemers, .. } = transaction
-        let factory_inputs =
+        expect [factory_input] =
           list.filter(
             inputs,
             fn(input) {
@@ -72,17 +75,7 @@ validator(
               ) == 1
             },
           )
-        expect [factory_input] = factory_inputs
         let Input { output_reference: factory_input_ref, .. } = factory_input
-        let mint_value = value.from_minted_value(mint)
-        expect
-          value.quantity_of(
-            mint_value,
-            authen_policy_id,
-            factory_auth_asset_name,
-          ) == 1
-        expect
-          value.quantity_of(mint_value, authen_policy_id, pool_auth_asset_name) == 1
         let redeemer_list = dict.to_list(redeemers)
         expect [(_, raw_factory_redeemer)] =
           list.filter(
@@ -114,10 +107,13 @@ validator(
             asset_b_policy_id,
             asset_b_asset_name,
           )
-        expect
-          value.quantity_of(mint_value, authen_policy_id, lp_asset_name) == 9223372036854775807
-        expect list.length(value.flatten(mint_value)) == 3
-        True
+        let mint_value = value.from_minted_value(mint)
+        let expected_mint =
+          value.zero()
+            |> value.add(authen_policy_id, factory_auth_asset_name, 1)
+            |> value.add(authen_policy_id, pool_auth_asset_name, 1)
+            |> value.add(authen_policy_id, lp_asset_name, 9223372036854775807)
+        expected_mint == mint_value
       }
       MintLiquidity -> fail
     }

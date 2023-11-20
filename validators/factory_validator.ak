@@ -39,7 +39,7 @@ validator(
         asset_b_policy_id,
         asset_b_asset_name,
       )
-    let factory_input_opt =
+    expect Some(factory_input) =
       list.find(
         inputs,
         fn(input) {
@@ -47,7 +47,6 @@ validator(
           out_ref == factory_ref
         },
       )
-    expect Some(factory_input) = factory_input_opt
     let Input { output: factory_input_out, .. } = factory_input
     let Output { value: factory_input_value, address: factory_address, .. } =
       factory_input_out
@@ -145,6 +144,15 @@ validator(
     // Remaining Liquidity must be MAX_LIQUIDITY - total_liquidity
     expect
       value.quantity_of(pool_output_value, authen_policy_id, lp_asset_name) == remaining_liquidity
+    let flatted_value = value.flatten(pool_output_value)
+    expect
+      if utils.is_ada_asset(asset_a_policy_id, asset_a_asset_name) {
+        expect [_, _, _, _] = flatted_value
+        True
+      } else {
+        expect [_, _, _, _, _] = flatted_value
+        True
+      }
     // Transaction must mint only 1 Factory Asset + 1 Pool Asset + MAX INT64 LP Asset
     expect
       validate_mint(

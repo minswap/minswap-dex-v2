@@ -51,7 +51,6 @@ fn validate_swap_exact_in(
     } else {
       temp_amount_in
     }
-  let has_enough_amount_in = amount_in > 0
   let amount_out =
     math.calculate_amount_out(
       reserve_in: reserve_in,
@@ -72,22 +71,15 @@ fn validate_swap_exact_in(
         )
       None -> 0
     }
-  let not_over_slippage = checking_slippage_fn(amount_out)
-  let actual_amount_out =
-    value.quantity_of(
-      order_out_value,
-      asset_out_policy_id,
-      asset_out_asset_name,
-    )
-  let is_valid_amount_out =
-    if utils.is_ada_asset(asset_out_policy_id, asset_out_asset_name) {
-      amount_out + output_ada == actual_amount_out
-    } else {
-      let ada_amount =
-        value.quantity_of(order_out_value, ada_policy_id, ada_asset_name)
-      amount_out == actual_amount_out && ada_amount == output_ada
+  let expect_order_value_out =
+    value.zero()
+      |> value.add(ada_policy_id, ada_asset_name, output_ada)
+      |> value.add(asset_out_policy_id, asset_out_asset_name, amount_out)
+  expect and {
+      amount_in > 0,
+      checking_slippage_fn(amount_out),
+      expect_order_value_out == order_out_value,
     }
-  expect has_enough_amount_in && not_over_slippage && is_valid_amount_out
   if a_to_b_direction {
     (
       datum_reserve_a + amount_in - earned_fee_in,
@@ -146,7 +138,6 @@ fn validate_swap_exact_out(
     } else {
       temp_amount_in
     }
-  let has_enough_amount_in = maximum_amount_in > 0
   let necessary_amount_in =
     math.calculate_amount_in(
       reserve_in,
@@ -167,28 +158,20 @@ fn validate_swap_exact_out(
         )
       None -> 0
     }
-  let not_over_slippage = necessary_amount_in <= maximum_amount_in
-  let actual_amount_out =
-    value.quantity_of(
-      order_out_value,
-      asset_out_policy_id,
-      asset_out_asset_name,
-    )
-  let ada_amount =
-    value.quantity_of(order_out_value, ada_policy_id, ada_asset_name)
-  let change_amount_in =
-    value.quantity_of(order_out_value, asset_in_policy_id, asset_in_asset_name)
-  let is_valid_amount_out =
-    if utils.is_ada_asset(asset_in_policy_id, asset_in_asset_name) {
-      actual_amount_out == expected_receive && ada_amount == output_ada + maximum_amount_in - necessary_amount_in
-    } else if
-    utils.is_ada_asset(asset_out_policy_id, asset_out_asset_name){
-    
-      actual_amount_out == expected_receive + output_ada && change_amount_in == maximum_amount_in - necessary_amount_in
-    } else {
-      actual_amount_out == expected_receive && change_amount_in == maximum_amount_in - necessary_amount_in && ada_amount == output_ada
+  let expect_order_value_out =
+    value.zero()
+      |> value.add(ada_policy_id, ada_asset_name, output_ada)
+      |> value.add(asset_out_policy_id, asset_out_asset_name, expected_receive)
+      |> value.add(
+           asset_in_policy_id,
+           asset_in_asset_name,
+           maximum_amount_in - necessary_amount_in,
+         )
+  expect and {
+      maximum_amount_in > 0,
+      necessary_amount_in <= maximum_amount_in,
+      expect_order_value_out == order_out_value,
     }
-  expect has_enough_amount_in && not_over_slippage && is_valid_amount_out
   if a_to_b_direction {
     (
       datum_reserve_a + necessary_amount_in - earned_fee_in,
@@ -245,8 +228,6 @@ fn validate_deposit(
     } else {
       temp_amount_a
     }
-  let has_enough_amount_in =
-    amount_a >= 0 && amount_b >= 0 && amount_a + amount_b > 0
   let (earned_fee_a, earned_fee_b, lp_amount) =
     math.calculate_deposit_amount(
       amount_a: amount_a,
@@ -258,15 +239,17 @@ fn validate_deposit(
       trading_fee_denominator: trading_fee_denominator,
       profit_sharing_opt: profit_sharing_opt,
     )
-  let not_over_slippage = lp_amount >= minimum_lp
-  let lp_amount_out =
-    value.quantity_of(order_out_value, lp_asset_policy_id, lp_asset_asset_name)
-  let ada_amount_out =
-    value.quantity_of(order_out_value, ada_policy_id, ada_asset_name)
-
-  let is_valid_amount_out =
-    ada_amount_out == output_ada && lp_amount_out == lp_amount
-  expect has_enough_amount_in && not_over_slippage && is_valid_amount_out
+  let expect_order_value_out =
+    value.zero()
+      |> value.add(ada_policy_id, ada_asset_name, output_ada)
+      |> value.add(lp_asset_policy_id, lp_asset_asset_name, lp_amount)
+  expect and {
+      amount_a >= 0,
+      amount_b >= 0,
+      amount_a + amount_b > 0,
+      lp_amount >= minimum_lp,
+      expect_order_value_out == order_out_value,
+    }
   (
     datum_reserve_a + amount_a - earned_fee_a,
     datum_reserve_b + amount_b - earned_fee_b,
@@ -301,7 +284,6 @@ fn validate_withdraw(
   let Asset { policy_id: lp_policy_id, asset_name: lp_asset_name } = lp_asset
   let withdrawal_lp_amount =
     value.quantity_of(order_in_value, lp_policy_id, lp_asset_name)
-  let has_enough_amount_in = withdrawal_lp_amount > 0
   let (amount_a_out, amount_b_out) =
     math.calculate_withdraw(
       datum_reserve_a,
@@ -309,21 +291,17 @@ fn validate_withdraw(
       withdrawal_lp_amount,
       total_liquidity,
     )
-  let not_over_slippage =
-    amount_a_out >= minimum_amount_a && amount_b_out >= minimum_amount_b
-  let actual_amount_a_out =
-    value.quantity_of(order_out_value, asset_a_policy_id, asset_a_asset_name)
-  let actual_amount_b_out =
-    value.quantity_of(order_out_value, asset_b_policy_id, asset_b_asset_name)
-  let ada_amount_out =
-    value.quantity_of(order_out_value, ada_policy_id, ada_asset_name)
-  let is_valid_amount_out =
-    if utils.is_ada_asset(asset_a_policy_id, asset_a_asset_name) {
-      actual_amount_a_out == amount_a_out + output_ada && actual_amount_b_out == amount_b_out
-    } else {
-      ada_amount_out == output_ada && actual_amount_a_out == amount_a_out && actual_amount_b_out == amount_b_out
+  let expect_order_value_out =
+    value.zero()
+      |> value.add(ada_policy_id, ada_asset_name, output_ada)
+      |> value.add(asset_a_policy_id, asset_a_asset_name, amount_a_out)
+      |> value.add(asset_b_policy_id, asset_b_asset_name, amount_b_out)
+  expect and {
+      withdrawal_lp_amount > 0,
+      amount_a_out >= minimum_amount_a,
+      amount_b_out >= minimum_amount_b,
+      expect_order_value_out == order_out_value,
     }
-  expect has_enough_amount_in && not_over_slippage && is_valid_amount_out
   (
     datum_reserve_a - amount_a_out,
     datum_reserve_b - amount_b_out,
@@ -369,7 +347,6 @@ fn validate_zap_out(
       policy_id: lp_policy_id,
       asset_name: lp_asset_name,
     )
-  let has_enough_amount_in = withdrawal_lp_amount > 0
 
   let (earned_fee_a, earned_fee_b, amount_out) =
     math.calculate_zap_out(
@@ -382,22 +359,15 @@ fn validate_zap_out(
       trading_fee_denominator: trading_fee_denominator,
       profit_sharing_opt: profit_sharing_opt,
     )
-  let not_over_slippage = amount_out >= minimum_receive
-  let ada_amount =
-    value.quantity_of(order_out_value, ada_policy_id, ada_asset_name)
-  let actual_amount_out =
-    value.quantity_of(
-      order_out_value,
-      asset_out_policy_id,
-      asset_out_asset_name,
-    )
-  let is_valid_amount_out =
-    if utils.is_ada_asset(asset_out_policy_id, asset_out_asset_name) {
-      actual_amount_out == output_ada + amount_out
-    } else {
-      actual_amount_out == amount_out && output_ada == ada_amount
+  let expect_order_value_out =
+    value.zero()
+      |> value.add(ada_policy_id, ada_asset_name, output_ada)
+      |> value.add(asset_out_policy_id, asset_out_asset_name, amount_out)
+  expect and {
+      withdrawal_lp_amount > 0,
+      amount_out >= minimum_receive,
+      expect_order_value_out == order_out_value,
     }
-  expect has_enough_amount_in && not_over_slippage && is_valid_amount_out
   if a_to_b_direction {
     (
       datum_reserve_a - earned_fee_a,
@@ -460,7 +430,6 @@ fn validate_partial_swap(
     } else {
       temp_amount_in
     }
-  let has_enough_amount_in = amount_in > 0
   let max_in_swap =
     math.calculate_max_in_swap(
       reserve_in: reserve_in,
@@ -470,13 +439,13 @@ fn validate_partial_swap(
       io_ratio_numerator: io_ratio_numerator,
       io_ratio_denominator: io_ratio_denominator,
     )
-  let (swap_amount_in, remaining_amount_in) =
+  let swap_amount_in =
     if amount_in <= max_in_swap {
-      (amount_in, 0)
+      amount_in
     } else {
-      (max_in_swap, amount_in - max_in_swap)
+      max_in_swap
     }
-  expect swap_amount_in > 0 && swap_amount_in >= minimum_swap_amount_required
+  let remaining_amount_in = amount_in - swap_amount_in
   let amount_out =
     math.calculate_amount_out(
       reserve_in: reserve_in,
@@ -497,30 +466,24 @@ fn validate_partial_swap(
         )
       None -> 0
     }
-  let ada_out_require = batcher_fee * ( hops - 1 ) + output_ada
   let old_amount_out =
     value.quantity_of(order_in_value, asset_out_policy_id, asset_out_asset_name)
-  let new_amount_out =
-    value.quantity_of(
-      order_out_value,
-      asset_out_policy_id,
-      asset_out_asset_name,
-    )
-  let new_amount_in =
-    value.quantity_of(order_out_value, asset_in_policy_id, asset_in_asset_name)
-  let is_valid_out_value =
-    if utils.is_ada_asset(asset_in_policy_id, asset_in_asset_name) {
-      new_amount_in == remaining_amount_in + ada_out_require && new_amount_out == old_amount_out + amount_out
-    } else if
-    utils.is_ada_asset(asset_out_policy_id, asset_out_asset_name){
-    
-      new_amount_in == remaining_amount_in && new_amount_out == old_amount_out + amount_out * ada_out_require
-    } else {
-      let ada_amount =
-        value.quantity_of(order_out_value, ada_policy_id, ada_asset_name)
-      new_amount_in == remaining_amount_in && new_amount_out == old_amount_out + amount_out && ada_out_require == ada_amount
+  let ada_out_require = batcher_fee * ( hops - 1 ) + output_ada
+  let expect_order_value_out =
+    value.zero()
+      |> value.add(ada_policy_id, ada_asset_name, ada_out_require)
+      |> value.add(
+           asset_out_policy_id,
+           asset_out_asset_name,
+           old_amount_out + amount_out,
+         )
+      |> value.add(asset_in_policy_id, asset_in_asset_name, remaining_amount_in)
+  expect and {
+      amount_in > 0,
+      swap_amount_in > 0,
+      swap_amount_in >= minimum_swap_amount_required,
+      expect_order_value_out == order_out_value,
     }
-  expect has_enough_amount_in && is_valid_out_value
   let has_next_swap =
     hops - 1 > 0 && remaining_amount_in >= minimum_swap_amount_required
   if a_to_b_direction {
@@ -573,7 +536,6 @@ fn validate_withdraw_imbalance(
   let Asset { policy_id: lp_policy_id, asset_name: lp_asset_name } = lp_asset
   let withdrawal_lp_amount =
     value.quantity_of(order_in_value, lp_policy_id, lp_asset_name)
-  let has_enough_amount_in = withdrawal_lp_amount > 0
   let (earned_fee_a, earned_fee_b, amount_a_out, amount_b_out) =
     math.calculate_withdraw_imbalance(
       expect_ab_ratio_numerator: ratio_asset_a,
@@ -586,20 +548,16 @@ fn validate_withdraw_imbalance(
       total_liquidity: total_liquidity,
       profit_sharing_opt: profit_sharing_opt,
     )
-  let not_over_slippage = amount_a_out >= minimum_amount_a
-  let actual_amount_a_out =
-    value.quantity_of(order_out_value, asset_a_policy_id, asset_a_asset_name)
-  let actual_amount_b_out =
-    value.quantity_of(order_out_value, asset_b_policy_id, asset_b_asset_name)
-  let ada_amount_out =
-    value.quantity_of(order_out_value, ada_policy_id, ada_asset_name)
-  let is_valid_amount_out =
-    if utils.is_ada_asset(asset_a_policy_id, asset_a_asset_name) {
-      actual_amount_a_out == amount_a_out + output_ada && actual_amount_b_out == amount_b_out
-    } else {
-      ada_amount_out == output_ada && actual_amount_a_out == amount_a_out && actual_amount_b_out == amount_b_out
+  let expect_order_value_out =
+    value.zero()
+      |> value.add(ada_policy_id, ada_asset_name, output_ada)
+      |> value.add(asset_a_policy_id, asset_a_asset_name, amount_a_out)
+      |> value.add(asset_b_policy_id, asset_b_asset_name, amount_b_out)
+  expect and {
+      withdrawal_lp_amount > 0,
+      amount_a_out >= minimum_amount_a,
+      expect_order_value_out == order_out_value,
     }
-  expect has_enough_amount_in && not_over_slippage && is_valid_amount_out
   (
     datum_reserve_a - amount_a_out - earned_fee_a,
     datum_reserve_b - amount_b_out - earned_fee_b,
@@ -669,19 +627,19 @@ fn get_multi_routing_swap_amount_out(
   expect amount_out > 0
   expect
     when direction is {
-      AToB ->
-        old_datum_reserve_a + amount_in - earned_fee_in == new_datum_reserve_a && // hihi
-        old_datum_reserve_b - amount_out == new_datum_reserve_b && // hihi
-        old_value_reserve_a + amount_in == new_value_reserve_a && // hihi
-        old_value_reserve_b - amount_out == new_value_reserve_b
-      // hihi
-      BToA ->
-        old_datum_reserve_a - amount_out == new_datum_reserve_a && // hihi
-        old_datum_reserve_b + amount_in - earned_fee_in == new_datum_reserve_b && // hihi
-        old_value_reserve_a - amount_out == new_value_reserve_a && // hihi
-        old_value_reserve_b + amount_in == new_value_reserve_b
+      AToB -> and {
+          old_datum_reserve_a + amount_in - earned_fee_in == new_datum_reserve_a,
+          old_datum_reserve_b - amount_out == new_datum_reserve_b,
+          old_value_reserve_a + amount_in == new_value_reserve_a,
+          old_value_reserve_b - amount_out == new_value_reserve_b,
+        }
+      BToA -> and {
+          old_datum_reserve_a - amount_out == new_datum_reserve_a,
+          old_datum_reserve_b + amount_in - earned_fee_in == new_datum_reserve_b,
+          old_value_reserve_a - amount_out == new_value_reserve_a,
+          old_value_reserve_b + amount_in == new_value_reserve_b,
+        }
     }
-  // hihi 
   amount_out
 }
 
@@ -802,8 +760,10 @@ pub fn validate_order_receiver(
         }
       None -> raw_order_output_datum == NoDatum
     }
-  expect receiver == output_address && is_valid_receiver_datum
-  True
+  and {
+    receiver == output_address,
+    is_valid_receiver_datum,
+  }
 }
 
 // TODO: validate order input value size
@@ -835,8 +795,11 @@ pub fn apply_orders(
             ..
           } = input
           let Output { value: order_out_value, .. } = output
-          let order_in_datum =
-            utils.must_find_order_datum(datum_map, raw_order_in_datum)
+          expect order_in_datum: OrderDatum =
+            when raw_order_in_datum is {
+              InlineDatum(d) -> d
+              _ -> utils.must_find_script_datum(datum_map, raw_order_in_datum)
+            }
           let OrderDatum {
             sender,
             receiver,
@@ -850,13 +813,14 @@ pub fn apply_orders(
           let new_state =
             when order_step is {
               SwapExactIn(direction, minimum_receive) -> {
-                expect minimum_receive > 0
-                expect
-                  validate_order_receiver(
-                    receiver: receiver,
-                    receiver_datum_hash_opt: receiver_datum_hash_opt,
-                    output: output,
-                  )
+                expect and {
+                    minimum_receive > 0,
+                    validate_order_receiver(
+                      receiver: receiver,
+                      receiver_datum_hash_opt: receiver_datum_hash_opt,
+                      output: output,
+                    ),
+                  }
                 let a_to_b_direction =
                   when direction is {
                     AToB -> True
@@ -880,13 +844,14 @@ pub fn apply_orders(
                 )
               }
               StopLoss(direction, stop_loss_receive) -> {
-                expect stop_loss_receive > 0
-                expect
-                  validate_order_receiver(
-                    receiver: receiver,
-                    receiver_datum_hash_opt: receiver_datum_hash_opt,
-                    output: output,
-                  )
+                expect and {
+                    stop_loss_receive > 0,
+                    validate_order_receiver(
+                      receiver: receiver,
+                      receiver_datum_hash_opt: receiver_datum_hash_opt,
+                      output: output,
+                    ),
+                  }
                 let a_to_b_direction =
                   when direction is {
                     AToB -> True
@@ -910,13 +875,15 @@ pub fn apply_orders(
                 )
               }
               OCO(direction, minimum_receive, stop_loss_receive) -> {
-                expect minimum_receive > 0 && stop_loss_receive > 0
-                expect
-                  validate_order_receiver(
-                    receiver: receiver,
-                    receiver_datum_hash_opt: receiver_datum_hash_opt,
-                    output: output,
-                  )
+                expect and {
+                    minimum_receive > 0,
+                    stop_loss_receive > 0,
+                    validate_order_receiver(
+                      receiver: receiver,
+                      receiver_datum_hash_opt: receiver_datum_hash_opt,
+                      output: output,
+                    ),
+                  }
                 let a_to_b_direction =
                   when direction is {
                     AToB -> True
@@ -940,13 +907,14 @@ pub fn apply_orders(
                 )
               }
               SwapExactOut(direction, expected_receive) -> {
-                expect expected_receive > 0
-                expect
-                  validate_order_receiver(
-                    receiver: receiver,
-                    receiver_datum_hash_opt: receiver_datum_hash_opt,
-                    output: output,
-                  )
+                expect and {
+                    expected_receive > 0,
+                    validate_order_receiver(
+                      receiver: receiver,
+                      receiver_datum_hash_opt: receiver_datum_hash_opt,
+                      output: output,
+                    ),
+                  }
                 let a_to_b_direction =
                   when direction is {
                     AToB -> True
@@ -968,13 +936,14 @@ pub fn apply_orders(
                 )
               }
               Deposit(minimum_lp) -> {
-                expect minimum_lp > 0
-                expect
-                  validate_order_receiver(
-                    receiver: receiver,
-                    receiver_datum_hash_opt: receiver_datum_hash_opt,
-                    output: output,
-                  )
+                expect and {
+                    minimum_lp > 0,
+                    validate_order_receiver(
+                      receiver: receiver,
+                      receiver_datum_hash_opt: receiver_datum_hash_opt,
+                      output: output,
+                    ),
+                  }
                 validate_deposit(
                   order_in_value: order_in_value,
                   order_out_value: order_out_value,
@@ -991,13 +960,15 @@ pub fn apply_orders(
                 )
               }
               Withdraw(minimum_asset_a, minimum_asset_b) -> {
-                expect minimum_asset_a > 0 && minimum_asset_b > 0
-                expect
-                  validate_order_receiver(
-                    receiver: receiver,
-                    receiver_datum_hash_opt: receiver_datum_hash_opt,
-                    output: output,
-                  )
+                expect and {
+                    minimum_asset_a > 0,
+                    minimum_asset_b > 0,
+                    validate_order_receiver(
+                      receiver: receiver,
+                      receiver_datum_hash_opt: receiver_datum_hash_opt,
+                      output: output,
+                    ),
+                  }
                 validate_withdraw(
                   order_in_value: order_in_value,
                   order_out_value: order_out_value,
@@ -1011,13 +982,14 @@ pub fn apply_orders(
                 )
               }
               ZapOut(direction, minimum_receive) -> {
-                expect minimum_receive > 0
-                expect
-                  validate_order_receiver(
-                    receiver: receiver,
-                    receiver_datum_hash_opt: receiver_datum_hash_opt,
-                    output: output,
-                  )
+                expect and {
+                    minimum_receive > 0,
+                    validate_order_receiver(
+                      receiver: receiver,
+                      receiver_datum_hash_opt: receiver_datum_hash_opt,
+                      output: output,
+                    ),
+                  }
                 let a_to_b_direction =
                   when direction is {
                     AToB -> True
@@ -1045,8 +1017,11 @@ pub fn apply_orders(
                 hops,
                 minimum_swap_amount_required,
               ) -> {
-                expect
-                  io_ratio_numerator > 0 && io_ratio_numerator > 0 && hops > 0
+                expect and {
+                    io_ratio_numerator > 0,
+                    io_ratio_numerator > 0,
+                    hops > 0,
+                  }
                 let a_to_b_direction =
                   when direction is {
                     AToB -> True
@@ -1109,18 +1084,20 @@ pub fn apply_orders(
                       order_out_hops,
                       order_out_minimum_swap_amount_required,
                     ) = order_out_step
-                    order_out_script_hash == order_hash && // hihi
-                    sender == order_out_sender && // hihi
-                    receiver == order_out_receiver && // hihi
-                    receiver_datum_hash_opt == order_out_receiver_datum_hash_opt && // hihi
-                    batcher_fee == order_out_batcher_fee && // hihi
-                    output_ada == order_out_output_ada && // hihi
-                    order_lp_asset == order_out_lp_asset && // hihi
-                    direction == order_out_step_direction && // hihi
-                    io_ratio_numerator == order_out_io_ratio_numerator && // hihi
-                    io_ratio_denominator == order_out_io_ratio_denominator && // hihi
-                    hops - 1 == order_out_hops && // hihi
-                    minimum_swap_amount_required == order_out_minimum_swap_amount_required
+                    and {
+                      order_out_script_hash == order_hash,
+                      sender == order_out_sender,
+                      receiver == order_out_receiver,
+                      receiver_datum_hash_opt == order_out_receiver_datum_hash_opt,
+                      batcher_fee == order_out_batcher_fee,
+                      output_ada == order_out_output_ada,
+                      order_lp_asset == order_out_lp_asset,
+                      direction == order_out_step_direction,
+                      io_ratio_numerator == order_out_io_ratio_numerator,
+                      io_ratio_denominator == order_out_io_ratio_denominator,
+                      hops - 1 == order_out_hops,
+                      minimum_swap_amount_required == order_out_minimum_swap_amount_required,
+                    }
                   } else {
                     validate_order_receiver(
                       receiver: receiver,
@@ -1137,14 +1114,16 @@ pub fn apply_orders(
                 )
               }
               WithdrawImbalance(ratio_asset_a, ratio_asset_b, minimum_asset_a) -> {
-                expect
-                  ratio_asset_a > 0 && ratio_asset_b > 0 && minimum_asset_a > 0
-                expect
-                  validate_order_receiver(
-                    receiver: receiver,
-                    receiver_datum_hash_opt: receiver_datum_hash_opt,
-                    output: output,
-                  )
+                expect and {
+                    ratio_asset_a > 0,
+                    ratio_asset_b > 0,
+                    minimum_asset_a > 0,
+                    validate_order_receiver(
+                      receiver: receiver,
+                      receiver_datum_hash_opt: receiver_datum_hash_opt,
+                      output: output,
+                    ),
+                  }
                 validate_withdraw_imbalance(
                   order_in_value: order_in_value,
                   order_out_value: order_out_value,

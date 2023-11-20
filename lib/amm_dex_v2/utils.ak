@@ -3,13 +3,10 @@ use aiken/bytearray
 use aiken/cbor
 use aiken/dict
 use aiken/hash
-use aiken/interval.{Finite}
 use aiken/list
 use aiken/string
-use aiken/transaction.{Datum, DatumHash, InlineDatum, NoDatum, ValidityRange}
-use aiken/transaction/value.{
-  AssetName, PolicyId, Value, ada_asset_name, ada_policy_id,
-}
+use aiken/transaction.{Datum, DatumHash, InlineDatum, NoDatum}
+use aiken/transaction/value.{AssetName, PolicyId, ada_asset_name, ada_policy_id}
 use amm_dex_v2/types.{Asset, DatumMap, FactoryDatum, OrderDatum, PoolDatum}
 
 const minus_ascii_code = 45
@@ -69,47 +66,6 @@ pub fn is_ada_asset(pid: PolicyId, name: AssetName) -> Bool {
   pid == ada_policy_id && name == ada_asset_name
 }
 
-pub fn verify_pool_datum_in_batch(
-  datum1: PoolDatum,
-  datum2: PoolDatum,
-  require_total_liquidity_unchange: Bool,
-) -> Bool {
-  let PoolDatum {
-    asset_a: datum_1_asset_a,
-    asset_b: datum_1_asset_b,
-    total_liquidity: datum_1_total_liquidity,
-    trading_fee_numerator: datum_1_trading_fee_numerator,
-    trading_fee_denominator: datum_1_trading_fee_denominator,
-    order_hash: datum_1_order_hash,
-    profit_sharing_opt: datum_1_profit_sharing_opt,
-    ..
-  } = datum1
-
-  let PoolDatum {
-    asset_a: datum_2_asset_a,
-    asset_b: datum_2_asset_b,
-    total_liquidity: datum_2_total_liquidity,
-    trading_fee_numerator: datum_2_trading_fee_numerator,
-    trading_fee_denominator: datum_2_trading_fee_denominator,
-    order_hash: datum_2_order_hash,
-    profit_sharing_opt: datum_2_profit_sharing_opt,
-    ..
-  } = datum2
-  expect
-    if require_total_liquidity_unchange {
-      datum_1_total_liquidity == datum_2_total_liquidity
-    } else {
-      True
-    }
-  datum_1_asset_a == datum_2_asset_a && // hehe
-  datum_1_asset_b == datum_2_asset_b && // hehe
-  datum_1_trading_fee_numerator == datum_2_trading_fee_numerator && // hehe
-  datum_1_trading_fee_denominator == datum_2_trading_fee_denominator && // hehe
-  datum_1_order_hash == datum_2_order_hash && // hehe
-  datum_1_profit_sharing_opt == datum_2_profit_sharing_opt
-  // hehe
-}
-
 pub fn compute_lp_asset_name(
   asset_a_policy_id: PolicyId,
   asset_a_asset_name: AssetName,
@@ -143,18 +99,6 @@ test test_compute_lp_asset_name() {
 pub fn must_parse_option(op: Option<a>) -> a {
   expect Some(t) = op
   t
-}
-
-pub fn find_license_deadline(license_symbol: PolicyId, val: Value) -> Int {
-  expect [(tn, am)] =
-    val
-      |> value.tokens(license_symbol)
-      |> dict.to_list()
-  if am == 1 {
-    bytearray_to_int(tn)
-  } else {
-    fail
-  }
 }
 
 pub fn bytearray_to_int(byte_arr: ByteArray) -> Int {
@@ -193,12 +137,6 @@ test test_bytearray_to_int() {
   r1 == 123 && r2 == 111
 }
 
-pub fn find_posix_time_range(time_rage: ValidityRange) -> (Int, Int) {
-  expect Finite(t1) = time_rage.lower_bound.bound_type
-  expect Finite(t2) = time_rage.upper_bound.bound_type
-  (t1, t2)
-}
-
 pub fn find_script_datum(datums: DatumMap, datum: Datum) -> Option<Data> {
   when datum is {
     NoDatum -> None
@@ -209,7 +147,7 @@ pub fn find_script_datum(datums: DatumMap, datum: Datum) -> Option<Data> {
   }
 }
 
-fn must_find_script_datum(datums: DatumMap, datum: Datum) -> Data {
+pub fn must_find_script_datum(datums: DatumMap, datum: Datum) -> Data {
   let datum_opt = find_script_datum(datums, datum)
   must_parse_option(datum_opt)
 }
@@ -252,7 +190,7 @@ fn list_at_index_step(outputs: List<a>, current_index: Int) -> a {
 
 /// Small utility to skip 10 items in a list.
 /// Used by `list_at_index`.
-fn skip_10_items(some_list: List<a>) -> List<a> {
+pub fn skip_10_items(some_list: List<a>) -> List<a> {
   some_list
     |> builtin.tail_list
     |> builtin.tail_list
@@ -322,4 +260,62 @@ test test_zip_with_throw_err() fail {
   let arr2 =
     [4, 5, 6, 6]
   zip_with(arr1, arr2, fn(a1, a2) { a1 + a2 }) == []
+}
+
+pub fn compare_list_length(arr1: List<a>, arr2: List<b>) -> Bool {
+  when arr1 is {
+    [] -> arr2 == []
+    [_, ..xs] ->
+      when arr2 is {
+        [] -> False
+        [_, ..ys] -> compare_list_length(xs, ys)
+      }
+  }
+}
+
+test test_compare_list_length() {
+  let arr1 =
+    [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18]
+  let arr2 =
+    [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18]
+  compare_list_length(arr1, arr2)
+}
+
+test test_compare_list_length_1() {
+  let arr1 =
+    [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18]
+  let arr2 =
+    [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17]
+  !compare_list_length(arr1, arr2)
+}
+
+test test_compare_list_length_2() {
+  let arr1 =
+    []
+  let arr2 =
+    []
+  compare_list_length(arr1, arr2)
+}
+
+test test_compare_list_length_3() {
+  let arr1 =
+    [1]
+  let arr2 =
+    []
+  !compare_list_length(arr1, arr2)
+}
+
+fn contains_element(list: List<a>, elem: a) -> Bool {
+  when list is {
+    [] -> False
+    [x, ..xs] -> elem == x || contains_element(xs, elem)
+  }
+}
+
+pub fn is_list_unique(list: List<a>) -> Bool {
+  when list is {
+    [] -> True
+    [_] -> True
+    [x, ..xs] -> !contains_element(xs, x) && is_list_unique(xs)
+  }
 }
