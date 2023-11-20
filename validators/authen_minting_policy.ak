@@ -4,6 +4,7 @@ use aiken/transaction.{
   Input, Mint, Output, OutputReference, ScriptContext, Spend, Transaction,
 }
 use aiken/transaction/value.{AssetName}
+use amm_dex_v2/pool_validation
 use amm_dex_v2/types.{
   Asset, AuthenRedeemer, CreatePool, FactoryDatum, FactoryRedeemer,
   MintFactoryAuthen, MintLiquidity,
@@ -107,13 +108,12 @@ validator(
             asset_b_policy_id,
             asset_b_asset_name,
           )
-        let mint_value = value.from_minted_value(mint)
-        let expected_mint =
-          value.zero()
-            |> value.add(authen_policy_id, factory_auth_asset_name, 1)
-            |> value.add(authen_policy_id, pool_auth_asset_name, 1)
-            |> value.add(authen_policy_id, lp_asset_name, 9223372036854775807)
-        expected_mint == mint_value
+        value.from_minted_value(mint) == pool_validation.get_pool_creation_expected_mint(
+          authen_policy_id: authen_policy_id,
+          factory_auth_asset_name: factory_auth_asset_name,
+          pool_auth_asset_name: pool_auth_asset_name,
+          lp_asset_name: lp_asset_name,
+        )
       }
       MintLiquidity -> fail
     }
