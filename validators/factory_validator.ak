@@ -2,8 +2,9 @@ use aiken/builtin
 use aiken/list
 use aiken/transaction.{Input, Output, ScriptContext, Spend, Transaction}
 use aiken/transaction/credential.{Address, ScriptCredential}
-use aiken/transaction/value.{AssetName, MintedValue, PolicyId}
+use aiken/transaction/value.{AssetName, PolicyId, ada_asset_name, ada_policy_id}
 use amm_dex_v2/math
+use amm_dex_v2/pool_validation
 use amm_dex_v2/types.{
   Asset, FactoryDatum, FactoryRedeemer, PoolDatum, ValidatorHash,
 }
@@ -132,72 +133,37 @@ validator(
         asset_b_asset_name,
       )
     let total_liquidity = math.calculate_initial_liquidity(amount_a, amount_b)
-
-    expect
-      pool_datum_asset_a == asset_a && pool_datum_asset_b == asset_b && // Asset A & B must be existed in Pool Datum
-      pool_datum_total_liquidity == total_liquidity && // Total Liquidity in PoolDatum must be sqrt(amount_a * amount_b)
-      pool_datum_reserve_a == amount_a && pool_datum_reserve_b == amount_b && // Pool Reserve must be the same between datum and value 
-      pool_datum_trading_fee_numerator > 0 && pool_datum_trading_fee_denominator > 0 && pool_datum_trading_fee_numerator < pool_datum_trading_fee_denominator && // Trading Fee Numenator & Denominator must be positive, Trading Fee Numenator must be less than Trading Fee Denominator
-      pool_datum_order_hash == order_hash
-    // Order Hash in Pool Datum must be matched with Order Hash in parameters
     let remaining_liquidity = 9223372036854775807 - total_liquidity
-    // Remaining Liquidity must be MAX_LIQUIDITY - total_liquidity
-    expect
-      value.quantity_of(pool_output_value, authen_policy_id, lp_asset_name) == remaining_liquidity
-    let flatted_value = value.flatten(pool_output_value)
-    expect
-      if utils.is_ada_asset(asset_a_policy_id, asset_a_asset_name) {
-        expect [_, _, _, _] = flatted_value
-        True
-      } else {
-        expect [_, _, _, _, _] = flatted_value
-        True
-      }
-    // Transaction must mint only 1 Factory Asset + 1 Pool Asset + MAX INT64 LP Asset
-    expect
-      validate_mint(
-        mint,
-        authen_policy_id,
-        factory_auth_asset_name,
-        pool_auth_asset_name,
-        lp_asset_name,
-      )
-    True
+    let expected_pool_out_value =
+      value.zero()
+        |> value.add(ada_policy_id, ada_asset_name, 3000000)
+        |> value.add(asset_a_policy_id, asset_a_asset_name, amount_a)
+        |> value.add(asset_b_policy_id, asset_b_asset_name, amount_b)
+        |> value.add(authen_policy_id, lp_asset_name, remaining_liquidity)
+        |> value.add(authen_policy_id, pool_auth_asset_name, 1)
+    and {
+      // Asset A must be existed in Pool Datum
+      pool_datum_asset_a == asset_a,
+      // Asset B must be existed in Pool Datum
+      pool_datum_asset_b == asset_b,
+      // Total Liquidity in PoolDatum must be sqrt(amount_a * amount_b)
+      pool_datum_total_liquidity == total_liquidity,
+      // Pool Reserve must be the same between datum and value 
+      pool_datum_reserve_a == amount_a,
+      pool_datum_reserve_b == amount_b,
+      pool_validation.validate_trading_fee_percent(
+        pool_datum_trading_fee_numerator,
+        pool_datum_trading_fee_denominator,
+      ),
+      // Order Hash in Pool Datum must be matched with Order Hash in parameters
+      pool_datum_order_hash == order_hash,
+      value.from_minted_value(mint) == pool_validation.get_pool_creation_expected_mint(
+        authen_policy_id: authen_policy_id,
+        factory_auth_asset_name: factory_auth_asset_name,
+        pool_auth_asset_name: pool_auth_asset_name,
+        lp_asset_name: lp_asset_name,
+      ),
+      expected_pool_out_value == pool_output_value,
+    }
   }
-}
-
-// This function will validate Mint part in Pool Creation Transaction
-// Transaction must mint only 1 Factory Asset + 1 Pool Asset + MAX INT64 LP Asset
-// Otherwise transaction must be failed
-fn validate_mint(
-  mint: MintedValue,
-  authen_policy_id: PolicyId,
-  factory_auth_asset_name: AssetName,
-  pool_auth_asset_name: AssetName,
-  lp_asset_name: AssetName,
-) -> Bool {
-  let mint_value = value.from_minted_value(mint)
-  let flatten_mint_value = value.flatten(mint_value)
-  let validate_num =
-    list.foldr(
-      flatten_mint_value,
-      0,
-      fn(v, acc) {
-        let (pid, an, am) = v
-        if pid == authen_policy_id {
-          if an == factory_auth_asset_name && am == 1 {
-            acc + 1
-          } else if an == pool_auth_asset_name && am == 1 {
-            acc + 1
-          } else if an == lp_asset_name && am == 9223372036854775807 {
-            acc + 1
-          } else {
-            fail
-          }
-        } else {
-          fail
-        }
-      },
-    )
-  validate_num == 3
 }

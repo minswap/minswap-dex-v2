@@ -809,7 +809,11 @@ pub fn apply_orders(
             output_ada,
             lp_asset: order_lp_asset,
           } = order_in_datum
-          expect batcher_fee > 0 && output_ada > 0 && lp_asset == order_lp_asset
+          expect and {
+              batcher_fee > 0,
+              output_ada > 0,
+              lp_asset == order_lp_asset,
+            }
           let new_state =
             when order_step is {
               SwapExactIn(direction, minimum_receive) -> {
