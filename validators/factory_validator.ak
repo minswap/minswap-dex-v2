@@ -39,7 +39,7 @@ validator(
         asset_b_policy_id,
         asset_b_asset_name,
       )
-    let factory_input_opt =
+    expect Some(factory_input) =
       list.find(
         inputs,
         fn(input) {
@@ -47,7 +47,6 @@ validator(
           out_ref == factory_ref
         },
       )
-    expect Some(factory_input) = factory_input_opt
     let Input { output: factory_input_out, .. } = factory_input
     let Output { value: factory_input_value, address: factory_address, .. } =
       factory_input_out

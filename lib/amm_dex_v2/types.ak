@@ -46,12 +46,6 @@ pub type PoolRedeemer {
     batcher_address: Address,
     input_indexes: List<Int>,
     license_index: Int,
-    value_reserve_a_in: Int,
-    value_reserve_b_in: Int,
-    value_remaining_liquidity_in: Int,
-    value_reserve_a_out: Int,
-    value_reserve_b_out: Int,
-    value_remaining_liquidity_out: Int,
   }
   MultiRouting {
     batcher_address: Address,
@@ -117,7 +111,7 @@ pub type OrderDatum {
 }
 
 pub type OrderRedeemer {
-  ApplyOrder { pool_input_index: Int }
+  ApplyOrder
   CancelOrder
 }
 
@@ -135,6 +129,10 @@ pub type AuthenRedeemer {
   MintFactoryAuthen
   CreatePool
   MintLiquidity
+}
+
+pub type OrderBatchingRedeemer {
+  pool_input_index: Int,
 }
 
 pub type BatchingPool {

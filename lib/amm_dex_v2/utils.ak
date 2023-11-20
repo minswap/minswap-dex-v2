@@ -6,9 +6,7 @@ use aiken/hash
 use aiken/list
 use aiken/string
 use aiken/transaction.{Datum, DatumHash, InlineDatum, NoDatum}
-use aiken/transaction/value.{
-  AssetName, PolicyId, Value, ada_asset_name, ada_policy_id,
-}
+use aiken/transaction/value.{AssetName, PolicyId, ada_asset_name, ada_policy_id}
 use amm_dex_v2/types.{Asset, DatumMap, FactoryDatum, OrderDatum, PoolDatum}
 
 const minus_ascii_code = 45
@@ -66,47 +64,6 @@ pub fn sorted_asset(asset_a: Asset, asset_b: Asset) -> Bool {
 
 pub fn is_ada_asset(pid: PolicyId, name: AssetName) -> Bool {
   pid == ada_policy_id && name == ada_asset_name
-}
-
-pub fn verify_pool_datum_in_batch(
-  datum1: PoolDatum,
-  datum2: PoolDatum,
-  require_total_liquidity_unchange: Bool,
-) -> Bool {
-  let PoolDatum {
-    asset_a: datum_1_asset_a,
-    asset_b: datum_1_asset_b,
-    total_liquidity: datum_1_total_liquidity,
-    trading_fee_numerator: datum_1_trading_fee_numerator,
-    trading_fee_denominator: datum_1_trading_fee_denominator,
-    order_hash: datum_1_order_hash,
-    profit_sharing_opt: datum_1_profit_sharing_opt,
-    ..
-  } = datum1
-
-  let PoolDatum {
-    asset_a: datum_2_asset_a,
-    asset_b: datum_2_asset_b,
-    total_liquidity: datum_2_total_liquidity,
-    trading_fee_numerator: datum_2_trading_fee_numerator,
-    trading_fee_denominator: datum_2_trading_fee_denominator,
-    order_hash: datum_2_order_hash,
-    profit_sharing_opt: datum_2_profit_sharing_opt,
-    ..
-  } = datum2
-  expect
-    if require_total_liquidity_unchange {
-      datum_1_total_liquidity == datum_2_total_liquidity
-    } else {
-      True
-    }
-  datum_1_asset_a == datum_2_asset_a && // hehe
-  datum_1_asset_b == datum_2_asset_b && // hehe
-  datum_1_trading_fee_numerator == datum_2_trading_fee_numerator && // hehe
-  datum_1_trading_fee_denominator == datum_2_trading_fee_denominator && // hehe
-  datum_1_order_hash == datum_2_order_hash && // hehe
-  datum_1_profit_sharing_opt == datum_2_profit_sharing_opt
-  // hehe
 }
 
 pub fn compute_lp_asset_name(
@@ -305,221 +262,6 @@ test test_zip_with_throw_err() fail {
   zip_with(arr1, arr2, fn(a1, a2) { a1 + a2 }) == []
 }
 
-test test_validate_pool_value_1() {
-  let authen_policy_id =
-    #"fd7df11942fcd168a93620d88fc53a4336c48e0f799e73263b7d5660"
-  let pool_auth_asset_name = #"4d5350"
-  let lp_asset_name =
-    #"31d0e583e0998ce44b2837f491edbf3d895973c136869a9e912d1d1a7a36568b"
-  let asset_a_policy_id = #""
-  let asset_a_asset_name = #""
-  let asset_b_policy_id =
-    #"782c158a98aed3aa676d9c85117525dcf3acc5506a30a8d87369fbcb"
-  let asset_b_asset_name = #"4d6f6e6574"
-  let pool_value =
-    value.zero()
-      |> value.add(authen_policy_id, pool_auth_asset_name, 1)
-      |> value.add(authen_policy_id, lp_asset_name, 10000)
-      |> value.add(asset_a_policy_id, asset_a_asset_name, 100000)
-      |> value.add(asset_b_policy_id, asset_b_asset_name, 100000)
-  validate_pool_value(
-    val: pool_value,
-    authen_policy_id: authen_policy_id,
-    pool_auth_asset_name: pool_auth_asset_name,
-    lp_asset_name: lp_asset_name,
-    asset_a_policy_id: asset_a_policy_id,
-    asset_a_asset_name: asset_a_asset_name,
-    asset_b_policy_id: asset_b_policy_id,
-    asset_b_asset_name: asset_b_asset_name,
-  )
-}
-
-test test_validate_pool_value_2() {
-  let authen_policy_id =
-    #"fd7df11942fcd168a93620d88fc53a4336c48e0f799e73263b7d5660"
-  let pool_auth_asset_name = #"4d5350"
-  let lp_asset_name =
-    #"31d0e583e0998ce44b2837f491edbf3d895973c136869a9e912d1d1a7a36568b"
-  let asset_a_policy_id =
-    #"782c158a98aed3aa676d9c85117525dcf3acc5506a30a8d87369fbcb"
-  let asset_a_asset_name = #"4d6f6e6574"
-  let asset_b_policy_id =
-    #"8f52f6a88acf6127bc4758a16b6047afc4da7887feae121ec217b75a"
-  let asset_b_asset_name = #"534e4f57"
-  let pool_value =
-    value.zero()
-      |> value.add(authen_policy_id, pool_auth_asset_name, 1)
-      |> value.add(authen_policy_id, lp_asset_name, 10000)
-      |> value.add(ada_policy_id, ada_asset_name, 100000)
-      |> value.add(asset_a_policy_id, asset_a_asset_name, 100000)
-      |> value.add(asset_b_policy_id, asset_b_asset_name, 100000)
-  validate_pool_value(
-    val: pool_value,
-    authen_policy_id: authen_policy_id,
-    pool_auth_asset_name: pool_auth_asset_name,
-    lp_asset_name: lp_asset_name,
-    asset_a_policy_id: asset_a_policy_id,
-    asset_a_asset_name: asset_a_asset_name,
-    asset_b_policy_id: asset_b_policy_id,
-    asset_b_asset_name: asset_b_asset_name,
-  )
-}
-
-test test_validate_pool_value_3() {
-  let authen_policy_id =
-    #"fd7df11942fcd168a93620d88fc53a4336c48e0f799e73263b7d5660"
-  let pool_auth_asset_name = #"4d5350"
-  let lp_asset_name =
-    #"31d0e583e0998ce44b2837f491edbf3d895973c136869a9e912d1d1a7a36568b"
-  let asset_a_policy_id =
-    #"782c158a98aed3aa676d9c85117525dcf3acc5506a30a8d87369fbcb"
-  let asset_a_asset_name = #"4d6f6e6574"
-  let asset_b_policy_id =
-    #"8f52f6a88acf6127bc4758a16b6047afc4da7887feae121ec217b75a"
-  let asset_b_asset_name = #"534e4f57"
-  let pool_value =
-    value.zero()
-      |> value.add(authen_policy_id, pool_auth_asset_name, 1)
-      |> value.add(authen_policy_id, lp_asset_name, 10000)
-      |> value.add(ada_policy_id, ada_asset_name, 100000)
-  validate_pool_value(
-    val: pool_value,
-    authen_policy_id: authen_policy_id,
-    pool_auth_asset_name: pool_auth_asset_name,
-    lp_asset_name: lp_asset_name,
-    asset_a_policy_id: asset_a_policy_id,
-    asset_a_asset_name: asset_a_asset_name,
-    asset_b_policy_id: asset_b_policy_id,
-    asset_b_asset_name: asset_b_asset_name,
-  )
-}
-
-test test_validate_pool_value_4() fail {
-  let authen_policy_id =
-    #"fd7df11942fcd168a93620d88fc53a4336c48e0f799e73263b7d5660"
-  let pool_auth_asset_name = #"4d5350"
-  let lp_asset_name =
-    #"31d0e583e0998ce44b2837f491edbf3d895973c136869a9e912d1d1a7a36568b"
-  let asset_a_policy_id =
-    #"782c158a98aed3aa676d9c85117525dcf3acc5506a30a8d87369fbcb"
-  let asset_a_asset_name = #"4d6f6e6574"
-  let asset_b_policy_id =
-    #"8f52f6a88acf6127bc4758a16b6047afc4da7887feae121ec217b75a"
-  let asset_b_asset_name = #"534e4f57"
-  let pool_value =
-    value.zero()
-      |> value.add(authen_policy_id, lp_asset_name, 10000)
-      |> value.add(asset_a_policy_id, asset_a_asset_name, 100000)
-      |> value.add(asset_b_policy_id, asset_b_asset_name, 100000)
-      |> value.add(ada_policy_id, ada_asset_name, 100000)
-  validate_pool_value(
-    val: pool_value,
-    authen_policy_id: authen_policy_id,
-    pool_auth_asset_name: pool_auth_asset_name,
-    lp_asset_name: lp_asset_name,
-    asset_a_policy_id: asset_a_policy_id,
-    asset_a_asset_name: asset_a_asset_name,
-    asset_b_policy_id: asset_b_policy_id,
-    asset_b_asset_name: asset_b_asset_name,
-  )
-}
-
-pub fn validate_pool_value(
-  val: Value,
-  authen_policy_id: PolicyId,
-  pool_auth_asset_name: AssetName,
-  lp_asset_name: AssetName,
-  asset_a_policy_id: PolicyId,
-  asset_a_asset_name: AssetName,
-  asset_b_policy_id: PolicyId,
-  asset_b_asset_name: AssetName,
-) -> Bool {
-  let flatten_value = value.flatten(val)
-  let value_size = list.length(flatten_value)
-
-  expect
-    value.quantity_of(
-      self: val,
-      policy_id: authen_policy_id,
-      asset_name: pool_auth_asset_name,
-    ) == 1
-  let lp_amount =
-    value.quantity_of(
-      self: val,
-      policy_id: authen_policy_id,
-      asset_name: lp_asset_name,
-    )
-  let reserve_a =
-    value.quantity_of(
-      self: val,
-      policy_id: asset_a_policy_id,
-      asset_name: asset_a_asset_name,
-    )
-  let reserve_b =
-    value.quantity_of(
-      self: val,
-      policy_id: asset_b_policy_id,
-      asset_name: asset_b_asset_name,
-    )
-  let c0 = 1
-  let c1 =
-    if lp_amount > 0 {
-      c0 + 1
-    } else {
-      c0
-    }
-  let c2 =
-    if reserve_a > 0 {
-      c1 + 1
-    } else {
-      c1
-    }
-  let c3 =
-    if reserve_b > 0 {
-      c2 + 1
-    } else {
-      c2
-    }
-  let c4 =
-    if is_ada_asset(asset_a_policy_id, asset_a_asset_name) {
-      c3
-    } else {
-      c3 + 1
-    }
-  // trace cbor.diagnostic(value_size)
-  // trace cbor.diagnostic(c4)
-  value_size == c4
-  // let validate_num =
-  //   list.foldr(
-  //     flatten_value,
-  //     0,
-  //     fn(v, acc) {
-  //       let (pid, an, am) = v
-  //       expect am > 0
-  //       if pid == authen_policy_id {
-  //         if an == pool_auth_asset_name && am == 1 {
-  //           acc + 1
-  //         } else if an == lp_asset_name {
-  //           acc + 1
-  //         } else {
-  //           fail
-  //         }
-  //       } else if pid == asset_a_policy_id && an == asset_a_asset_name {
-  //         acc + 1
-  //       } else if pid == asset_b_policy_id && an == asset_b_asset_name {
-  //         acc + 1
-  //       } else if pid == ada_policy_id && an == ada_asset_name {
-  //         acc + 1
-  //       } else {
-  //         fail
-  //       }
-  //     },
-  //   )
-  // trace cbor.diagnostic(value_size)
-  // trace cbor.diagnostic(validate_num)
-  // validate_num == value_size
-}
-
 pub fn compare_list_length(arr1: List<a>, arr2: List<b>) -> Bool {
   when arr1 is {
     [] -> arr2 == []
@@ -561,4 +303,19 @@ test test_compare_list_length_3() {
   let arr2 =
     []
   !compare_list_length(arr1, arr2)
+}
+
+fn contains_element(list: List<a>, elem: a) -> Bool {
+  when list is {
+    [] -> False
+    [x, ..xs] -> elem == x || contains_element(xs, elem)
+  }
+}
+
+pub fn is_list_unique(list: List<a>) -> Bool {
+  when list is {
+    [] -> True
+    [_] -> True
+    [x, ..xs] -> !contains_element(xs, x) && is_list_unique(xs)
+  }
 }
