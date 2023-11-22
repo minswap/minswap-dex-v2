@@ -677,9 +677,9 @@ pub fn validate_swap_multi_routing_order(
   batcher_fee: Int,
   output_ada: Int,
 ) -> Bool {
-  let first_routing = utils.list_at_index(routings, 0)
+  let first_routing = routings |> builtin.head_list
   let last_routing = utils.list_at_index(routings, list.length(routings) - 1)
-  let first_pool = utils.list_at_index(pools, 0)
+  let first_pool = pools |> builtin.head_list
   let last_pool = utils.list_at_index(pools, list.length(pools) - 1)
   let SwapRouting { direction: first_routing_direction, .. } = first_routing
   let SwapRouting { direction: last_routing_direction, .. } = last_routing
@@ -723,23 +723,14 @@ pub fn validate_swap_multi_routing_order(
       all_pools: pools,
       all_routings: routings,
     )
-  expect amount_out >= minimum_receive
-  let actual_amount_out =
-    value.quantity_of(
-      order_out_value,
-      asset_out_policy_id,
-      asset_out_asset_name,
-    )
-  let is_valid_amount_out =
-    if utils.is_ada_asset(asset_out_policy_id, asset_out_asset_name) {
-      amount_out + output_ada == actual_amount_out
-    } else {
-      let ada_amount =
-        value.quantity_of(order_out_value, ada_policy_id, ada_asset_name)
-      amount_out == actual_amount_out && ada_amount == output_ada
-    }
-  expect is_valid_amount_out
-  True
+  let expect_order_value_out =
+    value.zero()
+      |> value.add(ada_policy_id, ada_asset_name, output_ada)
+      |> value.add(asset_out_policy_id, asset_out_asset_name, amount_out)
+  and {
+    amount_out >= minimum_receive,
+    expect_order_value_out == order_out_value,
+  }
 }
 
 pub fn validate_order_receiver(
@@ -766,7 +757,6 @@ pub fn validate_order_receiver(
   }
 }
 
-// TODO: validate order input value size
 pub fn apply_orders(
   datum_map: DatumMap,
   asset_a: Asset,
@@ -810,8 +800,10 @@ pub fn apply_orders(
             lp_asset: order_lp_asset,
           } = order_in_datum
           expect and {
+              // batcher_fee and output_ada must be positive
               batcher_fee > 0,
               output_ada > 0,
+              // lp_asset must be the same with processing Liquidity Pool
               lp_asset == order_lp_asset,
             }
           let new_state =
@@ -819,6 +811,7 @@ pub fn apply_orders(
               SwapExactIn(direction, minimum_receive) -> {
                 expect and {
                     minimum_receive > 0,
+                    // Order Output must be returned to receiver and might have receiver_datum_hash_opt
                     validate_order_receiver(
                       receiver: receiver,
                       receiver_datum_hash_opt: receiver_datum_hash_opt,
@@ -850,6 +843,7 @@ pub fn apply_orders(
               StopLoss(direction, stop_loss_receive) -> {
                 expect and {
                     stop_loss_receive > 0,
+                    // Order Output must be returned to receiver and might have receiver_datum_hash_opt
                     validate_order_receiver(
                       receiver: receiver,
                       receiver_datum_hash_opt: receiver_datum_hash_opt,
@@ -882,6 +876,7 @@ pub fn apply_orders(
                 expect and {
                     minimum_receive > 0,
                     stop_loss_receive > 0,
+                    // Order Output must be returned to receiver and might have receiver_datum_hash_opt
                     validate_order_receiver(
                       receiver: receiver,
                       receiver_datum_hash_opt: receiver_datum_hash_opt,
@@ -913,6 +908,7 @@ pub fn apply_orders(
               SwapExactOut(direction, expected_receive) -> {
                 expect and {
                     expected_receive > 0,
+                    // Order Output must be returned to receiver and might have receiver_datum_hash_opt
                     validate_order_receiver(
                       receiver: receiver,
                       receiver_datum_hash_opt: receiver_datum_hash_opt,
@@ -942,6 +938,7 @@ pub fn apply_orders(
               Deposit(minimum_lp) -> {
                 expect and {
                     minimum_lp > 0,
+                    // Order Output must be returned to receiver and might have receiver_datum_hash_opt
                     validate_order_receiver(
                       receiver: receiver,
                       receiver_datum_hash_opt: receiver_datum_hash_opt,
@@ -967,6 +964,7 @@ pub fn apply_orders(
                 expect and {
                     minimum_asset_a > 0,
                     minimum_asset_b > 0,
+                    // Order Output must be returned to receiver and might have receiver_datum_hash_opt
                     validate_order_receiver(
                       receiver: receiver,
                       receiver_datum_hash_opt: receiver_datum_hash_opt,
@@ -988,6 +986,7 @@ pub fn apply_orders(
               ZapOut(direction, minimum_receive) -> {
                 expect and {
                     minimum_receive > 0,
+                    // Order Output must be returned to receiver and might have receiver_datum_hash_opt
                     validate_order_receiver(
                       receiver: receiver,
                       receiver_datum_hash_opt: receiver_datum_hash_opt,
@@ -1103,6 +1102,7 @@ pub fn apply_orders(
                       minimum_swap_amount_required == order_out_minimum_swap_amount_required,
                     }
                   } else {
+                    // Order Output must be returned to receiver and might have receiver_datum_hash_opt
                     validate_order_receiver(
                       receiver: receiver,
                       receiver_datum_hash_opt: receiver_datum_hash_opt,
@@ -1122,6 +1122,7 @@ pub fn apply_orders(
                     ratio_asset_a > 0,
                     ratio_asset_b > 0,
                     minimum_asset_a > 0,
+                    // Order Output must be returned to receiver and might have receiver_datum_hash_opt
                     validate_order_receiver(
                       receiver: receiver,
                       receiver_datum_hash_opt: receiver_datum_hash_opt,

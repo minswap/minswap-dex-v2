@@ -11,10 +11,15 @@ use amm_dex_v2/types.{
 use amm_dex_v2/utils
 
 validator(
+  // The PolicyID of Authen Minting Policy
   authen_policy_id: PolicyId,
+  // ValidatorHash of Pool Contract
   pool_hash: ValidatorHash,
+  // ValidationHash of Order Contract
   order_hash: ValidatorHash,
+  // the legitimate Factory TokenName
   factory_auth_asset_name: AssetName,
+  // the legitimate Pool TokenName
   pool_auth_asset_name: AssetName,
 ) {
   fn validate_factory(
@@ -31,7 +36,7 @@ validator(
       asset_a
     let Asset { policy_id: asset_b_policy_id, asset_name: asset_b_asset_name } =
       asset_b
-    // Asset A must less than Asset B
+    // validate that Asset A and Asset B must be sorted
     expect utils.sorted_asset(asset_a, asset_b)
     let lp_asset_name =
       utils.compute_lp_asset_name(
@@ -40,6 +45,8 @@ validator(
         asset_b_policy_id,
         asset_b_asset_name,
       )
+
+    // validate that there's single Factory UTxO in Transaction Input and contain single legitimate Factory NFT Token
     expect Some(factory_input) =
       list.find(
         inputs,
@@ -48,9 +55,31 @@ validator(
           out_ref == factory_ref
         },
       )
-    let Input { output: factory_input_out, .. } = factory_input
-    let Output { value: factory_input_value, address: factory_address, .. } =
-      factory_input_out
+    let Input {
+      output: Output {
+        value: factory_input_value,
+        address: factory_address,
+        ..
+      },
+      ..
+    } = factory_input
+    let Address { payment_credential: factory_payment_credential, .. } =
+      factory_address
+    expect [_] =
+      list.filter(
+        inputs,
+        fn(input) {
+          let Input {
+            output: Output {
+              address: Address { payment_credential: payment_cred, .. },
+              ..
+            },
+            ..
+          } = input
+          factory_payment_credential == payment_cred
+        },
+      )
+
     // Transaction must have a Factory Asset in the Spending Script
     expect
       value.quantity_of(
@@ -58,16 +87,25 @@ validator(
         authen_policy_id,
         factory_auth_asset_name,
       ) == 1
+    // validate that there are only 2 Factory UTxOs in Transaction Outputs, 
+    // they must contain single legitimate Factory NFT Token. 
     expect [factory_output_1, factory_output_2] =
       list.filter(
         outputs,
         fn(output) {
-          let Output { address: out_addr, value: out_value, .. } = output
-          out_addr == factory_address && value.quantity_of(
-            out_value,
-            authen_policy_id,
-            factory_auth_asset_name,
-          ) == 1
+          let Output {
+            address: Address { payment_credential: payment_cred, .. },
+            value: out_value,
+            ..
+          } = output
+          and {
+            factory_payment_credential == payment_cred,
+            value.quantity_of(
+              out_value,
+              authen_policy_id,
+              factory_auth_asset_name,
+            ) == 1,
+          }
         },
       )
     let Output { datum: factory_output_1_raw_datum, .. } = factory_output_1
@@ -76,12 +114,19 @@ validator(
       utils.must_find_factory_datum(datums, factory_output_1_raw_datum)
     let FactoryDatum { head: new_head_2, tail: new_tail_2 } =
       utils.must_find_factory_datum(datums, factory_output_2_raw_datum)
-    // Transaction must put new hash between old hashes, (current_head, current_tail) -> (current_head, new_hash) && (new_hash, current_tail)
-    expect
-      builtin.less_than_bytearray(new_head_1, new_tail_1) && builtin.less_than_bytearray(
-        new_head_2,
-        new_tail_2,
-      ) && new_head_1 == current_head && new_tail_2 == current_tail && lp_asset_name == new_tail_1 && lp_asset_name == new_head_2
+    // validate that new Factory UTxO datum must be followed by Linked List rule
+    // (old head, old tail) -> (old head, Pool LP Token Name) and (Pool LP Token Name, old tail)
+    // old head < Pool LP Token Name < old tail
+    expect and {
+        builtin.less_than_bytearray(new_head_1, new_tail_1),
+        builtin.less_than_bytearray(new_head_2, new_tail_2),
+        new_head_1 == current_head,
+        new_tail_2 == current_tail,
+        lp_asset_name == new_tail_1,
+        lp_asset_name == new_head_2,
+      }
+    // validate that there is a new Pool UTxO in Transaction Outputs. 
+    // Pool UTxO must contain single Pool NFT Token
     expect [pool_output] =
       list.filter(
         outputs,
@@ -90,12 +135,14 @@ validator(
           let Address { payment_credential: out_addr_payment_credential, .. } =
             out_addr
           when out_addr_payment_credential is {
-            ScriptCredential(hash) ->
-              pool_hash == hash && value.quantity_of(
-                out_value,
-                authen_policy_id,
-                pool_auth_asset_name,
-              ) == 1
+            ScriptCredential(hash) -> and {
+                pool_hash == hash,
+                value.quantity_of(
+                  out_value,
+                  authen_policy_id,
+                  pool_auth_asset_name,
+                ) == 1,
+              }
             _ -> False
           }
         },
@@ -113,6 +160,7 @@ validator(
       order_hash: pool_datum_order_hash,
       profit_sharing_opt: pool_datum_profit_sharing_opt,
     } = utils.must_find_pool_datum(datums, pool_output_raw_datum)
+    // profit_sharing must be empty
     expect None = pool_datum_profit_sharing_opt
     let estimated_amount_a =
       value.quantity_of(
@@ -142,15 +190,15 @@ validator(
         |> value.add(authen_policy_id, lp_asset_name, remaining_liquidity)
         |> value.add(authen_policy_id, pool_auth_asset_name, 1)
     and {
-      // Asset A must be existed in Pool Datum
+      // asset_a and asset_b must be the same with Factory Redeemer
       pool_datum_asset_a == asset_a,
-      // Asset B must be existed in Pool Datum
       pool_datum_asset_b == asset_b,
       // Total Liquidity in PoolDatum must be sqrt(amount_a * amount_b)
       pool_datum_total_liquidity == total_liquidity,
       // Pool Reserve must be the same between datum and value 
       pool_datum_reserve_a == amount_a,
       pool_datum_reserve_b == amount_b,
+      // trading_fee_percentage must be between **0.05%** and **10%**
       pool_validation.validate_trading_fee_percent(
         pool_datum_trading_fee_numerator,
         pool_datum_trading_fee_denominator,
@@ -163,6 +211,12 @@ validator(
         pool_auth_asset_name: pool_auth_asset_name,
         lp_asset_name: lp_asset_name,
       ),
+      // Pool Value must only have necessary Token:
+      // - Asset A 
+      // - Asset B
+      // - remaining LP Token (_MAX_INT64_ - _total_liquidity_)
+      // - 1 Pool NFT Token
+      // - 3 ADA (required ADA for an UTxO)
       expected_pool_out_value == pool_output_value,
     }
   }

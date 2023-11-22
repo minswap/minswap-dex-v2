@@ -11,10 +11,15 @@ use amm_dex_v2/types.{
 use amm_dex_v2/utils
 
 validator(
+  // The PolicyID of Authen Minting Policy
   authen_policy_id: PolicyId,
+  // Policy ID managed by the Minswap team, used for minting Batcher License and Admin License assets
   license_policy_id: PolicyId,
+  // the legitimate Pool TokenName
   pool_auth_asset_name: AssetName,
+  // The TokenName of Admin Asset, determined by Minswap team
   admin_asset_name: AssetName,
+  // Maximum expiration time of Batcher license from now (to prevent minting infinity license)
   maximum_deadline_range: Int,
 ) {
   fn validate_pool(
@@ -46,10 +51,11 @@ validator(
           !builtin.null_list(input_indexes),
           // Input indexes must be unique
           utils.is_list_unique(input_indexes),
-          // Batching transaction won't mint anything
+          // validate Transaction won't mint any assets
           value.is_zero(value.from_minted_value(mint)),
           // Batcher with valid license token must be a signer of transaction
           list.has(extra_signatories, batcher_pkh),
+          // A valid license token is the token having expired timestamp as TokenName and must be within current time and current time + _maximum_deadline_range_
           pool_validation.validate_batcher_license(
             license_input: license_input,
             validity_range: validity_range,
@@ -77,9 +83,14 @@ validator(
       ) -> {
         let routing_in_indexes_len = list.length(routing_in_indexes)
         let routing_out_indexes_len = list.length(routing_out_indexes)
-        // TODO: Validate distinct indexes
-        expect
-          routing_in_indexes_len == routing_out_indexes_len && routing_out_indexes_len >= 2
+        // validate routing_in_indexes and routing_out_indexes must be unique, 
+        // have the same length and contain more than 1 element.
+        expect and {
+            routing_in_indexes_len == routing_out_indexes_len,
+            routing_out_indexes_len >= 2,
+            utils.is_list_unique(routing_in_indexes),
+            utils.is_list_unique(routing_out_indexes),
+          }
         let Transaction {
           inputs,
           outputs,
@@ -89,23 +100,25 @@ validator(
           mint,
           ..
         } = transaction
-        // Doesn't mint anything
-        expect value.is_zero(value.from_minted_value(mint))
         let Address { payment_credential: batcher_payment_credential, .. } =
           batcher_address
         expect VerificationKeyCredential(batcher_pkh) =
           batcher_payment_credential
-        // Verify Batcher with valid license token must be a signer of transaction
-        expect list.has(extra_signatories, batcher_pkh)
         // Batching Redeemer provides @license_index which help save calculation cost
         let license_input = utils.list_at_index(inputs, license_index)
-        expect
-          pool_validation.validate_batcher_license(
-            license_input: license_input,
-            validity_range: validity_range,
-            license_policy_id: license_policy_id,
-            maximum_deadline_range: maximum_deadline_range,
-          )
+        expect and {
+            // validate Transaction won't mint any assets
+            value.is_zero(value.from_minted_value(mint)),
+            // Verify Batcher with valid license token must be a signer of transaction
+            list.has(extra_signatories, batcher_pkh),
+            // A valid license token is the token having expired timestamp as TokenName and must be within current time and current time + _maximum_deadline_range_
+            pool_validation.validate_batcher_license(
+              license_input: license_input,
+              validity_range: validity_range,
+              license_policy_id: license_policy_id,
+              maximum_deadline_range: maximum_deadline_range,
+            ),
+          }
         pool_validation.validate_swap_multi_routing(
           authen_policy_id: authen_policy_id,
           pool_auth_asset_name: pool_auth_asset_name,

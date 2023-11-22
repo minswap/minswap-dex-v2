@@ -12,18 +12,23 @@ use amm_dex_v2/types.{
 use amm_dex_v2/utils
 
 validator(
+  // @out_ref is a Reference of an Unspent Transaction Output,
+  // which will only be spent on `MintFactoryAuthen` redeemer to make sure this redeemer can only be called once
   out_ref: OutputReference,
+  // the legitimate Factory TokenName
   factory_auth_asset_name: AssetName,
+  // the legitimate Pool TokenName
   pool_auth_asset_name: AssetName,
 ) {
   fn validate_authen(redeemer: AuthenRedeemer, context: ScriptContext) {
     let ScriptContext { transaction, purpose } = context
     expect Mint(authen_policy_id) = purpose
     when redeemer is {
+      // The redeemer can be called once to initialize the whole AMM V2 system
       MintFactoryAuthen -> {
         let Transaction { inputs, mint, outputs, datums, .. } = transaction
 
-        // Transaction must has @out_ref in the input to make sure that this redeemer can only be executed once
+        // validate that `out_ref` must be presented in the Transaction Inputs
         expect [_] =
           list.filter(
             inputs,
@@ -32,15 +37,18 @@ validator(
               output_reference == out_ref
             },
           )
+
+        // validate that the redeemer only mint a single Factory Token 
         let mint_value = value.from_minted_value(mint)
         expect [(minted_pid, minted_an, minted_amount)] =
           value.flatten(mint_value)
-        // Transaction must mint only 1 Factory Auth Asset
         expect and {
             minted_pid == authen_policy_id,
             minted_an == factory_auth_asset_name,
             minted_amount == 1,
           }
+        // validate that there's only 1 Factory UTxO in the Transaction Outputs
+        // The Factory UTxO must contain Factory Token in the value
         expect [factory_output] =
           list.filter(
             outputs,
@@ -63,6 +71,8 @@ validator(
       }
       CreatePool -> {
         let Transaction { inputs, mint, redeemers, .. } = transaction
+        // validate that there's a single Factory UTxO in the Transaction Inputs. 
+        // Factory UTxO must contain Factory NFT Token in the value
         expect [factory_input] =
           list.filter(
             inputs,

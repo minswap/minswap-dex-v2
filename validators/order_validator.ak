@@ -12,13 +12,17 @@ use amm_dex_v2/types.{
 }
 use amm_dex_v2/utils
 
-validator(stake_credential: StakeCredential) {
+validator(
+  // the Stake Credential of Order Batching Validator
+  stake_credential: StakeCredential,
+) {
   fn validate_order(raw_datum: Data, raw_redeemer: Data, context: ScriptContext) {
     expect ScriptContext { transaction, purpose: Spend(_) } = context
     expect redeemer: OrderRedeemer = raw_redeemer
     when redeemer is {
       ApplyOrder -> {
         let Transaction { withdrawals, .. } = transaction
+        // validate that an Order can be spent if there's a `Order Batching` validator in the `withdrawals`
         dict.has_key(withdrawals, stake_credential)
       }
       CancelOrder -> {
@@ -27,13 +31,17 @@ validator(stake_credential: StakeCredential) {
         let OrderDatum { sender: Address { payment_credential, .. }, .. } =
           order_datum
         expect VerificationKeyCredential(owner_pkh) = payment_credential
+        // validate that the transaction has _sender_'s signature or _sender_ script UTxO in the Transaction Inputs
         list.has(extra_signatories, owner_pkh)
       }
     }
   }
 }
 
-validator(pool_hash: ValidatorHash) {
+validator(
+  // the hash of Liquidity Pool Script
+  pool_hash: ValidatorHash,
+) {
   fn validate_order_spending_in_batching(
     redeemer: OrderBatchingRedeemer,
     context: ScriptContext,
@@ -47,6 +55,7 @@ validator(pool_hash: ValidatorHash) {
       ..
     } = utils.list_at_index(inputs, pool_input_index)
     expect ScriptCredential(hash) = payment_credential
+    // validate that there's a Pool Input which have Address's Payment Credential matching with `pool_hash`
     pool_hash == hash
   }
 }

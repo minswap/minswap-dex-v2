@@ -70,43 +70,109 @@ pub type SwapRouting {
   direction: OrderDirection,
 }
 
-// TODO: handle MultiRouting Order
 pub type OrderStep {
-  // TODO: Combine SwapExactIn, SwapExactInStopLoss & SwapExactInOCO to single one
-  SwapExactIn { direction: OrderDirection, minimum_receive: Int }
-  // TODO: SwapExactInStopLoss & SwapExactInOCO: Find another way that's easier to understand for users
-  StopLoss { direction: OrderDirection, stop_loss_receive: Int }
-  OCO {
+  // SwapExactIn is used for exchanging specific amount of single asset in the liquidity pool. 
+  // The order will be executed if the received amount is greater than or equal to `minimum_receive`.
+  SwapExactIn {
+    // The direction (AToB or BToA) of swap request. 
     direction: OrderDirection,
+    // Minimum amount of Asset Out which users want to receive after exchanging
     minimum_receive: Int,
+  }
+  // StopLoss is used for exchanging specific amount of single asset in the liquidity pool.
+  // The order will be executed if the received amount is less than or equal to `stop_loss_receive`
+  StopLoss {
+    // The direction (AToB or BToA) of swap request.  
+    direction: OrderDirection,
+    // Maximum amount of Asset Out which users want to receive after exchanging
     stop_loss_receive: Int,
   }
-  SwapExactOut { direction: OrderDirection, expected_receive: Int }
-  Deposit { minimum_lp: Int }
-  Withdraw { minimum_asset_a: Int, minimum_asset_b: Int }
-  ZapOut { direction: OrderDirection, minimum_receive: Int }
-  PartialSwap {
+  // OCO is used for exchanging specific amount of single asset in the liquidity pool.
+  // The order will be executed if the received amount is less than or equal to `stop_loss_receive` 
+  //    and greater than or equal to `minimum_receive`
+  OCO {
+    // The direction (AToB or BToA) of swap request.  
     direction: OrderDirection,
+    // Minimum amount of Asset Out which users want to receive after exchanging
+    minimum_receive: Int,
+    // Maximum amount of Asset Out which users want to receive after exchanging
+    stop_loss_receive: Int,
+  }
+  // SwapExactOut is used for exchanging single asset in the liquidity pool and receiving the exact amout of other asset.
+  // The order will be executed if the received amount is equal to `expected_receive`
+  SwapExactOut {
+    // The direction (AToB or BToA) of swap request.  
+    direction: OrderDirection,
+    // The exact amount of Asset Out which users want to receive after exchanging
+    expected_receive: Int,
+  }
+  // Deposit is used for depositing pool's assets and receiving LP Token
+  Deposit {
+    // The minimum amount of LP Token which users want to receive after depositing
+    minimum_lp: Int,
+  }
+  // Withdraw is used for withdrawing pool's asset with the exact assets ratio of the liquidity pool at that time
+  Withdraw {
+    // minimum received amounts of Asset A
+    minimum_asset_a: Int,
+    // minimum received amounts of Asset B
+    minimum_asset_b: Int,
+  }
+  // ZapOut is used for withdrawing a single pool asset out of Liquidity Pool
+  ZapOut {
+    // The direction (AToB or BToA) of ZapOut request. `AToB` in case Asset Out is B and vice versa
+    direction: OrderDirection,
+    // Minimum amount of Asset Out which users want to receive after withdrawing
+    minimum_receive: Int,
+  }
+  // PartialSwap is used for exchange partial amount of single Asset. 
+  // The Partial Swap can be executed multiple time if the price ratio is matched with user's expectation, 
+  //   and the time is defined in `hops`
+  PartialSwap {
+    // The direction (AToB or BToA) of swap request.
+    direction: OrderDirection,
+    // the price ratio which users want to exchange
     io_ratio_numerator: Int,
     io_ratio_denominator: Int,
+    // The time PartialSwap can be executed
     hops: Int,
+    // The minimum amount which is required to swap per each execution time
     minimum_swap_amount_required: Int,
   }
+  // WithdrawImbalance is used for withdrawing custom amount of assets.
   WithdrawImbalance {
+    //  The ratio of Asset A and Asset B users want to receive after withdrawing
     ratio_asset_a: Int,
     ratio_asset_b: Int,
+    // The minimum amount of asset A which users want to receive.
+    // The amount of Asset will be followed by the ratio:
+    //    (_received_asset_b_ = _minimum_asset_a_ * _ratio_asset_b_ / _ratio_asset_a_)
     minimum_asset_a: Int,
   }
-  SwapMultiRouting { routings: List<SwapRouting>, minimum_receive: Int }
+  // SwapMultiRouting is used for exchanging specific amount of single asset across multiple Liquidity Pools.
+  SwapMultiRouting {
+    // The routings (including a list of _direction_ and _lp_asset_), 
+    // which is defined Liquidity Pools the swap is routing through
+    routings: List<SwapRouting>,
+    // Minimum amount of Asset Out which users want to receive after exchanging
+    minimum_receive: Int,
+  }
 }
 
 pub type OrderDatum {
+  // The address of order's creator, only sender can cancel the order
   sender: Address,
+  // The address which receives the funds after order is processed
   receiver: Address,
+  // The datum hash of the output after order is processed.
   receiver_datum_hash_opt: Option<CustomDatumHash>,
+  // The Liquidity Pool's LP Asset that the order will be applied to
   lp_asset: Asset,
+  // The information about Order Type
   step: OrderStep,
+  // The fee users have to pay to Batcher to execute batching transaction
   batcher_fee: Int,
+  // As known as Minimum ADA which users need to put to the Order, and these amounts will be returned with _receiver_ Output
   output_ada: Int,
 }
 
@@ -132,6 +198,7 @@ pub type AuthenRedeemer {
 }
 
 pub type OrderBatchingRedeemer {
+  // it's used for finding Pool Input faster
   pool_input_index: Int,
 }
 
