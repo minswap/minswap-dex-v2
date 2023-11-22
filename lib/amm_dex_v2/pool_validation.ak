@@ -1,3 +1,4 @@
+use aiken/builtin
 use aiken/dict.{Dict}
 use aiken/interval.{Finite, Interval, IntervalBound}
 use aiken/list
@@ -160,13 +161,6 @@ fn get_batching_pool(
   let lp_asset =
     Asset { policy_id: authen_policy_id, asset_name: lp_asset_name }
 
-  // Each Pool UTxO has a Pool Authen Asset (authen_policy_id + pool_auth_asset_name) 
-  // This asset must be only stay in Pool UTxO
-  // Verify Pool Authen Asset must be existed in Pool Input and Output value
-  // expect and {
-  //     value.quantity_of(pool_in_value, authen_policy_id, pool_auth_asset_name) == 1,
-  //     value.quantity_of(pool_out_value, authen_policy_id, pool_auth_asset_name) == 1,
-  //   }
   let estimate_value_reserve_a_in =
     value.quantity_of(pool_in_value, asset_a_policy_id, asset_a_asset_name)
   let estimate_value_reserve_a_out =
@@ -356,9 +350,9 @@ pub fn validate_swap_multi_routing(
     address: Address { payment_credential: pool_payment_credential, .. },
     lp_asset: pool_lp_asset,
     ..
-  } = utils.list_at_index(batching_pools, 0)
+  } = batching_pools |> builtin.head_list
 
-  let order_inputs =
+  expect [order_input] =
     list.filter(
       all_inputs,
       fn(input) {
@@ -375,8 +369,7 @@ pub fn validate_swap_multi_routing(
         }
       },
     )
-  expect [order_input] = order_inputs
-  let order_outputs =
+  expect [order_output] =
     list.filter(
       all_outputs,
       fn(output) {
@@ -385,12 +378,16 @@ pub fn validate_swap_multi_routing(
         addr != batcher_address && payment_cred != pool_payment_credential
       },
     )
-  expect [order_output] = order_outputs
   let Input {
     output: Output { value: order_in_value, datum: raw_order_in_datum, .. },
     ..
   } = order_input
   let Output { value: order_out_value, .. } = order_output
+  expect order_in_datum: OrderDatum =
+    when raw_order_in_datum is {
+      InlineDatum(d) -> d
+      _ -> utils.must_find_script_datum(all_datums, raw_order_in_datum)
+    }
   let OrderDatum {
     receiver,
     receiver_datum_hash_opt,
@@ -399,18 +396,27 @@ pub fn validate_swap_multi_routing(
     output_ada,
     lp_asset: order_lp_asset,
     ..
-  } = utils.must_find_order_datum(all_datums, raw_order_in_datum)
-  let is_valid_receiver =
-    order_validation.validate_order_receiver(
-      receiver: receiver,
-      receiver_datum_hash_opt: receiver_datum_hash_opt,
-      output: order_output,
-    )
-  expect
-    batcher_fee > 0 && output_ada > 0 && is_valid_receiver && pool_lp_asset == order_lp_asset
+  } = order_in_datum
+  expect and {
+      // batcher_fee and output_ada must be positive
+      batcher_fee > 0,
+      output_ada > 0,
+      // Order Output must be returned to receiver and might have receiver_datum_hash_opt
+      order_validation.validate_order_receiver(
+        receiver: receiver,
+        receiver_datum_hash_opt: receiver_datum_hash_opt,
+        output: order_output,
+      ),
+      // lp_asset in OrderDatum must be the same with LP Asset of first Liquidity Pool in routing list
+      pool_lp_asset == order_lp_asset,
+    }
   when order_step is {
     SwapMultiRouting(routings, minimum_receive) -> {
-      expect minimum_receive > 0
+      expect and {
+          minimum_receive > 0,
+          // The number of Pool Inputs and Pool Outputs must be the same with _routings_ length
+          utils.compare_list_length(batching_pools, routings),
+        }
       order_validation.validate_swap_multi_routing_order(
         pools: batching_pools,
         routings: routings,
@@ -532,15 +538,9 @@ pub fn validate_update_pool_datum_or_stake_credential(
   let Address { payment_credential: pool_in_address_payment_credential, .. } =
     pool_in_address
 
-  expect
-    value.quantity_of(pool_in_value, authen_policy_id, pool_auth_asset_name) == 1
   let admin_input = utils.list_at_index(all_inputs, admin_index)
   let Input { output: Output { value: admin_value, .. }, .. } = admin_input
-  // Only Admin token can trigger this redeemer
-  expect
-    value.quantity_of(admin_value, license_policy_id, admin_asset_name) == 1
-  // This Redeemer won't mint anything 
-  expect value.is_zero(value.from_minted_value(all_mints))
+  // validate there is a single Pool UTxO in Transaction Inputs and single Pool UTxO in Transaction Outputs
   expect [pool_output] =
     list.filter(
       all_outputs,
@@ -556,7 +556,17 @@ pub fn validate_update_pool_datum_or_stake_credential(
     datum: raw_pool_out_datum,
     ..
   } = pool_output
-  expect dict.size(all_redeemers) == 1
+  expect and {
+      // Transaction contain only 1 Script (Pool Script). 
+      // It will avoid bad Admin can steal money from Order Contract.
+      dict.size(all_redeemers) == 1,
+      // Pool Input contains 1 valid Pool NFT Token
+      value.quantity_of(pool_in_value, authen_policy_id, pool_auth_asset_name) == 1,
+      // validate Admin with valid Admin License Token must be presented in Transaction Inputs
+      value.quantity_of(admin_value, license_policy_id, admin_asset_name) == 1,
+      // This Redeemer won't mint anything 
+      value.is_zero(value.from_minted_value(all_mints)),
+    }
   let pool_out_datum =
     utils.must_find_pool_datum(all_datums, raw_pool_out_datum)
   let PoolDatum {
@@ -581,24 +591,19 @@ pub fn validate_update_pool_datum_or_stake_credential(
     order_hash: pool_out_order_hash,
     profit_sharing_opt: pool_out_profit_sharing_opt,
   } = pool_out_datum
-  let irrelevant_pool_data_unchanged =
-    pool_in_asset_a == pool_out_asset_a && // hihi
-    pool_in_asset_b == pool_out_asset_b && // hihi
-    pool_in_total_liquidity == pool_out_total_liquidity && // hihi
-    pool_in_reserve_a == pool_out_reserve_a && // hihi
-    pool_in_reserve_b == pool_out_reserve_b && // hihi
-    pool_in_order_hash == pool_out_order_hash && // hihi
-    pool_in_value == pool_out_value
-  // hihi
-  expect irrelevant_pool_data_unchanged
+  expect and {
+      pool_in_asset_a == pool_out_asset_a,
+      pool_in_asset_b == pool_out_asset_b,
+      pool_in_total_liquidity == pool_out_total_liquidity,
+      pool_in_reserve_a == pool_out_reserve_a,
+      pool_in_reserve_b == pool_out_reserve_b,
+      pool_in_order_hash == pool_out_order_hash,
+      pool_in_value == pool_out_value,
+    }
   when action is {
     UpdatePoolFee -> {
-      // only trading fee or fee sharing can be changed
-      let is_valid_trading_fee =
-        validate_trading_fee_percent(
-          trading_fee_numerator: pool_out_trading_fee_numerator,
-          trading_fee_denominator: pool_out_trading_fee_denominator,
-        )
+      // Profit Sharing can be on/off by setting profit_sharing_opt is None or Some. 
+      // Profit Sharing must be between **16.66%** and **50%**
       let is_valid_fee_sharing =
         when pool_out_profit_sharing_opt is {
           None -> True
@@ -613,16 +618,23 @@ pub fn validate_update_pool_datum_or_stake_credential(
             )
           }
         }
-      pool_in_address == pool_out_address && is_valid_trading_fee && is_valid_fee_sharing
+      and {
+        // Pool Address must be unchanged (both Payment and Stake Credential)
+        pool_in_address == pool_out_address,
+        // Trading Fee must be between **0.05%** and **10%**
+        validate_trading_fee_percent(
+          trading_fee_numerator: pool_out_trading_fee_numerator,
+          trading_fee_denominator: pool_out_trading_fee_denominator,
+        ),
+        is_valid_fee_sharing,
+      }
     }
-    UpdatePoolStakeCredential -> {
-      let is_valid_trading_fee =
-        pool_in_trading_fee_numerator == pool_out_trading_fee_numerator && // hihi
-        pool_in_trading_fee_denominator == pool_out_trading_fee_denominator
-      let is_valid_fee_sharing =
-        pool_in_profit_sharing_opt == pool_out_profit_sharing_opt
-      is_valid_trading_fee && is_valid_fee_sharing
-    }
+    UpdatePoolStakeCredential -> and {
+        // Trading Fee and Profit Sharing must be unchanged
+        pool_in_trading_fee_numerator == pool_out_trading_fee_numerator,
+        pool_in_trading_fee_denominator == pool_out_trading_fee_denominator,
+        pool_in_profit_sharing_opt == pool_out_profit_sharing_opt,
+      }
   }
 }
 
@@ -647,7 +659,7 @@ pub fn validate_fee_sharing_percent(
   fee_sharing_numerator: Int,
   fee_sharing_denominator: Int,
 ) -> Bool {
-  // Max 10%, Min 0.05%
+  // Max 50%, Min 16.66%
   let max_fee_sharing_numerator = 1
   let max_fee_sharing_denominator = 2
   let min_fee_sharing_numerator = 1
@@ -679,6 +691,7 @@ pub fn validate_withdraw_liquidity_share(
     pool_in_output
   let Address { payment_credential: pool_in_payment_credential, .. } =
     pool_in_address
+  // validate there is a single Pool UTxO in Transaction Inputs and single Pool UTxO in Transaction Outputs
   expect [pool_output] =
     list.filter(
       all_outputs,
@@ -694,20 +707,24 @@ pub fn validate_withdraw_liquidity_share(
     datum: raw_pool_out_datum,
     ..
   } = pool_output
-  expect pool_in_address == pool_out_address
-  expect dict.size(all_redeemers) == 1
   let pool_out_datum =
     utils.must_find_pool_datum(all_datums, raw_pool_out_datum)
-  expect pool_in_datum == pool_out_datum
-  expect
-    value.quantity_of(pool_in_value, authen_policy_id, pool_auth_asset_name) == 1
   let admin_input = utils.list_at_index(all_inputs, admin_index)
   let Input { output: Output { value: admin_value, .. }, .. } = admin_input
-  // Only Admin token can trigger this redeemer
-  expect
-    value.quantity_of(admin_value, license_policy_id, admin_asset_name) == 1
-  // This Redeemer won't mint anything 
-  expect value.is_zero(value.from_minted_value(all_mints))
+  expect and {
+      // Pool Input and Output Address must be unchanged (both Payment and Stake Credential)
+      pool_in_address == pool_out_address,
+      // Transaction contain only 1 Script (Pool Script). 
+      // It will avoid bad Admin can steal money from Order Contract.
+      dict.size(all_redeemers) == 1,
+      // Pool Datum must be unchanged
+      pool_in_datum == pool_out_datum,
+      value.quantity_of(pool_in_value, authen_policy_id, pool_auth_asset_name) == 1,
+      // validate Admin with valid Admin License Token must be presented in Transaction Inputs.
+      value.quantity_of(admin_value, license_policy_id, admin_asset_name) == 1,
+      // validate Transaction won't mint any assets
+      value.is_zero(value.from_minted_value(all_mints)),
+    }
   let PoolDatum {
     asset_a,
     asset_b,
@@ -729,6 +746,9 @@ pub fn validate_withdraw_liquidity_share(
     }
   let value_reserve_b_in =
     value.quantity_of(pool_in_value, asset_b_policy_id, asset_b_asset_name)
+  // validate Admin withdraws the exact earned Profit Sharing amount:
+  //    Earned Asset A: Reserve A in Value - Reserve A in Datum
+  //    Earned Asset B: Reserve B in Value - Reserve B in Datum
   let earned_a = value_reserve_a_in - datum_reserve_a_in
   let earned_b = value_reserve_b_in - datum_reserve_b_in
   let pool_out_sub_earned_a =
@@ -745,6 +765,7 @@ pub fn validate_withdraw_liquidity_share(
       asset_name: asset_b_asset_name,
       quantity: earned_b * -1,
     )
+  // validate Pool Out Value must be Pool In Value sub Earned Asset A and Earned Asset B
   pool_in_value == pool_out_sub_earned_b
 }
 

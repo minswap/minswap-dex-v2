@@ -265,10 +265,14 @@ test test_zip_with_throw_err() fail {
 pub fn compare_list_length(arr1: List<a>, arr2: List<b>) -> Bool {
   when arr1 is {
     [] -> arr2 == []
-    [_, ..xs] ->
+    _ ->
       when arr2 is {
         [] -> False
-        [_, ..ys] -> compare_list_length(xs, ys)
+        _ ->
+          compare_list_length(
+            arr1 |> builtin.tail_list,
+            arr2 |> builtin.tail_list,
+          )
       }
   }
 }
