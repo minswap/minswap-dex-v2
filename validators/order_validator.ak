@@ -26,13 +26,33 @@ validator(
         dict.has_key(withdrawals, stake_credential)
       }
       CancelOrder -> {
-        let Transaction { extra_signatories, .. } = transaction
+        let Transaction { inputs, extra_signatories, .. } = transaction
         expect order_datum: OrderDatum = raw_datum
-        let OrderDatum { sender: Address { payment_credential, .. }, .. } =
-          order_datum
-        expect VerificationKeyCredential(owner_pkh) = payment_credential
+        let OrderDatum {
+          sender: Address { payment_credential: owner_payment_credential, .. },
+          ..
+        } = order_datum
         // validate that the transaction has _sender_'s signature or _sender_ script UTxO in the Transaction Inputs
-        list.has(extra_signatories, owner_pkh)
+        when owner_payment_credential is {
+          VerificationKeyCredential(owner_pkh) ->
+            // Verify transaction must be signed by Owner
+            list.has(extra_signatories, owner_pkh)
+          ScriptCredential(_) ->
+            // In case owner is script address, this script will require at least 1 owner UTxO in input
+            // If owner UTxO has enough condition to unlock itself, it can unlock this script as well
+            list.length(
+              list.filter(
+                inputs,
+                fn(input) {
+                  let Input { output, .. } = input
+                  let Output { address: out_address, .. } = output
+                  let Address { payment_credential: out_payment_credential, .. } =
+                    out_address
+                  out_payment_credential == owner_payment_credential
+                },
+              ),
+            ) > 0
+        }
       }
     }
   }
