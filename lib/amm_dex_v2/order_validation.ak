@@ -1067,6 +1067,15 @@ pub fn apply_orders(
                     } = output
                     expect ScriptCredential(order_out_script_hash) =
                       order_out_payment_cred
+                    expect order_out_datum: OrderDatum =
+                      when raw_order_out_datum is {
+                        InlineDatum(d) -> d
+                        _ ->
+                          utils.must_find_script_datum(
+                            datum_map,
+                            raw_order_out_datum,
+                          )
+                      }
                     let OrderDatum {
                       sender: order_out_sender,
                       receiver: order_out_receiver,
@@ -1075,11 +1084,7 @@ pub fn apply_orders(
                       batcher_fee: order_out_batcher_fee,
                       output_ada: order_out_output_ada,
                       lp_asset: order_out_lp_asset,
-                    } =
-                      utils.must_find_order_datum(
-                        datum_map,
-                        raw_order_out_datum,
-                      )
+                    } = order_out_datum
                     expect PartialSwap(
                       order_out_step_direction,
                       order_out_io_ratio_numerator,
