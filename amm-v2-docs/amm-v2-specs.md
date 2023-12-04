@@ -9,7 +9,7 @@
 
 
 ## 2. Architecture
-
+![Architecture](pics/architecture.png)
 
 There're 5 contracts in the AMM V2 system:
 
@@ -637,95 +637,95 @@ Transaction structure:
        - _batcher_address_
        - _input_indexes_
        - _license_index_
-   - Outputs:
-     - a Pool Output
-       - Address: Pool Address (unchanged)
-       - Value: (followed by OnChain calculation)
-         - 3 ADA
-         - Token A
-         - Token B
-         - LP Token
-         - 1 Pool NFT Token
-       - Datum:
-         - _asset_a_ (unchanged)
-         - _asset_b_ (unchanged)
-         - _total_liquidity_
-         - _reserve_a_ (followed by OnChain calculation)
-         - _reserve_b_ (followed by OnChain calculation)
-         - _trading_fee_numerator_ (unchanged)
-         - _trading_fee_denominator_ (unchanged)
-         - _order_hash_ (unchanged)
-         - _profit_sharing_opt_ (unchanged)
-     - Order Outputs:
-       - Address: _receiver_
-       - DatumHash: _receiver_datum_hash_opt_
-       - Value:
-         - _SwapExactIn_:
+ - Outputs:
+   - a Pool Output
+     - Address: Pool Address (unchanged)
+     - Value: (followed by OnChain calculation)
+       - 3 ADA
+       - Token A
+       - Token B
+       - LP Token
+       - 1 Pool NFT Token
+     - Datum:
+       - _asset_a_ (unchanged)
+       - _asset_b_ (unchanged)
+       - _total_liquidity_
+       - _reserve_a_ (followed by OnChain calculation)
+       - _reserve_b_ (followed by OnChain calculation)
+       - _trading_fee_numerator_ (unchanged)
+       - _trading_fee_denominator_ (unchanged)
+       - _order_hash_ (unchanged)
+       - _profit_sharing_opt_ (unchanged)
+   - Order Outputs:
+     - Address: _receiver_
+     - DatumHash: _receiver_datum_hash_opt_
+     - Value:
+       - _SwapExactIn_:
+         - Value:
+           - _output_ada_ ADA
+           - Received Token (must be greater than or equal to _minimum_receive_)
+       - _StopLoss_:
+         - Value:
+           - _output_ada_ ADA
+           - Received Token (must be less than or equal to _stop_loss_receive_)
+       - _OCO_:
+         - Step:
+           - _direction_
+           - _minimum_receive_ (TODO: Link formula section here)
+           - _stop_loss_receive_ (TODO: Link formula section here)
+         - Value:
+           - _output_ada_ ADA
+           - Received Token (must be less than or equal to _stop_loss_receive_ and greater than or equal to _minimum_receive_)
+       - _SwapExactOut_:
+         - Value:
+           - _output_ada_ ADA
+           - Received Token (must be equal to _expected_receive_)
+           - Change of Swapping Token (if have)
+       - _Deposit_:
+         - Value:
+           - _output_ada_ ADA
+           - LP Token (must be greater than or equal to _minimum_lp_)
+       - _Withdraw_:
+         - Value:
+           - _output_ada_ ADA
+           - Token A (must be greater than or equal to _minimum_asset_a_)
+           - Token B (must be greater than or equal to _minimum_asset_b_)
+       - _ZapOut_:
+         - Value:
+           - _output_ada_ ADA
+           - Received Token (must be greater than or equal to _minimum_receive_)
+       - _WithdrawImbalance_:
+         - Step:
+           - _ratio_asset_a_ (TODO: Link formula section here)
+           - _ratio_asset_b_ (TODO: Link formula section here)
+           - _minimum_asset_a_ (TODO: Link formula section here)
+         - Value:
+           - _output_ada_ ADA
+           - Token A (must be greater than or equal to _minimum_asset_a_)
+           - Token B (must be greater than or equal to _minimum_asset_a_ * _ratio_asset_b_ / _ratio_asset_a_)
+       - _PartialSwap_: partial is more complex, the result has 2 cases
+         - Return all the funds to _receiver_ if _hops_ = 1 or remaining Swapping Token is less than _minimum_swap_amount_required_
            - Value:
-             - _output_ada_ ADA
-             - Received Token (must be greater than or equal to _minimum_receive_)
-         - _StopLoss_:
+             - _batcher_fee_ * (_hops_ - 1) + _output_ada_ ADA
+             - remaining swapping Token and received Token
+         - Create new _PartialSwap_ Order if _hops_ > 1 and remaining Swapping Token is greater than _minimum_swap_amount_required_
+           - Datum:
+             - _sender_ (unchanged)
+             - _receiver_ (unchanged)
+             - _receiver_datum_hash_ (unchanged)
+             - _lp_asset_ (unchanged)
+             - _batcher_fee_ (unchanged)
+             - _output_ada_ (unchanged)
+             - _step_: _PartialSwap_
+               - _direction_ (unchanged)
+               - _io_ratio_numerator_ (unchanged)
+               - _io_ratio_denominator_ (unchanged)
+               - _hops_: _old_hops_ - 1
+               - _minimum_swap_amount_required_ (unchanged)
            - Value:
-             - _output_ada_ ADA
-             - Received Token (must be less than or equal to _stop_loss_receive_)
-         - _OCO_:
-           - Step:
-             - _direction_
-             - _minimum_receive_ (TODO: Link formula section here)
-             - _stop_loss_receive_ (TODO: Link formula section here)
-           - Value:
-             - _output_ada_ ADA
-             - Received Token (must be less than or equal to _stop_loss_receive_ and greater than or equal to _minimum_receive_)
-         - _SwapExactOut_:
-           - Value:
-             - _output_ada_ ADA
-             - Received Token (must be equal to _expected_receive_)
-             - Change of Swapping Token (if have)
-         - _Deposit_:
-           - Value:
-             - _output_ada_ ADA
-             - LP Token (must be greater than or equal to _minimum_lp_)
-         - _Withdraw_:
-           - Value:
-             - _output_ada_ ADA
-             - Token A (must be greater than or equal to _minimum_asset_a_)
-             - Token B (must be greater than or equal to _minimum_asset_b_)
-         - _ZapOut_:
-           - Value:
-             - _output_ada_ ADA
-             - Received Token (must be greater than or equal to _minimum_receive_)
-         - _WithdrawImbalance_:
-           - Step:
-             - _ratio_asset_a_ (TODO: Link formula section here)
-             - _ratio_asset_b_ (TODO: Link formula section here)
-             - _minimum_asset_a_ (TODO: Link formula section here)
-           - Value:
-             - _output_ada_ ADA
-             - Token A (must be greater than or equal to _minimum_asset_a_)
-             - Token B (must be greater than or equal to _minimum_asset_a_ * _ratio_asset_b_ / _ratio_asset_a_)
-         - _PartialSwap_: partial is more complex, the result has 2 cases
-           - Return all the funds to _receiver_ if _hops_ = 1 or remaining Swapping Token is less than _minimum_swap_amount_required_
-             - Value:
-               - _batcher_fee_ * (_hops_ - 1) + _output_ada_ ADA
-               - remaining swapping Token and received Token
-           - Create new _PartialSwap_ Order if _hops_ > 1 and remaining Swapping Token is greater than _minimum_swap_amount_required_
-             - Datum:
-               - _sender_ (unchanged)
-               - _receiver_ (unchanged)
-               - _receiver_datum_hash_ (unchanged)
-               - _lp_asset_ (unchanged)
-               - _batcher_fee_ (unchanged)
-               - _output_ada_ (unchanged)
-               - _step_: _PartialSwap_
-                 - _direction_ (unchanged)
-                 - _io_ratio_numerator_ (unchanged)
-                 - _io_ratio_denominator_ (unchanged)
-                 - _hops_: _old_hops_ - 1
-                 - _minimum_swap_amount_required_ (unchanged)
-             - Value:
-               - _batcher_fee_ * (_hops_ - 1) + _output_ada_ ADA
-               - remaining swapping Token and received Token
-     - Batcher Change UTxOs
+             - _batcher_fee_ * (_hops_ - 1) + _output_ada_ ADA
+             - remaining swapping Token and received Token
+   - Batcher Change UTxOs
 
 
 ### 3.4.5 Multi Routing

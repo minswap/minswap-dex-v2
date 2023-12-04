@@ -171,7 +171,7 @@ pub fn calculate_amount_in(
 // Final formular:
 //    swap_amount ^ 2 * ( 1 - f ) * ( amount_out + reserve_out )
 //      + swap_amount * ( 2 - f ) * reserve_in * ( amount_out + reserve_out )
-//      + ( reserve_in ^ 2 * amount_out + reserve_in * reserve_out * amount_out )
+//      + ( reserve_in ^ 2 * amount_out - reserve_in * reserve_out * amount_out )
 //    = 0
 pub fn calculate_deposit_swap_amount(
   amount_in: Int,

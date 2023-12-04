@@ -1,7 +1,8 @@
 use aiken/dict
 use aiken/list
 use aiken/transaction.{
-  Input, Mint, Output, OutputReference, ScriptContext, Spend, Transaction,
+  InlineDatum, Input, Mint, Output, OutputReference, ScriptContext, Spend,
+  Transaction,
 }
 use aiken/transaction/value.{AssetName}
 use amm_dex_v2/pool_validation
@@ -62,8 +63,12 @@ validator(
             },
           )
         let Output { datum: factory_raw_datum, .. } = factory_output
-        let FactoryDatum { head, tail } =
-          utils.must_find_factory_datum(datums, factory_raw_datum)
+        expect factory_datum: FactoryDatum =
+          when factory_raw_datum is {
+            InlineDatum(d) -> d
+            _ -> utils.must_find_script_datum(datums, factory_raw_datum)
+          }
+        let FactoryDatum { head, tail } = factory_datum
         and {
           head == #"00",
           tail == #"ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff00",

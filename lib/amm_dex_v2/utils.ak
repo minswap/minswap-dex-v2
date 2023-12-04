@@ -7,7 +7,7 @@ use aiken/list
 use aiken/string
 use aiken/transaction.{Datum, DatumHash, InlineDatum, NoDatum}
 use aiken/transaction/value.{AssetName, PolicyId, ada_asset_name, ada_policy_id}
-use amm_dex_v2/types.{Asset, DatumMap, FactoryDatum, OrderDatum, PoolDatum}
+use amm_dex_v2/types.{Asset, DatumMap}
 
 const minus_ascii_code = 45
 
@@ -96,11 +96,6 @@ test test_compute_lp_asset_name() {
   lp_asset_name == #"82e2b1fd27a7712a1a9cf750dfbea1a5778611b20e06dd6a611df7a643f8cb75"
 }
 
-pub fn must_parse_option(op: Option<a>) -> a {
-  expect Some(t) = op
-  t
-}
-
 pub fn bytearray_to_int(byte_arr: ByteArray) -> Int {
   let byte_len = bytearray.length(byte_arr)
   do_bytearray_to_int(byte_arr, 0, 0, byte_len)
@@ -137,34 +132,17 @@ test test_bytearray_to_int() {
   r1 == 123 && r2 == 111
 }
 
-pub fn find_script_datum(datums: DatumMap, datum: Datum) -> Option<Data> {
-  when datum is {
-    NoDatum -> None
-    DatumHash(dh) ->
-      datums
-        |> dict.get(dh)
-    InlineDatum(dat) -> Some(dat)
-  }
-}
-
 pub fn must_find_script_datum(datums: DatumMap, datum: Datum) -> Data {
-  let datum_opt = find_script_datum(datums, datum)
-  must_parse_option(datum_opt)
-}
-
-pub fn must_find_order_datum(datums: DatumMap, datum: Datum) -> OrderDatum {
-  expect order_datum: OrderDatum = must_find_script_datum(datums, datum)
-  order_datum
-}
-
-pub fn must_find_pool_datum(datums: DatumMap, datum: Datum) -> PoolDatum {
-  expect pool_datum: PoolDatum = must_find_script_datum(datums, datum)
-  pool_datum
-}
-
-pub fn must_find_factory_datum(datums: DatumMap, datum: Datum) -> FactoryDatum {
-  expect factory_datum: FactoryDatum = must_find_script_datum(datums, datum)
-  factory_datum
+  let datum_opt =
+    when datum is {
+      NoDatum -> None
+      DatumHash(dh) ->
+        datums
+          |> dict.get(dh)
+      InlineDatum(dat) -> Some(dat)
+    }
+  expect Some(datum) = datum_opt
+  datum
 }
 
 pub fn list_at_index(outputs: List<a>, payout_outputs_offset: Int) -> a {

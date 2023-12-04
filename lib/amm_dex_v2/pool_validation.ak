@@ -500,8 +500,11 @@ fn find_multi_routing_pools(
       let Output { address: pool_in_address, datum: pool_in_datum_raw, .. } =
         pool_in_output
       let Output { address: pool_out_address, .. } = pool_out
-      let pool_in_datum =
-        utils.must_find_pool_datum(datum_map, pool_in_datum_raw)
+      expect pool_in_datum: PoolDatum =
+        when pool_in_datum_raw is {
+          InlineDatum(d) -> d
+          _ -> utils.must_find_script_datum(datum_map, pool_in_datum_raw)
+        }
 
       expect pool_in_address == pool_out_address
       get_batching_pool(
@@ -567,8 +570,11 @@ pub fn validate_update_pool_datum_or_stake_credential(
       // This Redeemer won't mint anything 
       value.is_zero(value.from_minted_value(all_mints)),
     }
-  let pool_out_datum =
-    utils.must_find_pool_datum(all_datums, raw_pool_out_datum)
+  expect pool_out_datum: PoolDatum =
+    when raw_pool_out_datum is {
+      InlineDatum(d) -> d
+      _ -> utils.must_find_script_datum(all_datums, raw_pool_out_datum)
+    }
   let PoolDatum {
     asset_a: pool_in_asset_a,
     asset_b: pool_in_asset_b,
@@ -707,8 +713,11 @@ pub fn validate_withdraw_liquidity_share(
     datum: raw_pool_out_datum,
     ..
   } = pool_output
-  let pool_out_datum =
-    utils.must_find_pool_datum(all_datums, raw_pool_out_datum)
+  expect pool_out_datum: PoolDatum =
+    when raw_pool_out_datum is {
+      InlineDatum(d) -> d
+      _ -> utils.must_find_script_datum(all_datums, raw_pool_out_datum)
+    }
   let admin_input = utils.list_at_index(all_inputs, admin_index)
   let Input { output: Output { value: admin_value, .. }, .. } = admin_input
   expect and {
