@@ -42,13 +42,8 @@ pub type UpdatePoolFeeOrStakeCredentialAction {
 }
 
 pub type PoolRedeemer {
-  Batching {
-    batcher_address: Address,
-    input_indexes: List<Int>,
-    license_index: Int,
-  }
+  Batching { input_indexes: List<Int>, license_index: Int }
   MultiRouting {
-    batcher_address: Address,
     license_index: Int,
     routing_in_indexes: List<Int>,
     routing_out_indexes: List<Int>,

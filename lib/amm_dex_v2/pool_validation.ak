@@ -17,13 +17,16 @@ use amm_dex_v2/types.{
 }
 use amm_dex_v2/utils
 
-pub fn validate_batcher_license(
+pub fn validate_batcher_license_and_find_batcher_address(
   license_input: Input,
   validity_range: ValidityRange,
   license_policy_id: PolicyId,
   maximum_deadline_range: Int,
-) -> Bool {
-  let Input { output: Output { value: license_value, .. }, .. } = license_input
+) -> Address {
+  let Input {
+    output: Output { address: batcher_address, value: license_value, .. },
+    ..
+  } = license_input
   expect [(license_asset_name, license_amount)] =
     license_value
       |> value.tokens(license_policy_id)
@@ -38,11 +41,12 @@ pub fn validate_batcher_license(
   // - Only Batcher with valid license token can trigger @ApplyPool redeemer validation.  
   // - A valid license token is the token with @tokenName (representing for expired milliseconds) 
   //   and must be within the time range from current_time to current_time + maximum_deadline_range
-  and {
-    license_amount == 1,
-    license_deadline >= end_valid_time_range,
-    license_deadline <= start_valid_time_range + maximum_deadline_range,
-  }
+  expect and {
+      license_amount == 1,
+      license_deadline >= end_valid_time_range,
+      license_deadline <= start_valid_time_range + maximum_deadline_range,
+    }
+  batcher_address
 }
 
 fn find_pool_input_and_output_in_batching(
