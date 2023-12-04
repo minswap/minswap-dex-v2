@@ -71,3 +71,4 @@ In case users want to zap out to Asset B, $\Delta x$ will be swapped, then total
 $$Out = \Delta y + \frac{(f_{d} - f_{n}) * \Delta x * y_{0}}{x_{0} * f_{d} + (f_{d} - f_{n}) * \Delta x}$$
 
 ### 5. Withdraw Imbalance
+TODO
