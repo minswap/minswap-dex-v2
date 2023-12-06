@@ -62,6 +62,20 @@ pub fn sorted_asset(asset_a: Asset, asset_b: Asset) -> Bool {
   }
 }
 
+test test_sorted_asset() {
+  let asset_a = Asset { policy_id: ada_policy_id, asset_name: ada_asset_name }
+  let asset_b =
+    Asset {
+      policy_id: #"e16c2dc8ae937e8d3790c7fd7168d7b994621ba14ca11415f39fed72",
+      asset_name: #"4d494e",
+    }
+  and {
+    sorted_asset(asset_a, asset_b),
+    !sorted_asset(asset_a, asset_a),
+    !sorted_asset(asset_b, asset_a),
+  }
+}
+
 pub fn is_ada_asset(pid: PolicyId, name: AssetName) -> Bool {
   pid == ada_policy_id && name == ada_asset_name
 }
