@@ -36,20 +36,20 @@ There're 5 contracts in the AMM V2 system:
 
 
 - Factory NFT Token: the Factory legitimate Token, can be only minted in Pool Creation Transaction and cannot be outside Factory Contract. The minting must be followed by rule of `Authen Minting Policy`
- - CurrencySymbol: Authen Minting Policy
- - TokenName: Defined in `Authen Minting Policy` parameters (e.g. "MS")
+   - CurrencySymbol: Authen Minting Policy
+   - TokenName: Defined in `Authen Minting Policy` parameters (e.g. "MS")
 - Pool NFT token: the Pool legitimate Token, can be only minted in Pool Creation Transaction and cannot be outside Pool Contract. The minting must be followed by rule of `Authen Minting Policy`
- - CurrencySymbol: Authen Minting Policy
- - TokenName: Defined in `Authen Minting Policy` parameters (e.g. "MSP")
+   - CurrencySymbol: Authen Minting Policy
+   - TokenName: Defined in `Authen Minting Policy` parameters (e.g. "MSP")
 - LP token: Represents Liquidity Provider's share of pool. Each pool has a different LP token.
- - CurrencySymbol: Authen Minting Policy
- - TokenName: Hash of Pool's Asset A and Asset B (`SHA_256(SHA_256(AssetA), SHA_256(AssetB))`)
+   - CurrencySymbol: Authen Minting Policy
+   - TokenName: Hash of Pool's Asset A and Asset B (`SHA_256(SHA_256(AssetA), SHA_256(AssetB))`)
 - Batcher license token: Permit batcher to apply pool
- - CurrencySymbol: Defined in Pool parameters. The policy is managed by team (e.g. multisig policy)
- - TokenName: POSIX timestamp represents license deadline
+   - CurrencySymbol: Defined in Pool parameters. The policy is managed by team (e.g. multisig policy)
+   - TokenName: POSIX timestamp represents license deadline
 - Admin license token:
- - CurrencySymbol: Defined in Pool parameters. The policy is managed by team (e.g. multisig policy)
- - TokenName: A constant string defined in pool parameters (e.g. "ADMIN")
+   - CurrencySymbol: Defined in Pool parameters. The policy is managed by team (e.g. multisig policy)
+   - TokenName: A constant string defined in pool parameters (e.g. "ADMIN")
 
 
 ### 3.3 Smart Contract
@@ -78,7 +78,7 @@ Order Batching validator is a Withdrawal Script, is responsible for validating P
 
 
 - **OrderBatchingRedeemer**: The redeemer contains `pool_input_index`, it's used for finding Pool Input faster, it will be called on Batching Transaction.
- - validate that there's a Pool Input which have Address's Payment Credential matching with `pool_hash`
+   - validate that there's a Pool Input which have Address's Payment Credential matching with `pool_hash`
 
 
 #### 3.3.2 Order Validator
@@ -100,37 +100,37 @@ There are 10 order types:
 
 
 - **SwapExactIn**: is used for exchanging specific amount of single asset in the liquidity pool, the order will be executed if the received amount is greater than or equal to `minimum_receive` which is defined below
- - _direction_: The direction (AToB or BToA) of swap request.
- - _minimum_receive_: Minimum amount of Asset Out which users want to receive after exchanging
+   - _direction_: The direction (AToB or BToA) of swap request.
+   - _minimum_receive_: Minimum amount of Asset Out which users want to receive after exchanging
 - **StopLoss**: is used for exchanging specific amount of single asset in the liquidity pool, the order will be executed if the received amount is less than or equal to `stop_loss_receive` which is defined below
- - _direction_: The direction (AToB or BToA) of swap request.
- - _stop_loss_receive_: Maximum amount of Asset Out which users want to receive after exchanging
+   - _direction_: The direction (AToB or BToA) of swap request.
+   - _stop_loss_receive_: Maximum amount of Asset Out which users want to receive after exchanging
 - **OCO**: is used for exchanging specific amount of single asset in the liquidity pool, the order will be executed if the received amount is less than or equal to `stop_loss_receive` and greater than or equal to `minimum_receive` which are defined below
- - _direction_: The direction (AToB or BToA) of swap request.
- - _minimum_receive_: Minimum amount of Asset Out which users want to receive after exchanging
- - _stop_loss_receive_: Maximum amount of Asset Out which users want to receive after exchanging
+   - _direction_: The direction (AToB or BToA) of swap request.
+   - _minimum_receive_: Minimum amount of Asset Out which users want to receive after exchanging
+   - _stop_loss_receive_: Maximum amount of Asset Out which users want to receive after exchanging
 - **SwapExactOut**: is used for exchanging single asset in the liquidity pool and receiving the exact amout of other asset, the order will be executed if the received amount is equal to `expected_receive` which is defined below
- - _direction_: The direction (AToB or BToA) of swap request.
- - _expected_receive_: The exact amount of Asset Out which users want to receive after exchanging
+   - _direction_: The direction (AToB or BToA) of swap request.
+   - _expected_receive_: The exact amount of Asset Out which users want to receive after exchanging
 - **Deposit**: is used for depositing pool's assets and receiving LP Token
- - _minimum_lp_: The minimum amount of LP Token which users want to receive after depositing
+   - _minimum_lp_: The minimum amount of LP Token which users want to receive after depositing
 - **Withdraw**: is used for withdrawing pool's asset with the exact assets ratio of the liquidity pool at that time
- - _minimum_asset_a_: minimum received amounts of Asset A.
- - _minimum_asset_b_: minimum received amounts of Asset B.
+   - _minimum_asset_a_: minimum received amounts of Asset A.
+   - _minimum_asset_b_: minimum received amounts of Asset B.
 - **ZapOut**: is used for withdrawing a single pool asset out of Liquidity Pool.
- - _direction_: The direction (AToB or BToA) of ZapOut request. `AToB` in case Asset Out is B and vice versa
- - _minimum_receive_: Minimum amount of Asset Out which users want to receive after withdrawing
+   - _direction_: The direction (AToB or BToA) of ZapOut request. `AToB` in case Asset Out is B and vice versa
+   - _minimum_receive_: Minimum amount of Asset Out which users want to receive after withdrawing
 - **PartialSwap**: is used for exchanging partial amounts of single Asset. The Partial Swap can be executed multiple times if the price ratio is matched with the user's expectation, and the time is defined in `hops`.  
- - _direction_: The direction (AToB or BToA) of swap request.
- - _io_ratio_numerator_ and _io_ratio_denominator_: the price ratio which users want to exchange
- - _hops_: The time PartialSwap can be executed.
- - _minimum_swap_amount_required_: The minimum amount which is required to swap per each execution time.
+   - _direction_: The direction (AToB or BToA) of swap request.
+   - _io_ratio_numerator_ and _io_ratio_denominator_: the price ratio which users want to exchange
+   - _hops_: The time PartialSwap can be executed.
+   - _minimum_swap_amount_required_: The minimum amount which is required to swap per each execution time.
 - **WithdrawImbalance**: is used for withdrawing custom amounts of assets.
- - _ratio_asset_a_ and _ratio_asset_b_: The ratio of Asset A and Asset B users want to receive after withdrawing
- - _minimum_asset_a_: The minimum amount of asset A which users want to receive, The amount of Asset will be followed by the ratio (_received_asset_b_ = _minimum_asset_a_ * _ratio_asset_b_ / _ratio_asset_a_)
+   - _ratio_asset_a_ and _ratio_asset_b_: The ratio of Asset A and Asset B users want to receive after withdrawing
+   - _minimum_asset_a_: The minimum amount of asset A which users want to receive, The amount of Asset will be followed by the ratio (_received_asset_b_ = _minimum_asset_a_ * _ratio_asset_b_ / _ratio_asset_a_)
 - **SwapMultiRouting**: is used for exchanging a specific amount of single asset across multiple Liquidity Pools.
- - _routings_: The routings (including a list of _direction_ and _lp_asset_), which is defined Liquidity Pools the swap is routing through
- - _minimum_receive_: Minimum amount of Asset Out which users want to receive after exchanging
+   - _routings_: The routings (including a list of _direction_ and _lp_asset_), which is defined Liquidity Pools the swap is routing through
+   - _minimum_receive_: Minimum amount of Asset Out which users want to receive after exchanging
 
 
 An Order Datum keeps information about Order Type and some other informations:
@@ -156,9 +156,9 @@ An Order Datum keeps information about Order Type and some other informations:
 
 
 - **ApplyOrder**: the redeemer will allow spending Order UTxO in Batching transaction
- - validate that an Order can be spent if there's a `Order Batching` validator in the `withdrawals`
+   - validate that an Order can be spent if there's a `Order Batching` validator in the `withdrawals`
 - **CancelOrder**: the redeemer will allow _sender_ to spend Order UTxO to get back locked funds.
- - validate that the transaction has _sender_'s signature or _sender_ script UTxO in the Transaction Inputs
+   - validate that the transaction has _sender_'s signature or _sender_ script UTxO in the Transaction Inputs
 
 
 #### 3.3.3 Authen Minting Policy
@@ -184,17 +184,17 @@ Authen Minting Policy is responsible for creating initial Factory `Linked List`,
 
 
 - **MintFactoryAuthen**: The redeemer can be called once to initialize the whole AMM V2 system
- - validate that `out_ref` must be presented in the Transaction Inputs
- - validate that there's only 1 Factory UTxO in the Transaction Outputs. The Factory UTxO must contain Factory Token in the value and its datum is:
-   - _head_: `#"00"`
-   - _tail_: `#"ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff00"`
- - validate that the redeemer only mint **a single Factory Token**
+   - validate that `out_ref` must be presented in the Transaction Inputs
+   - validate that there's only 1 Factory UTxO in the Transaction Outputs. The Factory UTxO must contain Factory Token in the value and its datum is:
+     - _head_: `#"00"`
+     - _tail_: `#"ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff00"`
+   - validate that the redeemer only mint **a single Factory Token**
 - **CreatePool**:  The redeemer will allow creating a new Liquidity Pool.
- - validate that there's a single Factory UTxO in the Transaction Inputs. Factory UTxO must contain Factory NFT Token in the value
- - validate that transaction only mint 3 types of tokens:
-   - 1 Factory NFT Token
-   - 1 Pool NFT Token
-   - MAX_INT64 LP Token, LP Token must have PolicyID is **AuthenMintingPolicy** and TokenName is Hash of Pool's Asset A and Asset B (`SHA_256(SHA_256(AssetA), SHA_256(AssetB))`). Asset A and Asset B are in Factory Redeemer and they must be sorted
+   - validate that there's a single Factory UTxO in the Transaction Inputs. Factory UTxO must contain Factory NFT Token in the value
+   - validate that transaction only mint 3 types of tokens:
+     - 1 Factory NFT Token
+     - 1 Pool NFT Token
+     - MAX_INT64 LP Token, LP Token must have PolicyID is **AuthenMintingPolicy** and TokenName is Hash of Pool's Asset A and Asset B (`SHA_256(SHA_256(AssetA), SHA_256(AssetB))`). Asset A and Asset B are in Factory Redeemer and they must be sorted
 
 
 #### 3.3.4 Factory Validator
@@ -254,23 +254,23 @@ Anytime new Pool is created, a Factory UTxO will be spent can create the 2 new o
 
 #### 3.3.4.4 Validation
 - **Factory Redeemer**:
- - validate that Asset A and Asset B must be sorted
- - validate that there's single Factory UTxO in Transaction Input and contain single legitimate Factory NFT Token
- - validate that there are only 2 Factory UTxOs in Transaction Outputs, they must contain a single legitimate Factory NFT Token.
- - validate that new Factory UTxO datum must be followed by Linked List rule
- - validate that there is a new Pool UTxO in Transaction Outputs. Pool UTxO must contain single Pool NFT Token
- - Pool Datum must have correct data:
-   - _asset_a_ and _asset_b_ must be the same with Factory Redeemer
-   - _total_liquidity_ must be sqrt(_amount_a_ * _amount_b_)
-   - _reserve_a_ and _reserve_b_ must be _amount_a_ and _amount_b_
-   - _trading_fee_percentage_ must be between **0.05%** and **10%**
-   - _order_hash_ must be the same with parameter
-   - _profit_sharing_ must be empty
- - Pool Value must only have necessary Token: Asset A, Asset B, remaining LP Token (_MAX_INT64_ - _total_liquidity_), 1 Pool NFT Token and 3 ADA (required ADA for an UTxO)
- - validate that transaction only mint 3 types of tokens:
-   - 1 Factory NFT Token
-   - 1 Pool NFT Token
-   - MAX_INT64 LP Token, LP Token must have PolicyID is **AuthenMintingPolicy** and TokenName is Hash of Pool's Asset A and Asset B (`SHA_256(SHA_256(AssetA), SHA_256(AssetB))`). Asset A and Asset B are in Factory Redeemer and they must be sorted
+   - validate that Asset A and Asset B must be sorted
+   - validate that there's single Factory UTxO in Transaction Input and contain single legitimate Factory NFT Token
+   - validate that there are only 2 Factory UTxOs in Transaction Outputs, they must contain a single legitimate Factory NFT Token.
+   - validate that new Factory UTxO datum must be followed by Linked List rule
+   - validate that there is a new Pool UTxO in Transaction Outputs. Pool UTxO must contain single Pool NFT Token
+   - Pool Datum must have correct data:
+     - _asset_a_ and _asset_b_ must be the same with Factory Redeemer
+     - _total_liquidity_ must be sqrt(_amount_a_ * _amount_b_)
+     - _reserve_a_ and _reserve_b_ must be _amount_a_ and _amount_b_
+     - _trading_fee_percentage_ must be between **0.05%** and **10%**
+     - _order_hash_ must be the same with parameter
+     - _profit_sharing_ must be empty
+   - Pool Value must only have necessary Token: Asset A, Asset B, remaining LP Token (_MAX_INT64_ - _total_liquidity_), 1 Pool NFT Token and 3 ADA (required ADA for an UTxO)
+   - validate that transaction only mint 3 types of tokens:
+     - 1 Factory NFT Token
+     - 1 Pool NFT Token
+     - MAX_INT64 LP Token, LP Token must have PolicyID is **AuthenMintingPolicy** and TokenName is Hash of Pool's Asset A and Asset B (`SHA_256(SHA_256(AssetA), SHA_256(AssetB))`). Asset A and Asset B are in Factory Redeemer and they must be sorted
 
 
 #### 3.3.5 Pool Validator
@@ -345,61 +345,61 @@ Pool validator is the most important part in the system. It's responsible for gu
        - Order Output must be returned to _receiver_ and might have _receiver_datum_hash_opt_
        - TODO: Write a doc to explain Order Calculation formula
 - **MultiRouting**: This redeemer will be called on MultiRouting Transaction. It will process single **SwapMultiRouting** Order and multiple **Liquidity Pool**
- - validate batcher with valid License Token must be presented in Transaction Inputs:
-   - Batcher must sign a Batching transaction.
-   - A valid license token is the token having expired timestamp as TokenName and must be within current time and current time + _maximum_deadline_range_
- - validate _routing_in_indexes_ and _routing_out_indexes_ must be unique, have the same length and contain more than 1 element.
- - validate Transaction won't mint any assets
- - validate the number of Pool Inputs and Pool Outputs must be _routing_in_indexes_ length. and each Pool Input must have the same Address with Pool Output (both Payment and Stake Credential)
- - validate all fields in each Pool Datum must not be changed except _reserve_a_ and _reserve_b_
- - validate each Pool Input / Output Value contain necessary assets:
-   - 3 ADA
-   - Asset A
-   - Asset B
-   - LP Token
-   - Pool NFT Token
- - validate transaction must have single **SwapMultiRouting** Order and:
-   - All amount fields in Order Step must be positive
-   - _batcher_fee_ and _output_ada_ must be positive
-   - _lp_asset_ in **OrderDatum** must be the same with LP Asset of first Liquidity Pool in routing list
-   - Order Output must be returned to _receiver_ and might having _receiver_datum_hash_opt_
-   - The number of Pool Inputs and Pool Outputs must be the same with _routings_ length
-   - Calculated Asset Out must be returned to _receiver_
-   - TODO: Write a doc to explain Order Calculation formula
+   - validate batcher with valid License Token must be presented in Transaction Inputs:
+     - Batcher must sign a Batching transaction.
+     - A valid license token is the token having expired timestamp as TokenName and must be within current time and current time + _maximum_deadline_range_
+   - validate _routing_in_indexes_ and _routing_out_indexes_ must be unique, have the same length and contain more than 1 element.
+   - validate Transaction won't mint any assets
+   - validate the number of Pool Inputs and Pool Outputs must be _routing_in_indexes_ length. and each Pool Input must have the same Address with Pool Output (both Payment and Stake Credential)
+   - validate all fields in each Pool Datum must not be changed except _reserve_a_ and _reserve_b_
+   - validate each Pool Input / Output Value contain necessary assets:
+     - 3 ADA
+     - Asset A
+     - Asset B
+     - LP Token
+     - Pool NFT Token
+   - validate transaction must have single **SwapMultiRouting** Order and:
+     - All amount fields in Order Step must be positive
+     - _batcher_fee_ and _output_ada_ must be positive
+     - _lp_asset_ in **OrderDatum** must be the same with LP Asset of first Liquidity Pool in routing list
+     - Order Output must be returned to _receiver_ and might having _receiver_datum_hash_opt_
+     - The number of Pool Inputs and Pool Outputs must be the same with _routings_ length
+     - Calculated Asset Out must be returned to _receiver_
+     - TODO: Write a doc to explain Order Calculation formula
 - **UpdatePoolFeeOrStakeCredential**: Allow Admin update Liquidity Pool's fee (Trading Fee and Profit Sharing) or update Pool's Stake Credential. It allows Minswap can delegate Liquidity Pool's ADA to different Stake Pools
- - validate Admin with valid Admin License Token must be presented in Transaction Inputs
- - validate there is a single Pool UTxO in Transaction Inputs and single Pool UTxO in Transaction Outputs and:
-   - Pool Input contains 1 valid Pool NFT Token
-   - Pool Input and Output Value must be unchanged
-   - Transaction contain only 1 Script (Pool Script). It will avoid bad Admin stealing money from Order Contract.
- -  validate Transaction won't mint any assets
- -  Both **UpdatePoolFeeOrStakeCredential** _action_ must not change these fields on the Pool Datum:
-    -  _asset_a_
-    -  _asset_b_
-    -  _total_liquidity_
-    -  _reserve_a_
-    -  _reseve_b_
-    -  _order_hash_
- -  Each _action_ must be followed:
-    -  _UpdatePoolFee_:
-          - Trading Fee must be between **0.05%** and **10%**
-          - Profit Sharing can be on/off by setting _profit_sharing_opt_ is None or Some. Profit Sharing must be between **16.66%** and **50%**
-          - Pool Address must be unchanged (both Payment and Stake Credential)
-    - _UpdatePoolStakeCredential_:
-      - Trading Fee and Profit Sharing must be unchanged
-      - Pool's Stake Credential can be changed to any other Stake Address
+   - validate Admin with valid Admin License Token must be presented in Transaction Inputs
+   - validate there is a single Pool UTxO in Transaction Inputs and single Pool UTxO in Transaction Outputs and:
+     - Pool Input contains 1 valid Pool NFT Token
+     - Pool Input and Output Value must be unchanged
+     - Transaction contain only 1 Script (Pool Script). It will avoid bad Admin stealing money from Order Contract.
+   -  validate Transaction won't mint any assets
+   -  Both **UpdatePoolFeeOrStakeCredential** _action_ must not change these fields on the Pool Datum:
+      -  _asset_a_
+      -  _asset_b_
+      -  _total_liquidity_
+      -  _reserve_a_
+      -  _reseve_b_
+      -  _order_hash_
+   -  Each _action_ must be followed:
+      -  _UpdatePoolFee_:
+            - Trading Fee must be between **0.05%** and **10%**
+            - Profit Sharing can be on/off by setting _profit_sharing_opt_ is None or Some. Profit Sharing must be between **16.66%** and **50%**
+            - Pool Address must be unchanged (both Payment and Stake Credential)
+      - _UpdatePoolStakeCredential_:
+        - Trading Fee and Profit Sharing must be unchanged
+        - Pool's Stake Credential can be changed to any other Stake Address
 - **WithdrawLiquidityShare**: Allow Admin can withdraw Liquidity Share to any Addresss.
- - validate Admin with valid Admin License Token must be presented in Transaction Inputs.
- - validate there is a single Pool UTxO in Transaction Inputs and single Pool UTxO in Transaction Outputs and:
-   - Pool Input contains 1 valid Pool NFT Token
-   - Pool Input and Output Address must be unchanged (both Payment and Stake Credential)
-   - Pool Datum must be unchanged
-   - Transaction contain only 1 Script (Pool Script). It will avoid bad Admin stealing money from Order Contract.
- - validate Transaction won't mint any assets
- - validate Admin withdraws the exact earned Profit Sharing amount:
-   - Earned Asset A: Reserve A in Value - Reserve A in Datum
-   - Earned Asset B: Reserve B in Value - Reserve B in Datum
- - validate Pool Out Value must be Pool In Value sub Earned Asset A and Earned Asset B
+   - validate Admin with valid Admin License Token must be presented in Transaction Inputs.
+   - validate there is a single Pool UTxO in Transaction Inputs and single Pool UTxO in Transaction Outputs and:
+     - Pool Input contains 1 valid Pool NFT Token
+     - Pool Input and Output Address must be unchanged (both Payment and Stake Credential)
+     - Pool Datum must be unchanged
+     - Transaction contain only 1 Script (Pool Script). It will avoid bad Admin stealing money from Order Contract.
+   - validate Transaction won't mint any assets
+   - validate Admin withdraws the exact earned Profit Sharing amount:
+     - Earned Asset A: Reserve A in Value - Reserve A in Datum
+     - Earned Asset B: Reserve B in Value - Reserve B in Datum
+   - validate Pool Out Value must be Pool In Value sub Earned Asset A and Earned Asset B
 
 
 ### 3.4 Transaction

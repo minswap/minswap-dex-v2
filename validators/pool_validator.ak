@@ -1,7 +1,6 @@
 use aiken/builtin
 use aiken/list
 use aiken/transaction.{ScriptContext, Spend, Transaction}
-use aiken/transaction/credential.{Address, VerificationKeyCredential}
 use aiken/transaction/value.{AssetName, PolicyId}
 use amm_dex_v2/pool_validation
 use amm_dex_v2/types.{
@@ -30,22 +29,19 @@ validator(
     expect ScriptContext { transaction, purpose: Spend(pool_input_ref) } =
       context
     when redeemer is {
-      Batching(batcher_address, input_indexes, license_index) -> {
-        let Transaction {
-          inputs,
-          outputs,
-          datums,
-          extra_signatories,
-          validity_range,
-          mint,
-          ..
-        } = transaction
-        let Address { payment_credential: batcher_payment_credential, .. } =
-          batcher_address
-        expect VerificationKeyCredential(batcher_pkh) =
-          batcher_payment_credential
+      Batching(input_indexes, license_index) -> {
+        let Transaction { inputs, outputs, datums, validity_range, mint, .. } =
+          transaction
         // Batching Redeemer provides @license_index which help save calculation cost
         let license_input = utils.list_at_index(inputs, license_index)
+        // A valid license token is the token having expired timestamp as TokenName and must be within current time and current time + _maximum_deadline_range_
+        let batcher_address =
+          pool_validation.validate_batcher_license_and_find_batcher_address(
+            license_input: license_input,
+            validity_range: validity_range,
+            license_policy_id: license_policy_id,
+            maximum_deadline_range: maximum_deadline_range,
+          )
         and {
           // Input indexes must not be empty list
           !builtin.null_list(input_indexes),
@@ -53,15 +49,6 @@ validator(
           utils.is_list_unique(input_indexes),
           // validate Transaction won't mint any assets
           value.is_zero(value.from_minted_value(mint)),
-          // Batcher with valid license token must be a signer of transaction
-          list.has(extra_signatories, batcher_pkh),
-          // A valid license token is the token having expired timestamp as TokenName and must be within current time and current time + _maximum_deadline_range_
-          pool_validation.validate_batcher_license(
-            license_input: license_input,
-            validity_range: validity_range,
-            license_policy_id: license_policy_id,
-            maximum_deadline_range: maximum_deadline_range,
-          ),
           pool_validation.validate_batching(
             authen_policy_id: authen_policy_id,
             pool_auth_asset_name: pool_auth_asset_name,
@@ -75,12 +62,7 @@ validator(
           ),
         }
       }
-      MultiRouting(
-        batcher_address,
-        license_index,
-        routing_in_indexes,
-        routing_out_indexes,
-      ) -> {
+      MultiRouting(license_index, routing_in_indexes, routing_out_indexes) -> {
         let routing_in_indexes_len = list.length(routing_in_indexes)
         let routing_out_indexes_len = list.length(routing_out_indexes)
         // validate routing_in_indexes and routing_out_indexes must be unique, 
@@ -91,45 +73,36 @@ validator(
             utils.is_list_unique(routing_in_indexes),
             utils.is_list_unique(routing_out_indexes),
           }
-        let Transaction {
-          inputs,
-          outputs,
-          datums,
-          extra_signatories,
-          validity_range,
-          mint,
-          ..
-        } = transaction
-        let Address { payment_credential: batcher_payment_credential, .. } =
-          batcher_address
-        expect VerificationKeyCredential(batcher_pkh) =
-          batcher_payment_credential
+        let Transaction { inputs, outputs, datums, validity_range, mint, .. } =
+          transaction
+        // let Address { payment_credential: batcher_payment_credential, .. } =
+        //   batcher_address
+        // expect VerificationKeyCredential(batcher_pkh) =
+        //   batcher_payment_credential
         // Batching Redeemer provides @license_index which help save calculation cost
         let license_input = utils.list_at_index(inputs, license_index)
-        expect and {
-            // validate Transaction won't mint any assets
-            value.is_zero(value.from_minted_value(mint)),
-            // Verify Batcher with valid license token must be a signer of transaction
-            list.has(extra_signatories, batcher_pkh),
-            // A valid license token is the token having expired timestamp as TokenName and must be within current time and current time + _maximum_deadline_range_
-            pool_validation.validate_batcher_license(
-              license_input: license_input,
-              validity_range: validity_range,
-              license_policy_id: license_policy_id,
-              maximum_deadline_range: maximum_deadline_range,
-            ),
-          }
-        pool_validation.validate_swap_multi_routing(
-          authen_policy_id: authen_policy_id,
-          pool_auth_asset_name: pool_auth_asset_name,
-          all_inputs: inputs,
-          all_outputs: outputs,
-          all_datums: datums,
-          pool_input_ref: pool_input_ref,
-          batcher_address: batcher_address,
-          routing_in_indexes: routing_in_indexes,
-          routing_out_indexes: routing_out_indexes,
-        )
+        let batcher_address =
+          pool_validation.validate_batcher_license_and_find_batcher_address(
+            license_input: license_input,
+            validity_range: validity_range,
+            license_policy_id: license_policy_id,
+            maximum_deadline_range: maximum_deadline_range,
+          )
+        and {
+          // validate Transaction won't mint any assets
+          value.is_zero(value.from_minted_value(mint)),
+          pool_validation.validate_swap_multi_routing(
+            authen_policy_id: authen_policy_id,
+            pool_auth_asset_name: pool_auth_asset_name,
+            all_inputs: inputs,
+            all_outputs: outputs,
+            all_datums: datums,
+            pool_input_ref: pool_input_ref,
+            batcher_address: batcher_address,
+            routing_in_indexes: routing_in_indexes,
+            routing_out_indexes: routing_out_indexes,
+          ),
+        }
       }
       UpdatePoolFeeOrStakeCredential(action, admin_index) -> {
         let Transaction { inputs, outputs, datums, redeemers, mint, .. } =
