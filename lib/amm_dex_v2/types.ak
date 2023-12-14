@@ -65,6 +65,14 @@ pub type SwapRouting {
   direction: OrderDirection,
 }
 
+// Decide the Order behavior in case Order is not meet the slippage tolerance
+pub type OrderKillable {
+  // Order will be killed by Batcher and funds come back to the Sender
+  KillOnFailed
+  // Order is still pending and be ignored from the Batching transaction
+  PendingOnFailed
+}
+
 pub type OrderStep {
   // SwapExactIn is used for exchanging specific amount of single asset in the liquidity pool. 
   // The order will be executed if the received amount is greater than or equal to `minimum_receive`.
@@ -73,6 +81,8 @@ pub type OrderStep {
     direction: OrderDirection,
     // Minimum amount of Asset Out which users want to receive after exchanging
     minimum_receive: Int,
+    // Decide the Order behavior in case Order is not meet the slippage tolerance
+    killable: OrderKillable,
   }
   // StopLoss is used for exchanging specific amount of single asset in the liquidity pool.
   // The order will be executed if the received amount is less than or equal to `stop_loss_receive`
@@ -81,6 +91,8 @@ pub type OrderStep {
     direction: OrderDirection,
     // Maximum amount of Asset Out which users want to receive after exchanging
     stop_loss_receive: Int,
+    // Decide the Order behavior in case Order is not meet the slippage tolerance
+    killable: OrderKillable,
   }
   // OCO is used for exchanging specific amount of single asset in the liquidity pool.
   // The order will be executed if the received amount is less than or equal to `stop_loss_receive` 
@@ -92,6 +104,8 @@ pub type OrderStep {
     minimum_receive: Int,
     // Maximum amount of Asset Out which users want to receive after exchanging
     stop_loss_receive: Int,
+    // Decide the Order behavior in case Order is not meet the slippage tolerance
+    killable: OrderKillable,
   }
   // SwapExactOut is used for exchanging single asset in the liquidity pool and receiving the exact amout of other asset.
   // The order will be executed if the received amount is equal to `expected_receive`
@@ -100,11 +114,15 @@ pub type OrderStep {
     direction: OrderDirection,
     // The exact amount of Asset Out which users want to receive after exchanging
     expected_receive: Int,
+    // Decide the Order behavior in case Order is not meet the slippage tolerance
+    killable: OrderKillable,
   }
   // Deposit is used for depositing pool's assets and receiving LP Token
   Deposit {
     // The minimum amount of LP Token which users want to receive after depositing
     minimum_lp: Int,
+    // Decide the Order behavior in case Order is not meet the slippage tolerance
+    killable: OrderKillable,
   }
   // Withdraw is used for withdrawing pool's asset with the exact assets ratio of the liquidity pool at that time
   Withdraw {
@@ -112,6 +130,8 @@ pub type OrderStep {
     minimum_asset_a: Int,
     // minimum received amounts of Asset B
     minimum_asset_b: Int,
+    // Decide the Order behavior in case Order is not meet the slippage tolerance
+    killable: OrderKillable,
   }
   // ZapOut is used for withdrawing a single pool asset out of Liquidity Pool
   ZapOut {
@@ -119,6 +139,8 @@ pub type OrderStep {
     direction: OrderDirection,
     // Minimum amount of Asset Out which users want to receive after withdrawing
     minimum_receive: Int,
+    // Decide the Order behavior in case Order is not meet the slippage tolerance
+    killable: OrderKillable,
   }
   // PartialSwap is used for exchange partial amount of single Asset. 
   // The Partial Swap can be executed multiple time if the price ratio is matched with user's expectation, 
@@ -143,6 +165,8 @@ pub type OrderStep {
     // The amount of Asset will be followed by the ratio:
     //    (_received_asset_b_ = _minimum_asset_a_ * _ratio_asset_b_ / _ratio_asset_a_)
     minimum_asset_a: Int,
+    // Decide the Order behavior in case Order is not meet the slippage tolerance
+    killable: OrderKillable,
   }
   // SwapMultiRouting is used for exchanging specific amount of single asset across multiple Liquidity Pools.
   SwapMultiRouting {
@@ -173,7 +197,7 @@ pub type OrderDatum {
 
 pub type OrderRedeemer {
   ApplyOrder
-  CancelOrder
+  CancelOrderByOwner
 }
 
 pub type FactoryDatum {

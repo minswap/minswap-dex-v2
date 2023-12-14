@@ -75,10 +75,6 @@ validator(
           }
         let Transaction { inputs, outputs, datums, validity_range, mint, .. } =
           transaction
-        // let Address { payment_credential: batcher_payment_credential, .. } =
-        //   batcher_address
-        // expect VerificationKeyCredential(batcher_pkh) =
-        //   batcher_payment_credential
         // Batching Redeemer provides @license_index which help save calculation cost
         let license_input = utils.list_at_index(inputs, license_index)
         let batcher_address =

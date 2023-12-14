@@ -7,8 +7,8 @@ use aiken/transaction/credential.{
   Address, ScriptCredential, StakeCredential, VerificationKeyCredential,
 }
 use amm_dex_v2/types.{
-  ApplyOrder, CancelOrder, OrderBatchingRedeemer, OrderDatum, OrderRedeemer,
-  ValidatorHash,
+  ApplyOrder, CancelOrderByOwner, OrderBatchingRedeemer, OrderDatum,
+  OrderRedeemer, ValidatorHash,
 }
 use amm_dex_v2/utils
 
@@ -25,7 +25,7 @@ validator(
         // validate that an Order can be spent if there's a `Order Batching` validator in the `withdrawals`
         dict.has_key(withdrawals, stake_credential)
       }
-      CancelOrder -> {
+      CancelOrderByOwner -> {
         let Transaction { inputs, extra_signatories, .. } = transaction
         expect order_datum: OrderDatum = raw_datum
         let OrderDatum {

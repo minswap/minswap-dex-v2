@@ -102,24 +102,31 @@ There are 10 order types:
 - **SwapExactIn**: is used for exchanging specific amount of single asset in the liquidity pool, the order will be executed if the received amount is greater than or equal to `minimum_receive` which is defined below
    - _direction_: The direction (AToB or BToA) of swap request.
    - _minimum_receive_: Minimum amount of Asset Out which users want to receive after exchanging
+   - _killable_: Decide the Order behavior in case Order is not meet the slippage tolerance
 - **StopLoss**: is used for exchanging specific amount of single asset in the liquidity pool, the order will be executed if the received amount is less than or equal to `stop_loss_receive` which is defined below
    - _direction_: The direction (AToB or BToA) of swap request.
    - _stop_loss_receive_: Maximum amount of Asset Out which users want to receive after exchanging
+   - _killable_: Decide the Order behavior in case Order is not meet the slippage tolerance
 - **OCO**: is used for exchanging specific amount of single asset in the liquidity pool, the order will be executed if the received amount is less than or equal to `stop_loss_receive` and greater than or equal to `minimum_receive` which are defined below
    - _direction_: The direction (AToB or BToA) of swap request.
    - _minimum_receive_: Minimum amount of Asset Out which users want to receive after exchanging
    - _stop_loss_receive_: Maximum amount of Asset Out which users want to receive after exchanging
+   - _killable_: Decide the Order behavior in case Order is not meet the slippage tolerance
 - **SwapExactOut**: is used for exchanging single asset in the liquidity pool and receiving the exact amout of other asset, the order will be executed if the received amount is equal to `expected_receive` which is defined below
    - _direction_: The direction (AToB or BToA) of swap request.
    - _expected_receive_: The exact amount of Asset Out which users want to receive after exchanging
+   - _killable_: Decide the Order behavior in case Order is not meet the slippage tolerance
 - **Deposit**: is used for depositing pool's assets and receiving LP Token
    - _minimum_lp_: The minimum amount of LP Token which users want to receive after depositing
+   - _killable_: Decide the Order behavior in case Order is not meet the slippage tolerance
 - **Withdraw**: is used for withdrawing pool's asset with the exact assets ratio of the liquidity pool at that time
    - _minimum_asset_a_: minimum received amounts of Asset A.
    - _minimum_asset_b_: minimum received amounts of Asset B.
+   - _killable_: Decide the Order behavior in case Order is not meet the slippage tolerance
 - **ZapOut**: is used for withdrawing a single pool asset out of Liquidity Pool.
    - _direction_: The direction (AToB or BToA) of ZapOut request. `AToB` in case Asset Out is B and vice versa
    - _minimum_receive_: Minimum amount of Asset Out which users want to receive after withdrawing
+   - _killable_: Decide the Order behavior in case Order is not meet the slippage tolerance
 - **PartialSwap**: is used for exchanging partial amounts of single Asset. The Partial Swap can be executed multiple times if the price ratio is matched with the user's expectation, and the time is defined in `hops`.  
    - _direction_: The direction (AToB or BToA) of swap request.
    - _io_ratio_numerator_ and _io_ratio_denominator_: the price ratio which users want to exchange
@@ -128,6 +135,7 @@ There are 10 order types:
 - **WithdrawImbalance**: is used for withdrawing custom amounts of assets.
    - _ratio_asset_a_ and _ratio_asset_b_: The ratio of Asset A and Asset B users want to receive after withdrawing
    - _minimum_asset_a_: The minimum amount of asset A which users want to receive, The amount of Asset will be followed by the ratio (_received_asset_b_ = _minimum_asset_a_ * _ratio_asset_b_ / _ratio_asset_a_)
+   - _killable_: Decide the Order behavior in case Order is not meet the slippage tolerance
 - **SwapMultiRouting**: is used for exchanging a specific amount of single asset across multiple Liquidity Pools.
    - _routings_: The routings (including a list of _direction_ and _lp_asset_), which is defined Liquidity Pools the swap is routing through
    - _minimum_receive_: Minimum amount of Asset Out which users want to receive after exchanging
