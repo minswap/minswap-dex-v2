@@ -193,11 +193,14 @@ pub type OrderDatum {
   batcher_fee: Int,
   // As known as Minimum ADA which users need to put to the Order, and these amounts will be returned with _receiver_ Output
   output_ada: Int,
+  // Order Expired time. If the order is not executed after Expired Time, anyone can help the owner cancel it 
+  expired_time_opt: Option<Int>,
 }
 
 pub type OrderRedeemer {
   ApplyOrder
   CancelOrderByOwner
+  CancelExpiredOrderByAnyone
 }
 
 pub type FactoryDatum {

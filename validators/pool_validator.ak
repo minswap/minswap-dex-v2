@@ -35,7 +35,7 @@ validator(
         // Batching Redeemer provides @license_index which help save calculation cost
         let license_input = utils.list_at_index(inputs, license_index)
         // A valid license token is the token having expired timestamp as TokenName and must be within current time and current time + _maximum_deadline_range_
-        let batcher_address =
+        let (batcher_address, end_valid_time_range) =
           pool_validation.validate_batcher_license_and_find_batcher_address(
             license_input: license_input,
             validity_range: validity_range,
@@ -58,6 +58,7 @@ validator(
             pool_input_ref: pool_input_ref,
             pool_in_datum: datum,
             batcher_address: batcher_address,
+            end_valid_time_range: end_valid_time_range,
             input_indexes: input_indexes,
           ),
         }
@@ -77,7 +78,7 @@ validator(
           transaction
         // Batching Redeemer provides @license_index which help save calculation cost
         let license_input = utils.list_at_index(inputs, license_index)
-        let batcher_address =
+        let (batcher_address, end_valid_time_range) =
           pool_validation.validate_batcher_license_and_find_batcher_address(
             license_input: license_input,
             validity_range: validity_range,
@@ -95,6 +96,7 @@ validator(
             all_datums: datums,
             pool_input_ref: pool_input_ref,
             batcher_address: batcher_address,
+            end_valid_time_range: end_valid_time_range,
             routing_in_indexes: routing_in_indexes,
             routing_out_indexes: routing_out_indexes,
           ),
