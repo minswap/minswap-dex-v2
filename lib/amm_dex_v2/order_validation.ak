@@ -923,16 +923,10 @@ pub fn validate_order_receiver(
   let Output { address: output_address, datum: raw_order_output_datum, .. } =
     output
   let is_valid_receiver_datum =
-    when receiver_datum_hash_opt is {
-      Some(receiver_datum_hash) ->
-        when raw_order_output_datum is {
-          NoDatum -> fail
-          DatumHash(dh) -> dh == receiver_datum_hash
-          InlineDatum(dat) ->
-            hash.blake2b_256(builtin.serialise_data(dat)) == receiver_datum_hash
-        }
-      None -> raw_order_output_datum == NoDatum
-    }
+    utils.is_valid_datum(
+      raw_datum: raw_order_output_datum,
+      datum_hash_opt: receiver_datum_hash_opt,
+    )
   and {
     receiver == output_address,
     is_valid_receiver_datum,
@@ -954,12 +948,10 @@ pub fn validate_order_output(
     ..
   } = output
   let is_valid_receiver_datum =
-    when raw_order_output_datum is {
-      NoDatum -> None
-      DatumHash(dh) -> Some(dh)
-      InlineDatum(dat) -> Some(hash.blake2b_256(builtin.serialise_data(dat)))
-    } == receiver_datum_hash_opt
-
+    utils.is_valid_datum(
+      raw_datum: raw_order_output_datum,
+      datum_hash_opt: receiver_datum_hash_opt,
+    )
   let addition_value_output = value.merge(output_value, value.negate(value))
   let is_valid_output =
     // addition value output order must be just nothing or remaining batcher fee after batch
@@ -1771,26 +1763,28 @@ pub fn validate_cancel_expired_orders(
               _ -> utils.must_find_script_datum(datum_map, order_in_datum_raw)
             }
 
-          let OrderDatum {
-            sender,
-            sender_datum_hash_opt,
-            expired_time_opt,
-            batcher_fee,
+          let OrderDatum { sender, sender_datum_hash_opt, expired_time_opt, .. } =
+            order_in_datum
+
+          let Output {
+            address: output_address,
+            datum: raw_order_output_datum,
+            value: output_value,
             ..
-          } = order_in_datum
+          } = order_output
+          let is_valid_receiver_datum =
+            utils.is_valid_datum(
+              raw_datum: raw_order_output_datum,
+              datum_hash_opt: sender_datum_hash_opt,
+            )
 
           expect Some(expired_time) = expired_time_opt
           expect and {
               expired_time < start_valid_time_range,
-              // TODO: convert this, because this function just handle for batcher
-              validate_order_output(
-                receiver: sender,
-                receiver_datum_hash_opt: sender_datum_hash_opt,
-                value: value.merge(order_in_value, weighted_tx_fee),
-                output: order_output,
-                batcher_fee: batcher_fee,
-                is_success_order: False,
-              ),
+              sender == output_address,
+              // TODO: less fee for this
+              output_value == value.merge(order_in_value, weighted_tx_fee),
+              is_valid_receiver_datum,
             }
           validate_cancel_expired_orders(
             order_inputs: rest_order_inputs,
