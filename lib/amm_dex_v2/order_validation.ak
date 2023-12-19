@@ -967,7 +967,7 @@ pub fn validate_order_output(
       // Kill order by batcher : it run all logic like success order
       //    0 <= estimated fee < batcher fee
       let addition_lovelace = value.lovelace_of(addition_value_output)
-      addition_lovelace >=0 && addition_lovelace < batcher_fee
+      addition_lovelace >= 0 && addition_lovelace < batcher_fee
     }
   and {
     is_valid_output,
