@@ -95,8 +95,6 @@ fn validate_swap_exact_in(
         receiver_datum_hash_opt: receiver_datum_hash_opt,
         value: expect_order_value_out,
         output: order_output,
-        batcher_fee: batcher_fee,
-        is_success_order: True,
       )
     if a_to_b_direction {
       (
@@ -125,8 +123,6 @@ fn validate_swap_exact_in(
           receiver_datum_hash_opt: sender_datum_hash_opt,
           value: get_returnable_value(order_in_value, batcher_fee),
           output: order_output,
-          batcher_fee: batcher_fee,
-          is_success_order: False,
         ),
       }
     pool_state
@@ -215,8 +211,6 @@ fn validate_swap_exact_out(
         receiver_datum_hash_opt: receiver_datum_hash_opt,
         value: expect_order_value_out,
         output: order_output,
-        batcher_fee: batcher_fee,
-        is_success_order: True,
       )
     if a_to_b_direction {
       (
@@ -245,8 +239,6 @@ fn validate_swap_exact_out(
           receiver_datum_hash_opt: sender_datum_hash_opt,
           value: get_returnable_value(order_in_value, batcher_fee),
           output: order_output,
-          batcher_fee: batcher_fee,
-          is_success_order: False,
         ),
       }
     pool_state
@@ -323,8 +315,6 @@ fn validate_deposit(
         receiver_datum_hash_opt: receiver_datum_hash_opt,
         value: expect_order_value_out,
         output: order_output,
-        batcher_fee: batcher_fee,
-        is_success_order: True,
       )
     (
       datum_reserve_a + amount_a - earned_fee_a,
@@ -343,8 +333,6 @@ fn validate_deposit(
           receiver_datum_hash_opt: sender_datum_hash_opt,
           value: get_returnable_value(order_in_value, batcher_fee),
           output: order_output,
-          batcher_fee: batcher_fee,
-          is_success_order: False,
         ),
       }
     pool_state
@@ -406,8 +394,6 @@ fn validate_withdraw(
         receiver_datum_hash_opt: receiver_datum_hash_opt,
         value: expect_order_value_out,
         output: order_output,
-        batcher_fee: batcher_fee,
-        is_success_order: True,
       )
     (
       datum_reserve_a - amount_a_out,
@@ -426,8 +412,6 @@ fn validate_withdraw(
           receiver_datum_hash_opt: sender_datum_hash_opt,
           value: get_returnable_value(order_in_value, batcher_fee),
           output: order_output,
-          batcher_fee: batcher_fee,
-          is_success_order: False,
         ),
       }
     pool_state
@@ -500,8 +484,6 @@ fn validate_zap_out(
         receiver_datum_hash_opt: receiver_datum_hash_opt,
         value: expect_order_value_out,
         output: order_output,
-        batcher_fee: batcher_fee,
-        is_success_order: True,
       )
     if a_to_b_direction {
       (
@@ -530,8 +512,6 @@ fn validate_zap_out(
           receiver_datum_hash_opt: sender_datum_hash_opt,
           value: get_returnable_value(order_in_value, batcher_fee),
           output: order_output,
-          batcher_fee: batcher_fee,
-          is_success_order: False,
         ),
       }
     pool_state
@@ -719,8 +699,6 @@ fn validate_withdraw_imbalance(
         receiver_datum_hash_opt: receiver_datum_hash_opt,
         value: expect_order_value_out,
         output: order_output,
-        batcher_fee: batcher_fee,
-        is_success_order: True,
       )
     (
       datum_reserve_a - amount_a_out - earned_fee_a,
@@ -739,8 +717,6 @@ fn validate_withdraw_imbalance(
           receiver_datum_hash_opt: sender_datum_hash_opt,
           value: get_returnable_value(order_in_value, batcher_fee),
           output: order_output,
-          batcher_fee: batcher_fee,
-          is_success_order: False,
         ),
       }
     pool_state
@@ -937,8 +913,6 @@ pub fn validate_order_output(
   receiver_datum_hash_opt: Option<CustomDatumHash>,
   value: Value,
   output: Output,
-  batcher_fee: Int,
-  is_success_order: Bool,
 ) -> Bool {
   let Output {
     address: output_address,
@@ -951,28 +925,10 @@ pub fn validate_order_output(
       raw_datum: raw_order_output_datum,
       datum_hash_opt: receiver_datum_hash_opt,
     )
-  let addition_value_output = value.merge(output_value, value.negate(value))
-  let is_valid_output =
-    // addition value output order must be just nothing or remaining batcher fee after batch
-    if is_success_order {
-      when list.length(value.flatten(addition_value_output)) is {
-        0 -> True
-        1 -> {
-          let addition_lovelace = value.lovelace_of(addition_value_output)
-          addition_lovelace > 0 && addition_lovelace < batcher_fee
-        }
-        _ -> False
-      }
-    } else {
-      // Kill order by batcher : it run all logic like success order
-      //    0 <= estimated fee < batcher fee
-      let addition_lovelace = value.lovelace_of(addition_value_output)
-      addition_lovelace >= 0 && addition_lovelace < batcher_fee
-    }
   and {
-    is_valid_output,
     receiver == output_address,
     is_valid_receiver_datum,
+    value == output_value,
   }
 }
 
@@ -1755,6 +1711,12 @@ pub fn validate_cancel_expired_orders(
             },
             ..
           } = order_input
+          let Output {
+            address: order_out_address,
+            value: order_out_value,
+            datum: raw_order_output_datum,
+            ..
+          } = order_output
 
           expect order_in_datum: OrderDatum =
             when order_in_datum_raw is {
@@ -1765,12 +1727,6 @@ pub fn validate_cancel_expired_orders(
           let OrderDatum { sender, sender_datum_hash_opt, expired_time_opt, .. } =
             order_in_datum
 
-          let Output {
-            address: output_address,
-            datum: raw_order_output_datum,
-            value: output_value,
-            ..
-          } = order_output
           let is_valid_receiver_datum =
             utils.is_valid_datum(
               raw_datum: raw_order_output_datum,
@@ -1780,9 +1736,9 @@ pub fn validate_cancel_expired_orders(
           expect Some(expired_time) = expired_time_opt
           expect and {
               expired_time < start_valid_time_range,
-              sender == output_address,
+              sender == order_out_address,
               // TODO: less fee for this
-              output_value == value.merge(order_in_value, weighted_tx_fee),
+              order_out_value == value.merge(order_in_value, weighted_tx_fee),
               is_valid_receiver_datum,
             }
           validate_cancel_expired_orders(
