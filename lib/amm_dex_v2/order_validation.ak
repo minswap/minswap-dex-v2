@@ -1,7 +1,6 @@
 use aiken/builtin
-use aiken/hash
 use aiken/list
-use aiken/transaction.{DatumHash, InlineDatum, Input, NoDatum, Output}
+use aiken/transaction.{InlineDatum, Input, NoDatum, Output}
 use aiken/transaction/credential.{
   Address, ScriptCredential, VerificationKeyCredential,
 }
@@ -966,9 +965,9 @@ pub fn validate_order_output(
       }
     } else {
       // Kill order by batcher : it run all logic like success order
-      //    2/3 batcher fee  <= estimated fee < batcher fee
+      //    0 <= estimated fee < batcher fee
       let addition_lovelace = value.lovelace_of(addition_value_output)
-      addition_lovelace * 3 >= batcher_fee && addition_lovelace < batcher_fee
+      addition_lovelace >=0 && addition_lovelace < batcher_fee
     }
   and {
     is_valid_output,
