@@ -179,8 +179,10 @@ pub type OrderStep {
 }
 
 pub type OrderDatum {
-  // The address of order's creator, only sender can cancel the order
+  // The address of order's creator, only sender can cancel the order immediately
   sender: Address,
+  // The datum hash of the output after cancel by KillOnFailed or reach Order Expired time
+  sender_datum_hash_opt: Option<CustomDatumHash>,
   // The address which receives the funds after order is processed
   receiver: Address,
   // The datum hash of the output after order is processed.

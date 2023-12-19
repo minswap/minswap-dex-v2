@@ -15,6 +15,9 @@ use amm_dex_v2/types.{
 }
 use amm_dex_v2/utils
 
+// TODO: normal order: dynamic batcher fee
+// TODO: kill: <= bastcher fee get 0.5 ADA or can change, batcher is too big
+
 fn get_returnable_value(order_in_value: Value, batcher_fee: Int) -> Value {
   value.add(order_in_value, ada_policy_id, ada_asset_name, batcher_fee * -1)
 }
@@ -23,6 +26,7 @@ fn validate_swap_exact_in(
   order_in_value: Value,
   order_output: Output,
   sender: Address,
+  sender_datum_hash_opt: Option<CustomDatumHash>,
   receiver: Address,
   receiver_datum_hash_opt: Option<CustomDatumHash>,
   a_to_b_direction: Bool,
@@ -120,7 +124,7 @@ fn validate_swap_exact_in(
         kill_on_failed,
         validate_order_output(
           receiver: sender,
-          receiver_datum_hash_opt: None,
+          receiver_datum_hash_opt: sender_datum_hash_opt,
           value: get_returnable_value(order_in_value, batcher_fee),
           output: order_output,
         ),
@@ -133,6 +137,7 @@ fn validate_swap_exact_out(
   order_in_value: Value,
   order_output: Output,
   sender: Address,
+  sender_datum_hash_opt: Option<CustomDatumHash>,
   receiver: Address,
   receiver_datum_hash_opt: Option<CustomDatumHash>,
   a_to_b_direction: Bool,
@@ -235,7 +240,7 @@ fn validate_swap_exact_out(
         kill_on_failed,
         validate_order_output(
           receiver: sender,
-          receiver_datum_hash_opt: None,
+          receiver_datum_hash_opt: sender_datum_hash_opt,
           value: get_returnable_value(order_in_value, batcher_fee),
           output: order_output,
         ),
@@ -248,6 +253,7 @@ fn validate_deposit(
   order_in_value: Value,
   order_output: Output,
   sender: Address,
+  sender_datum_hash_opt: Option<CustomDatumHash>,
   receiver: Address,
   receiver_datum_hash_opt: Option<CustomDatumHash>,
   minimum_lp: Int,
@@ -328,7 +334,7 @@ fn validate_deposit(
         kill_on_failed,
         validate_order_output(
           receiver: sender,
-          receiver_datum_hash_opt: None,
+          receiver_datum_hash_opt: sender_datum_hash_opt,
           value: get_returnable_value(order_in_value, batcher_fee),
           output: order_output,
         ),
@@ -341,6 +347,7 @@ fn validate_withdraw(
   order_in_value: Value,
   order_output: Output,
   sender: Address,
+  sender_datum_hash_opt: Option<CustomDatumHash>,
   receiver: Address,
   receiver_datum_hash_opt: Option<CustomDatumHash>,
   minimum_amount_a: Int,
@@ -406,7 +413,7 @@ fn validate_withdraw(
         kill_on_failed,
         validate_order_output(
           receiver: sender,
-          receiver_datum_hash_opt: None,
+          receiver_datum_hash_opt: sender_datum_hash_opt,
           value: get_returnable_value(order_in_value, batcher_fee),
           output: order_output,
         ),
@@ -419,6 +426,7 @@ fn validate_zap_out(
   order_in_value: Value,
   order_output: Output,
   sender: Address,
+  sender_datum_hash_opt: Option<CustomDatumHash>,
   receiver: Address,
   receiver_datum_hash_opt: Option<CustomDatumHash>,
   minimum_receive: Int,
@@ -505,7 +513,7 @@ fn validate_zap_out(
         kill_on_failed,
         validate_order_output(
           receiver: sender,
-          receiver_datum_hash_opt: None,
+          receiver_datum_hash_opt: sender_datum_hash_opt,
           value: get_returnable_value(order_in_value, batcher_fee),
           output: order_output,
         ),
@@ -638,6 +646,7 @@ fn validate_withdraw_imbalance(
   order_in_value: Value,
   order_output: Output,
   sender: Address,
+  sender_datum_hash_opt: Option<CustomDatumHash>,
   receiver: Address,
   receiver_datum_hash_opt: Option<CustomDatumHash>,
   ratio_asset_a: Int,
@@ -709,7 +718,7 @@ fn validate_withdraw_imbalance(
         kill_on_failed,
         validate_order_output(
           receiver: sender,
-          receiver_datum_hash_opt: None,
+          receiver_datum_hash_opt: sender_datum_hash_opt,
           value: get_returnable_value(order_in_value, batcher_fee),
           output: order_output,
         ),
@@ -922,16 +931,11 @@ pub fn validate_order_output(
     ..
   } = output
   let is_valid_receiver_datum =
-    when receiver_datum_hash_opt is {
-      Some(receiver_datum_hash) ->
-        when raw_order_output_datum is {
-          NoDatum -> fail
-          DatumHash(dh) -> dh == receiver_datum_hash
-          InlineDatum(dat) ->
-            hash.blake2b_256(builtin.serialise_data(dat)) == receiver_datum_hash
-        }
-      None -> raw_order_output_datum == NoDatum
-    }
+    when raw_order_output_datum is {
+      NoDatum -> None
+      DatumHash(dh) -> Some(dh)
+      InlineDatum(dat) -> Some(hash.blake2b_256(builtin.serialise_data(dat)))
+    } == receiver_datum_hash_opt
   and {
     receiver == output_address,
     is_valid_receiver_datum,
@@ -976,6 +980,7 @@ pub fn apply_orders(
 
           let OrderDatum {
             sender,
+            sender_datum_hash_opt,
             receiver,
             receiver_datum_hash_opt,
             step: order_step,
@@ -1013,6 +1018,7 @@ pub fn apply_orders(
                   order_in_value: order_in_value,
                   order_output: output,
                   sender: sender,
+                  sender_datum_hash_opt: sender_datum_hash_opt,
                   receiver: receiver,
                   receiver_datum_hash_opt: receiver_datum_hash_opt,
                   a_to_b_direction: a_to_b_direction,
@@ -1046,6 +1052,7 @@ pub fn apply_orders(
                   order_in_value: order_in_value,
                   order_output: output,
                   sender: sender,
+                  sender_datum_hash_opt: sender_datum_hash_opt,
                   receiver: receiver,
                   receiver_datum_hash_opt: receiver_datum_hash_opt,
                   a_to_b_direction: a_to_b_direction,
@@ -1082,6 +1089,7 @@ pub fn apply_orders(
                   order_in_value: order_in_value,
                   order_output: output,
                   sender: sender,
+                  sender_datum_hash_opt: sender_datum_hash_opt,
                   receiver: receiver,
                   receiver_datum_hash_opt: receiver_datum_hash_opt,
                   a_to_b_direction: a_to_b_direction,
@@ -1115,6 +1123,7 @@ pub fn apply_orders(
                   order_in_value: order_in_value,
                   order_output: output,
                   sender: sender,
+                  sender_datum_hash_opt: sender_datum_hash_opt,
                   receiver: receiver,
                   receiver_datum_hash_opt: receiver_datum_hash_opt,
                   a_to_b_direction: a_to_b_direction,
@@ -1141,6 +1150,7 @@ pub fn apply_orders(
                   order_in_value: order_in_value,
                   order_output: output,
                   sender: sender,
+                  sender_datum_hash_opt: sender_datum_hash_opt,
                   receiver: receiver,
                   receiver_datum_hash_opt: receiver_datum_hash_opt,
                   minimum_lp: minimum_lp,
@@ -1170,6 +1180,7 @@ pub fn apply_orders(
                   order_in_value: order_in_value,
                   order_output: output,
                   sender: sender,
+                  sender_datum_hash_opt: sender_datum_hash_opt,
                   receiver: receiver,
                   receiver_datum_hash_opt: receiver_datum_hash_opt,
                   minimum_amount_a: minimum_asset_a,
@@ -1199,6 +1210,7 @@ pub fn apply_orders(
                   order_in_value: order_in_value,
                   order_output: output,
                   sender: sender,
+                  sender_datum_hash_opt: sender_datum_hash_opt,
                   receiver: receiver,
                   receiver_datum_hash_opt: receiver_datum_hash_opt,
                   minimum_receive: minimum_receive,
@@ -1281,6 +1293,7 @@ pub fn apply_orders(
                     let expected_order_out_datum =
                       OrderDatum {
                         sender,
+                        sender_datum_hash_opt,
                         receiver,
                         receiver_datum_hash_opt,
                         lp_asset: order_lp_asset,
@@ -1335,6 +1348,7 @@ pub fn apply_orders(
                   order_in_value: order_in_value,
                   order_output: output,
                   sender: sender,
+                  sender_datum_hash_opt: sender_datum_hash_opt,
                   receiver: receiver,
                   receiver_datum_hash_opt: receiver_datum_hash_opt,
                   ratio_asset_a: ratio_asset_a,
@@ -1419,6 +1433,7 @@ test test_validate_swap_exact_in_with_no_fee_sharing() {
       order_in_value: order_in_value,
       order_output: order_output,
       sender: sender,
+      sender_datum_hash_opt: None,
       receiver: receiver,
       receiver_datum_hash_opt: None,
       a_to_b_direction: True,
@@ -1495,6 +1510,7 @@ test test_validate_swap_exact_in_with_fee_sharing() {
       order_in_value: order_in_value,
       order_output: order_output,
       sender: sender,
+      sender_datum_hash_opt: None,
       receiver: receiver,
       receiver_datum_hash_opt: None,
       a_to_b_direction: True,
@@ -1667,6 +1683,7 @@ test test_validate_deposit() {
       order_in_value: order_in_value,
       order_output: order_output,
       sender: sender,
+      sender_datum_hash_opt: None,
       receiver: receiver,
       receiver_datum_hash_opt: None,
       minimum_lp: amount_out,
@@ -1705,8 +1722,6 @@ pub fn validate_cancel_expired_orders(
             },
             ..
           } = order_input
-          let Output { address: order_out_address, value: order_out_value, .. } =
-            order_output
 
           expect order_in_datum: OrderDatum =
             when order_in_datum_raw is {
@@ -1714,16 +1729,18 @@ pub fn validate_cancel_expired_orders(
               _ -> utils.must_find_script_datum(datum_map, order_in_datum_raw)
             }
 
-          let OrderDatum { sender, expired_time_opt, .. } = order_in_datum
+          let OrderDatum { sender, sender_datum_hash_opt, expired_time_opt, .. } =
+            order_in_datum
 
-          let Address { payment_credential: sender_payment_cred, .. } = sender
-          // Only support for Pub Key sender because we don't know the datum of Script sender
-          expect VerificationKeyCredential(_) = sender_payment_cred
           expect Some(expired_time) = expired_time_opt
           expect and {
               expired_time < start_valid_time_range,
-              sender == order_out_address,
-              order_out_value == value.merge(order_in_value, weighted_tx_fee),
+              validate_order_output(
+                receiver: sender,
+                receiver_datum_hash_opt: sender_datum_hash_opt,
+                value: value.merge(order_in_value, weighted_tx_fee),
+                output: order_output,
+              ),
             }
           validate_cancel_expired_orders(
             order_inputs: rest_order_inputs,
