@@ -318,7 +318,7 @@ pub fn is_list_unique(list: List<a>) -> Bool {
   }
 }
 
-// must be a number, not be unknow and for only blockchain, this can be big.
+// this just good for only blockchain and can be big.
 pub fn calculate_weighed_fee(fee: Value, num: Int) -> Value {
   let fee_list = value.flatten(fee)
   let weighted_fee_list =
