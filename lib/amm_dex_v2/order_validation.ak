@@ -1,7 +1,6 @@
 use aiken/builtin
-use aiken/hash
 use aiken/list
-use aiken/transaction.{DatumHash, InlineDatum, Input, NoDatum, Output}
+use aiken/transaction.{InlineDatum, Input, NoDatum, Output}
 use aiken/transaction/credential.{
   Address, ScriptCredential, VerificationKeyCredential,
 }
@@ -893,16 +892,10 @@ pub fn validate_order_receiver(
   let Output { address: output_address, datum: raw_order_output_datum, .. } =
     output
   let is_valid_receiver_datum =
-    when receiver_datum_hash_opt is {
-      Some(receiver_datum_hash) ->
-        when raw_order_output_datum is {
-          NoDatum -> fail
-          DatumHash(dh) -> dh == receiver_datum_hash
-          InlineDatum(dat) ->
-            hash.blake2b_256(builtin.serialise_data(dat)) == receiver_datum_hash
-        }
-      None -> raw_order_output_datum == NoDatum
-    }
+    utils.is_valid_datum(
+      raw_datum: raw_order_output_datum,
+      datum_hash_opt: receiver_datum_hash_opt,
+    )
   and {
     receiver == output_address,
     is_valid_receiver_datum,
@@ -922,16 +915,10 @@ pub fn validate_order_output(
     ..
   } = output
   let is_valid_receiver_datum =
-    when receiver_datum_hash_opt is {
-      Some(receiver_datum_hash) ->
-        when raw_order_output_datum is {
-          NoDatum -> fail
-          DatumHash(dh) -> dh == receiver_datum_hash
-          InlineDatum(dat) ->
-            hash.blake2b_256(builtin.serialise_data(dat)) == receiver_datum_hash
-        }
-      None -> raw_order_output_datum == NoDatum
-    }
+    utils.is_valid_datum(
+      raw_datum: raw_order_output_datum,
+      datum_hash_opt: receiver_datum_hash_opt,
+    )
   and {
     receiver == output_address,
     is_valid_receiver_datum,
