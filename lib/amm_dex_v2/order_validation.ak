@@ -948,6 +948,7 @@ pub fn apply_orders(
   trading_fee_denominator: Int,
   order_hash: ByteArray,
   profit_sharing_opt: Option<(Int, Int)>,
+  end_valid_time_range: Int,
   order_inputs: List<Input>,
   order_outputs: List<Output>,
   pool_state: PoolState,
@@ -981,6 +982,7 @@ pub fn apply_orders(
             batcher_fee,
             output_ada,
             lp_asset: order_lp_asset,
+            expired_time_opt,
           } = order_in_datum
           expect and {
               // batcher_fee and output_ada must be positive
@@ -988,6 +990,10 @@ pub fn apply_orders(
               output_ada > 0,
               // lp_asset must be the same with processing Liquidity Pool
               lp_asset == order_lp_asset,
+              when expired_time_opt is {
+                None -> True
+                Some(expired_time) -> end_valid_time_range <= expired_time
+              },
             }
           let new_state =
             when order_step is {
@@ -1287,6 +1293,7 @@ pub fn apply_orders(
                         },
                         batcher_fee,
                         output_ada,
+                        expired_time_opt,
                       }
                     and {
                       expected_order_out_datum == order_out_datum,
@@ -1356,6 +1363,7 @@ pub fn apply_orders(
             trading_fee_denominator: trading_fee_denominator,
             order_hash: order_hash,
             profit_sharing_opt: profit_sharing_opt,
+            end_valid_time_range: end_valid_time_range,
             order_inputs: inputs,
             order_outputs: outputs,
             pool_state: new_state,
@@ -1674,4 +1682,57 @@ test test_validate_deposit() {
       pool_state: (1000000, 4000000, 1000000, 4000000, 2000000),
     )
   new_pool_state == (2000000, 4123112, 2000000, 4123112, 2867556)
+}
+
+pub fn validate_cancel_expired_orders(
+  order_inputs: List<Input>,
+  all_outputs: List<Output>,
+  weighted_tx_fee: Value,
+  datum_map: DatumMap,
+  start_valid_time_range: Int,
+) -> Bool {
+  when order_inputs is {
+    [] -> True
+    [order_input, ..rest_order_inputs] ->
+      when all_outputs is {
+        [] -> False
+        [order_output, ..rest_all_outputs] -> {
+          let Input {
+            output: Output {
+              value: order_in_value,
+              datum: order_in_datum_raw,
+              ..
+            },
+            ..
+          } = order_input
+          let Output { address: order_out_address, value: order_out_value, .. } =
+            order_output
+
+          expect order_in_datum: OrderDatum =
+            when order_in_datum_raw is {
+              InlineDatum(d) -> d
+              _ -> utils.must_find_script_datum(datum_map, order_in_datum_raw)
+            }
+
+          let OrderDatum { sender, expired_time_opt, .. } = order_in_datum
+
+          let Address { payment_credential: sender_payment_cred, .. } = sender
+          // Only support for Pub Key sender because we don't know the datum of Script sender
+          expect VerificationKeyCredential(_) = sender_payment_cred
+          expect Some(expired_time) = expired_time_opt
+          expect and {
+              expired_time < start_valid_time_range,
+              sender == order_out_address,
+              order_out_value == value.merge(order_in_value, weighted_tx_fee),
+            }
+          validate_cancel_expired_orders(
+            order_inputs: rest_order_inputs,
+            all_outputs: rest_all_outputs,
+            weighted_tx_fee: weighted_tx_fee,
+            datum_map: datum_map,
+            start_valid_time_range: start_valid_time_range,
+          )
+        }
+      }
+  }
 }

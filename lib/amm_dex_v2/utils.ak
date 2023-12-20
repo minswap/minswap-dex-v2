@@ -6,7 +6,9 @@ use aiken/hash
 use aiken/list
 use aiken/string
 use aiken/transaction.{Datum, DatumHash, InlineDatum, NoDatum}
-use aiken/transaction/value.{AssetName, PolicyId, ada_asset_name, ada_policy_id}
+use aiken/transaction/value.{
+  AssetName, PolicyId, Value, ada_asset_name, ada_policy_id,
+}
 use amm_dex_v2/types.{Asset, DatumMap}
 
 const minus_ascii_code = 45
@@ -314,4 +316,107 @@ pub fn is_list_unique(list: List<a>) -> Bool {
     [_] -> True
     [x, ..xs] -> !contains_element(xs, x) && is_list_unique(xs)
   }
+}
+
+pub fn calculate_weighed_fee(fee: Value, num: Int) -> Value {
+  let fee_list = value.flatten(fee)
+  let weighted_fee_list =
+    list.map(
+      fee_list,
+      fn(elem) {
+        let (pid, an, amount) = elem
+        let weighted_amount = -(amount / num + 1)
+        (pid, an, weighted_amount)
+      },
+    )
+  list.foldr(
+    weighted_fee_list,
+    value.zero(),
+    fn(elem, acc_val) {
+      let (policy_id, asset_name, quantity) = elem
+      value.add(acc_val, policy_id, asset_name, quantity)
+    },
+  )
+}
+
+test test_calculate_weighed_fee_with_ada_fee() {
+  let fee =
+    value.zero()
+      |> value.add(ada_policy_id, ada_asset_name, 960000)
+
+  let expected_weighted_fee_1 =
+    value.zero()
+      |> value.add(ada_policy_id, ada_asset_name, -160001)
+
+  let expected_weighted_fee_2 =
+    value.zero()
+      |> value.add(ada_policy_id, ada_asset_name, -137143)
+  and {
+    calculate_weighed_fee(fee, 6) == expected_weighted_fee_1,
+    calculate_weighed_fee(fee, 7) == expected_weighted_fee_2,
+  }
+}
+
+// Dont know when it happens but we need to double check
+test test_calculate_weighed_fee_with_custom_fee() {
+  let fee =
+    value.zero()
+      |> value.add(ada_policy_id, ada_asset_name, 960000)
+      |> value.add(
+           #"e16c2dc8ae937e8d3790c7fd7168d7b994621ba14ca11415f39fed72",
+           #"4d494e",
+           960000,
+         )
+
+  let expected_weighted_fee_1 =
+    value.zero()
+      |> value.add(ada_policy_id, ada_asset_name, -160001)
+      |> value.add(
+           #"e16c2dc8ae937e8d3790c7fd7168d7b994621ba14ca11415f39fed72",
+           #"4d494e",
+           -160001,
+         )
+
+  let expected_weighted_fee_2 =
+    value.zero()
+      |> value.add(ada_policy_id, ada_asset_name, -137143)
+      |> value.add(
+           #"e16c2dc8ae937e8d3790c7fd7168d7b994621ba14ca11415f39fed72",
+           #"4d494e",
+           -137143,
+         )
+  and {
+    calculate_weighed_fee(fee, 6) == expected_weighted_fee_1,
+    calculate_weighed_fee(fee, 7) == expected_weighted_fee_2,
+  }
+}
+
+test test_merge_value() {
+  let order_value =
+    value.zero()
+      |> value.add(ada_policy_id, ada_asset_name, 100000000)
+      |> value.add(
+           #"e16c2dc8ae937e8d3790c7fd7168d7b994621ba14ca11415f39fed72",
+           #"4d494e",
+           200000000,
+         )
+
+  let weighted_fee =
+    value.zero()
+      |> value.add(ada_policy_id, ada_asset_name, -160001)
+      |> value.add(
+           #"e16c2dc8ae937e8d3790c7fd7168d7b994621ba14ca11415f39fed72",
+           #"4d494e",
+           -1281281,
+         )
+
+  let expected_receive =
+    value.zero()
+      |> value.add(ada_policy_id, ada_asset_name, 99839999)
+      |> value.add(
+           #"e16c2dc8ae937e8d3790c7fd7168d7b994621ba14ca11415f39fed72",
+           #"4d494e",
+           198718719,
+         )
+  value.merge(order_value, weighted_fee) == expected_receive
 }

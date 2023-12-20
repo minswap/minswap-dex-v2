@@ -22,7 +22,7 @@ pub fn validate_batcher_license_and_find_batcher_address(
   validity_range: ValidityRange,
   license_policy_id: PolicyId,
   maximum_deadline_range: Int,
-) -> Address {
+) -> (Address, Int) {
   let Input {
     output: Output { address: batcher_address, value: license_value, .. },
     ..
@@ -46,7 +46,7 @@ pub fn validate_batcher_license_and_find_batcher_address(
       license_deadline >= end_valid_time_range,
       license_deadline <= start_valid_time_range + maximum_deadline_range,
     }
-  batcher_address
+  (batcher_address, end_valid_time_range)
 }
 
 fn find_pool_input_and_output_in_batching(
@@ -241,6 +241,7 @@ pub fn validate_batching(
   pool_input_ref: OutputReference,
   pool_in_datum: PoolDatum,
   batcher_address: Address,
+  end_valid_time_range: Int,
   input_indexes: List<Int>,
 ) -> Bool {
   let (pool_input, pool_output) =
@@ -320,6 +321,7 @@ pub fn validate_batching(
     trading_fee_denominator: trading_fee_denominator,
     order_hash: order_hash,
     profit_sharing_opt: profit_sharing,
+    end_valid_time_range: end_valid_time_range,
     order_inputs: sorted_user_inputs,
     order_outputs: user_outputs,
     pool_state: pool_state_in,
@@ -334,6 +336,7 @@ pub fn validate_swap_multi_routing(
   all_datums: DatumMap,
   pool_input_ref: OutputReference,
   batcher_address: Address,
+  end_valid_time_range: Int,
   routing_in_indexes: List<Int>,
   routing_out_indexes: List<Int>,
 ) -> Bool {
@@ -399,6 +402,7 @@ pub fn validate_swap_multi_routing(
     batcher_fee,
     output_ada,
     lp_asset: order_lp_asset,
+    expired_time_opt,
     ..
   } = order_in_datum
   expect and {
@@ -413,6 +417,10 @@ pub fn validate_swap_multi_routing(
       ),
       // lp_asset in OrderDatum must be the same with LP Asset of first Liquidity Pool in routing list
       pool_lp_asset == order_lp_asset,
+      when expired_time_opt is {
+        None -> True
+        Some(expired_time) -> end_valid_time_range <= expired_time
+      },
     }
   when order_step is {
     SwapMultiRouting(routings, minimum_receive) -> {
