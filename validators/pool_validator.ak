@@ -29,7 +29,7 @@ validator(
     expect ScriptContext { transaction, purpose: Spend(pool_input_ref) } =
       context
     when redeemer is {
-      Batching(input_indexes, license_index) -> {
+      Batching(input_indexes, orders_fee, license_index) -> {
         let Transaction { inputs, outputs, datums, validity_range, mint, .. } =
           transaction
         // Batching Redeemer provides @license_index which help save calculation cost
@@ -47,6 +47,8 @@ validator(
           !builtin.null_list(input_indexes),
           // Input indexes must be unique
           utils.is_list_unique(input_indexes),
+          // Batcher need to provide all Batcher fee for each order
+          utils.compare_list_length(input_indexes, orders_fee),
           // validate Transaction won't mint any assets
           value.is_zero(value.from_minted_value(mint)),
           pool_validation.validate_batching(
@@ -60,10 +62,16 @@ validator(
             batcher_address: batcher_address,
             end_valid_time_range: end_valid_time_range,
             input_indexes: input_indexes,
+            orders_fee: orders_fee,
           ),
         }
       }
-      MultiRouting(license_index, routing_in_indexes, routing_out_indexes) -> {
+      MultiRouting(
+        license_index,
+        routing_in_indexes,
+        routing_out_indexes,
+        order_fee,
+      ) -> {
         let routing_in_indexes_len = list.length(routing_in_indexes)
         let routing_out_indexes_len = list.length(routing_out_indexes)
         // validate routing_in_indexes and routing_out_indexes must be unique, 
@@ -99,6 +107,7 @@ validator(
             end_valid_time_range: end_valid_time_range,
             routing_in_indexes: routing_in_indexes,
             routing_out_indexes: routing_out_indexes,
+            order_fee: order_fee,
           ),
         }
       }

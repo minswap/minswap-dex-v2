@@ -243,6 +243,7 @@ pub fn validate_batching(
   batcher_address: Address,
   end_valid_time_range: Int,
   input_indexes: List<Int>,
+  orders_fee: List<Int>,
 ) -> Bool {
   let (pool_input, pool_output) =
     find_pool_input_and_output_in_batching(
@@ -324,6 +325,7 @@ pub fn validate_batching(
     end_valid_time_range: end_valid_time_range,
     order_inputs: sorted_user_inputs,
     order_outputs: user_outputs,
+    orders_fee: orders_fee,
     pool_state: pool_state_in,
   )
 }
@@ -339,6 +341,7 @@ pub fn validate_swap_multi_routing(
   end_valid_time_range: Int,
   routing_in_indexes: List<Int>,
   routing_out_indexes: List<Int>,
+  order_fee: Int,
 ) -> Bool {
   let batching_pools =
     find_multi_routing_pools(
@@ -399,16 +402,19 @@ pub fn validate_swap_multi_routing(
     receiver,
     receiver_datum_hash_opt,
     step: order_step,
-    batcher_fee,
+    max_batcher_fee,
     output_ada,
     lp_asset: order_lp_asset,
     expired_time_opt,
     ..
   } = order_in_datum
   expect and {
-      // batcher_fee and output_ada must be positive
-      batcher_fee > 0,
+      // max_batcher_fee and output_ada must be positive
+      max_batcher_fee > 0,
       output_ada > 0,
+      // Used Batcher Fee must be positive and less than or equal batcher fee
+      order_fee > 0,
+      order_fee <= max_batcher_fee,
       // Order Output must be returned to receiver and might have receiver_datum_hash_opt
       order_validation.validate_order_receiver(
         receiver: receiver,
@@ -435,8 +441,9 @@ pub fn validate_swap_multi_routing(
         order_in_value: order_in_value,
         order_out_value: order_out_value,
         minimum_receive: minimum_receive,
-        batcher_fee: batcher_fee,
+        max_batcher_fee: max_batcher_fee,
         output_ada: output_ada,
+        used_batcher_fee: order_fee,
       )
     }
     _ -> False

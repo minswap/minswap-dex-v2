@@ -132,6 +132,7 @@ There are 10 order types:
    - _io_ratio_numerator_ and _io_ratio_denominator_: the price ratio which users want to exchange
    - _hops_: The time PartialSwap can be executed.
    - _minimum_swap_amount_required_: The minimum amount which is required to swap per each execution time.
+   - _max_batcher_fee_each_time_: Maximum fee that batcher can take to execute each time
 - **WithdrawImbalance**: is used for withdrawing custom amounts of assets.
    - _ratio_asset_a_ and _ratio_asset_b_: The ratio of Asset A and Asset B users want to receive after withdrawing
    - _minimum_asset_a_: The minimum amount of asset A which users want to receive, The amount of Asset will be followed by the ratio (_received_asset_b_ = _minimum_asset_a_ * _ratio_asset_b_ / _ratio_asset_a_)
@@ -149,7 +150,7 @@ An Order Datum keeps information about Order Type and some other informations:
 - _receiver_datum_hash_: (optional) the datum hash of the output after order is processed.
 - _lp_asset_: The Liquidity Pool's LP Asset that the order will be applied to
 - _step_: The information about Order Type which we mentioned above
-- _batcher_fee_: The fee users have to pay to Batcher to execute batching transaction
+- _max_batcher_fee_: The maximum fee users have to pay to Batcher to execute batching transaction. The actual fee Batcher will take might be less than the maximum fee
 - _output_ada_: As known as Minimum ADA which users need to put to the Order, and these amounts will be returned with _receiver_ Output
 
 
@@ -313,12 +314,14 @@ Pool validator is the most important part in the system. It's responsible for gu
  - **Batching**:
    - _batcher_address_: Address of Batcher
    - _input_indexes_: The Indexes of Orders are processing (it will be explained below)
+   - _orders_fee_: The list of batcher fee will be deducted from orders' fund. Batcher can decide the amount of fee for each orders. The Batcher Fee can not exceed the maximum batcher fee.
    - _license_index_: Index of the UTxO holding Batcher License Token in the Transaction Inputs.
  - **MultiRouting**:
    - _batcher_address_: Address of Batcher
    - _license_index_: Index of the UTxO holding Batcher License Token in the Transaction Inputs.
    - _routing_in_indexes_: Indexes of Pool UTxOs in the Transaction Inputs
    - _routing_out_indexes_: Indexes of Pool UTxOs in the Transaction Outputs
+   - _order_fee_: Batcher fee will be deducted from orders' fund. Batcher can decide the amount of fee for each orders. The Batcher Fee can not exceed the maximum batcher fee.
  - **UpdatePoolFeeOrStakeCredential**:
    - _action_: There are 2 actions in this redeemer.
      - _UpdatePoolFee_: Allow Admin to update Liquidity Pool's fee (Trading Fee and Profit Sharing).

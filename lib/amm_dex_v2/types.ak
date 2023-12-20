@@ -42,11 +42,16 @@ pub type UpdatePoolFeeOrStakeCredentialAction {
 }
 
 pub type PoolRedeemer {
-  Batching { input_indexes: List<Int>, license_index: Int }
+  Batching {
+    input_indexes: List<Int>,
+    orders_fee: List<Int>,
+    license_index: Int,
+  }
   MultiRouting {
     license_index: Int,
     routing_in_indexes: List<Int>,
     routing_out_indexes: List<Int>,
+    order_fee: Int,
   }
   UpdatePoolFeeOrStakeCredential {
     action: UpdatePoolFeeOrStakeCredentialAction,
@@ -155,6 +160,8 @@ pub type OrderStep {
     hops: Int,
     // The minimum amount which is required to swap per each execution time
     minimum_swap_amount_required: Int,
+    // Maximum fee that batcher can take to execute each time 
+    max_batcher_fee_each_time: Int,
   }
   // WithdrawImbalance is used for withdrawing custom amount of assets.
   WithdrawImbalance {
@@ -189,8 +196,9 @@ pub type OrderDatum {
   lp_asset: Asset,
   // The information about Order Type
   step: OrderStep,
-  // The fee users have to pay to Batcher to execute batching transaction
-  batcher_fee: Int,
+  // The maximum fee users have to pay to Batcher to execute batching transaction
+  // The actual fee Batcher will take might be less than the maximum fee
+  max_batcher_fee: Int,
   // As known as Minimum ADA which users need to put to the Order, and these amounts will be returned with _receiver_ Output
   output_ada: Int,
   // Order Expired time. If the order is not executed after Expired Time, anyone can help the owner cancel it 
