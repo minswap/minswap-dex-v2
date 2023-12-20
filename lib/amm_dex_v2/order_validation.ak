@@ -799,22 +799,18 @@ pub fn get_swap_multi_amount_out(
   all_pools: List<BatchingPool>,
   all_routings: List<SwapRouting>,
 ) -> Int {
-  when all_pools is {
+  expect [pool, ..rest_pools] = all_pools
+  expect [routing, ..rest_routings] = all_routings
+  let amount_out = get_multi_routing_swap_amount_out(amount_in, pool, routing)
+  when rest_pools is {
     [] -> current_amount_out
-    [pool, ..pools] ->
-      when all_routings is {
-        [] -> current_amount_out
-        [routing, ..routings] -> {
-          let amount_out =
-            get_multi_routing_swap_amount_out(amount_in, pool, routing)
-          get_swap_multi_amount_out(
-            amount_in: amount_out,
-            current_amount_out: amount_out,
-            all_pools: pools,
-            all_routings: routings,
-          )
-        }
-      }
+    _ ->
+      get_swap_multi_amount_out(
+        amount_in: amount_out,
+        current_amount_out: amount_out,
+        all_pools: rest_pools,
+        all_routings: rest_routings,
+      )
   }
 }
 

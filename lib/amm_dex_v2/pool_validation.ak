@@ -444,6 +444,7 @@ pub fn validate_swap_multi_routing(
 }
 
 // TODO: We need carefully verify these logic below 
+// TODO: validate 2 pools or more
 fn find_multi_routing_pools(
   authen_policy_id: PolicyId,
   pool_auth_asset_name: AssetName,
