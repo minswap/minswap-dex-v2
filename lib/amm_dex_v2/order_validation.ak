@@ -1,9 +1,7 @@
 use aiken/builtin
 use aiken/list
 use aiken/transaction.{InlineDatum, Input, NoDatum, Output}
-use aiken/transaction/credential.{
-  Address, ScriptCredential, VerificationKeyCredential,
-}
+use aiken/transaction/credential.{Address, ScriptCredential}
 use aiken/transaction/value.{Value, ada_asset_name, ada_policy_id}
 use amm_dex_v2/math
 use amm_dex_v2/types.{
@@ -114,8 +112,6 @@ fn validate_swap_exact_in(
       )
     }
   } else {
-    let Address { payment_credential: sender_payment_cred, .. } = sender
-    expect VerificationKeyCredential(_) = sender_payment_cred
     expect and {
         kill_on_failed,
         validate_order_output(
@@ -230,8 +226,6 @@ fn validate_swap_exact_out(
       )
     }
   } else {
-    let Address { payment_credential: sender_payment_cred, .. } = sender
-    expect VerificationKeyCredential(_) = sender_payment_cred
     expect and {
         kill_on_failed,
         validate_order_output(
@@ -324,8 +318,6 @@ fn validate_deposit(
       total_liquidity + lp_amount,
     )
   } else {
-    let Address { payment_credential: sender_payment_cred, .. } = sender
-    expect VerificationKeyCredential(_) = sender_payment_cred
     expect and {
         kill_on_failed,
         validate_order_output(
@@ -403,8 +395,6 @@ fn validate_withdraw(
       total_liquidity - withdrawal_lp_amount,
     )
   } else {
-    let Address { payment_credential: sender_payment_cred, .. } = sender
-    expect VerificationKeyCredential(_) = sender_payment_cred
     expect and {
         kill_on_failed,
         validate_order_output(
@@ -503,8 +493,6 @@ fn validate_zap_out(
       )
     }
   } else {
-    let Address { payment_credential: sender_payment_cred, .. } = sender
-    expect VerificationKeyCredential(_) = sender_payment_cred
     expect and {
         kill_on_failed,
         validate_order_output(
@@ -708,8 +696,6 @@ fn validate_withdraw_imbalance(
       total_liquidity - withdrawal_lp_amount,
     )
   } else {
-    let Address { payment_credential: sender_payment_cred, .. } = sender
-    expect VerificationKeyCredential(_) = sender_payment_cred
     expect and {
         kill_on_failed,
         validate_order_output(
