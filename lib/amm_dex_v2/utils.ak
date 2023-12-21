@@ -146,10 +146,9 @@ pub fn do_bytearray_positive_int(byte_arr: ByteArray, idx: Int) -> Int {
     if idx == 0 {
       byte - zero_ascii_code
     } else {
-      do_bytearray_positive_int(
-        byte_arr,
-        idx - 1,
-      ) * 10 + ( byte - zero_ascii_code )
+      do_bytearray_positive_int(byte_arr, idx - 1) * 10 + (
+        byte - zero_ascii_code
+      )
     }
   }
 }
@@ -157,7 +156,8 @@ pub fn do_bytearray_positive_int(byte_arr: ByteArray, idx: Int) -> Int {
 test test_bytearray_to_positive_int() {
   let r1 = bytearray_to_positive_int(string.to_bytearray(@"123"))
   let r2 = bytearray_to_positive_int(string.to_bytearray(@"111"))
-  r1 == 123 && r2 == 111
+  let r3 = bytearray_to_positive_int(string.to_bytearray(@"9013"))
+  r1 == 123 && r2 == 111 && r3 == 9013
 }
 
 pub fn must_find_script_datum(datums: DatumMap, datum: Datum) -> Data {
