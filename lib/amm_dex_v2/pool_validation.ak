@@ -2,10 +2,7 @@ use aiken/builtin
 use aiken/dict
 use aiken/interval.{Finite, Interval, IntervalBound}
 use aiken/list
-use aiken/transaction.{
-  InlineDatum, Input, Output, OutputReference, ValidityRange,
-     Redeemer, ScriptPurpose, 
-}
+use aiken/transaction.{Input, Output, OutputReference, ValidityRange}
 use aiken/transaction/credential.{Address, PaymentCredential, ScriptCredential}
 use aiken/transaction/value.{
   AssetName, PolicyId, Value, ada_asset_name, ada_policy_id,

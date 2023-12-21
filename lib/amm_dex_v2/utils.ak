@@ -15,6 +15,8 @@ use amm_dex_v2/types.{Asset, DatumMap}
 
 const zero_ascii_code = 48
 
+const nine_ascii_code = 57
+
 // Policy ID managed by the Minswap team, used for minting Batcher License
 pub const license_policy_id =
   #"229013ad3a22d2d051a28e7f9214a32444ecf19998f7bdf0c2849862"
@@ -34,7 +36,6 @@ pub const admin_asset_name = #"4d5341"
 
 // Maximum expiration time of Batcher license from now (to prevent minting infinity license)
 pub const maximum_deadline_range = 77760000000
-const nine_ascii_code = 57
 
 // not optimize yet
 // pub fn int_to_bytearray(i: Int) -> ByteArray {
