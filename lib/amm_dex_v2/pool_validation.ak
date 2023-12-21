@@ -4,6 +4,7 @@ use aiken/interval.{Finite, Interval, IntervalBound}
 use aiken/list
 use aiken/transaction.{
   InlineDatum, Input, Output, OutputReference, ValidityRange,
+     Redeemer, ScriptPurpose, 
 }
 use aiken/transaction/credential.{Address, PaymentCredential, ScriptCredential}
 use aiken/transaction/value.{
@@ -115,10 +116,7 @@ fn get_batching_pool(
     profit_sharing_opt: pool_in_profit_sharing_opt,
   } = pool_in_datum
   expect pool_out_datum: PoolDatum =
-    when pool_out_datum_raw is {
-      InlineDatum(d) -> d
-      _ -> utils.must_find_script_datum(datum_map, pool_out_datum_raw)
-    }
+    utils.must_find_script_datum(datum_map, pool_out_datum_raw)
   let PoolDatum {
     asset_a: pool_out_asset_a,
     asset_b: pool_out_asset_b,
@@ -385,10 +383,7 @@ pub fn validate_swap_multi_routing(
   } = order_input
   let Output { value: order_out_value, .. } = order_output
   expect order_in_datum: OrderDatum =
-    when raw_order_in_datum is {
-      InlineDatum(d) -> d
-      _ -> utils.must_find_script_datum(all_datums, raw_order_in_datum)
-    }
+    utils.must_find_script_datum(all_datums, raw_order_in_datum)
   let OrderDatum {
     receiver,
     receiver_datum_hash_opt,
@@ -510,10 +505,7 @@ fn find_multi_routing_pools(
         pool_in_output
       let Output { address: pool_out_address, .. } = pool_out
       expect pool_in_datum: PoolDatum =
-        when pool_in_datum_raw is {
-          InlineDatum(d) -> d
-          _ -> utils.must_find_script_datum(datum_map, pool_in_datum_raw)
-        }
+        utils.must_find_script_datum(datum_map, pool_in_datum_raw)
 
       expect pool_in_address == pool_out_address
       get_batching_pool(
@@ -565,10 +557,7 @@ pub fn validate_update_pool_datum_or_stake_credential(
       value.quantity_of(admin_value, admin_policy_id, admin_asset_name) == 1,
     }
   expect pool_out_datum: PoolDatum =
-    when raw_pool_out_datum is {
-      InlineDatum(d) -> d
-      _ -> utils.must_find_script_datum(all_datums, raw_pool_out_datum)
-    }
+    utils.must_find_script_datum(all_datums, raw_pool_out_datum)
   let PoolDatum {
     asset_a: pool_in_asset_a,
     asset_b: pool_in_asset_b,
@@ -699,10 +688,7 @@ pub fn validate_withdraw_liquidity_share(
       pool_payment_credential: pool_in_payment_credential,
     )
   expect pool_out_datum: PoolDatum =
-    when raw_pool_out_datum is {
-      InlineDatum(d) -> d
-      _ -> utils.must_find_script_datum(all_datums, raw_pool_out_datum)
-    }
+    utils.must_find_script_datum(all_datums, raw_pool_out_datum)
   let admin_input = utils.list_at_index(all_inputs, admin_index)
   let Input { output: Output { value: admin_value, .. }, .. } = admin_input
   expect and {

@@ -11,7 +11,7 @@ use aiken/transaction/value.{
 }
 use amm_dex_v2/types.{Asset, DatumMap}
 
-const minus_ascii_code = 45
+// const minus_ascii_code = 45
 
 const zero_ascii_code = 48
 
@@ -36,28 +36,29 @@ pub const admin_asset_name = #"4d5341"
 pub const maximum_deadline_range = 77760000000
 const nine_ascii_code = 57
 
-pub fn int_to_bytearray(i: Int) -> ByteArray {
-  if i < 0 {
-    let negate_i = i * -1
-    bytearray.push(int_to_bytearray(negate_i), minus_ascii_code)
-  } else if builtin.quotient_integer(i, 10) == 0 {
-    digit_to_bytearray(i)
-  } else {
-    bytearray.concat(
-      int_to_bytearray(builtin.quotient_integer(i, 10)),
-      digit_to_bytearray(builtin.remainder_integer(i, 10)),
-    )
-  }
-}
+// not optimize yet
+// pub fn int_to_bytearray(i: Int) -> ByteArray {
+//   if i < 0 {
+//     let negate_i = i * -1
+//     bytearray.push(int_to_bytearray(negate_i), minus_ascii_code)
+//   } else if builtin.quotient_integer(i, 10) == 0 {
+//     digit_to_bytearray(i)
+//   } else {
+//     bytearray.concat(
+//       int_to_bytearray(builtin.quotient_integer(i, 10)),
+//       digit_to_bytearray(builtin.remainder_integer(i, 10)),
+//     )
+//   }
+// }
 
-test test_int_to_bytearray() {
-  let arr =
-    [-10, 0, 1, 10, 99]
-  list.all(
-    arr,
-    fn(x) { int_to_bytearray(x) == bytearray.from_string(cbor.diagnostic(x)) },
-  )
-}
+// test test_int_to_bytearray() {
+//   let arr =
+//     [-10, 0, 1, 10, 99]
+//   list.all(
+//     arr,
+//     fn(x) { int_to_bytearray(x) == bytearray.from_string(cbor.diagnostic(x)) },
+//   )
+// }
 
 fn digit_to_bytearray(i: Int) -> ByteArray {
   let empty_byte_array = #""
@@ -161,16 +162,58 @@ test test_bytearray_to_positive_int() {
 }
 
 pub fn must_find_script_datum(datums: DatumMap, datum: Datum) -> Data {
-  let datum_opt =
-    when datum is {
-      NoDatum -> None
-      DatumHash(dh) ->
-        datums
-          |> dict.get(dh)
-      InlineDatum(dat) -> Some(dat)
-    }
-  expect Some(datum) = datum_opt
-  datum
+  when datum is {
+    InlineDatum(dat) -> dat
+    DatumHash(dh) ->
+      datums
+        |> dict_must_get(dh)
+    NoDatum -> fail
+  }
+}
+
+/// rewrite dict.get
+/// convert `Option<value>` to `value`
+/// `None` -> `fail`
+fn dict_must_get(self: dict.Dict<key, value>, key: key) -> value {
+  dict_do_must_get(dict.to_list(self), key)
+}
+
+fn dict_do_must_get(self: List<(key, value)>, key k: key) -> value {
+  when self is {
+    [] -> fail
+    [(k2, v), ..rest] ->
+      if k == k2 {
+        v
+      } else {
+        dict_do_must_get(rest, k)
+      }
+  }
+}
+
+const foo = #"666f6f"
+
+const bar = #"626172"
+
+const baz = #"62617a"
+
+test dict_must_get_1() fail {
+  dict_must_get(dict.new(), foo) == ""
+}
+
+test dict_must_get_2() {
+  let m =
+    dict.new()
+      |> dict.insert(foo, "Aiken", bytearray.compare)
+      |> dict.insert(bar, "awesome", bytearray.compare)
+  dict_must_get(m, key: foo) == "Aiken"
+}
+
+test dict_must_get_3() fail {
+  let m =
+    dict.new()
+      |> dict.insert(foo, "Aiken", bytearray.compare)
+      |> dict.insert(bar, "awesome", bytearray.compare)
+  dict_must_get(m, key: baz) == ""
 }
 
 pub fn list_at_index(outputs: List<a>, payout_outputs_offset: Int) -> a {

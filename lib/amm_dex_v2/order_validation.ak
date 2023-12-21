@@ -1692,10 +1692,7 @@ pub fn validate_cancel_expired_orders(
             order_output
 
           expect order_in_datum: OrderDatum =
-            when order_in_datum_raw is {
-              InlineDatum(d) -> d
-              _ -> utils.must_find_script_datum(datum_map, order_in_datum_raw)
-            }
+            utils.must_find_script_datum(datum_map, order_in_datum_raw)
 
           let OrderDatum { sender, expired_time_opt, .. } = order_in_datum
 
