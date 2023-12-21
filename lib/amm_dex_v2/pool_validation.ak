@@ -31,7 +31,7 @@ pub fn validate_batcher_license_and_find_batcher_address(
     license_value
       |> value.tokens(license_policy_id)
       |> dict.to_list()
-  let license_deadline = utils.bytearray_to_int(license_asset_name)
+  let license_deadline = utils.bytearray_to_positive_int(license_asset_name)
   let Interval {
     lower_bound: IntervalBound { bound_type: lower_bound_type, .. },
     upper_bound: IntervalBound { bound_type: upper_bound_type, .. },

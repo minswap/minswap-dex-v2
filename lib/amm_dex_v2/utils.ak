@@ -34,6 +34,7 @@ pub const admin_asset_name = #"4d5341"
 
 // Maximum expiration time of Batcher license from now (to prevent minting infinity license)
 pub const maximum_deadline_range = 77760000000
+const nine_ascii_code = 57
 
 pub fn int_to_bytearray(i: Int) -> ByteArray {
   if i < 0 {
@@ -132,39 +133,30 @@ test test_compute_lp_asset_name() {
   lp_asset_name == #"82e2b1fd27a7712a1a9cf750dfbea1a5778611b20e06dd6a611df7a643f8cb75"
 }
 
-pub fn bytearray_to_int(byte_arr: ByteArray) -> Int {
+pub fn bytearray_to_positive_int(byte_arr: ByteArray) -> Int {
   let byte_len = bytearray.length(byte_arr)
-  do_bytearray_to_int(byte_arr, 0, 0, byte_len)
+  do_bytearray_positive_int(byte_arr, byte_len - 1)
 }
 
-pub fn do_bytearray_to_int(
-  byte_arr: ByteArray,
-  idx: Int,
-  acc: Int,
-  byte_len: Int,
-) -> Int {
-  if idx == byte_len {
-    acc
+pub fn do_bytearray_positive_int(byte_arr: ByteArray, idx: Int) -> Int {
+  let byte = builtin.index_bytearray(byte_arr, idx)
+  if byte < zero_ascii_code || byte > nine_ascii_code {
+    fail
   } else {
-    let byte = builtin.index_bytearray(byte_arr, idx)
-    if idx == 0 && byte == minus_ascii_code {
-      do_bytearray_to_int(byte_arr, idx + 1, acc, byte_len) * -1
-    } else if byte < zero_ascii_code || byte < zero_ascii_code || byte > zero_ascii_code + 9 {
-      fail
+    if idx == 0 {
+      byte - zero_ascii_code
     } else {
-      do_bytearray_to_int(
+      do_bytearray_positive_int(
         byte_arr,
-        idx + 1,
-        acc * 10 + ( byte - zero_ascii_code ),
-        byte_len,
-      )
+        idx - 1,
+      ) * 10 + ( byte - zero_ascii_code )
     }
   }
 }
 
-test test_bytearray_to_int() {
-  let r1 = bytearray_to_int(string.to_bytearray(@"123"))
-  let r2 = bytearray_to_int(string.to_bytearray(@"111"))
+test test_bytearray_to_positive_int() {
+  let r1 = bytearray_to_positive_int(string.to_bytearray(@"123"))
+  let r2 = bytearray_to_positive_int(string.to_bytearray(@"111"))
   r1 == 123 && r2 == 111
 }
 
