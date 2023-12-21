@@ -4,22 +4,18 @@ use aiken/transaction.{
   InlineDatum, Input, Mint, Output, OutputReference, ScriptContext, Spend,
   Transaction,
 }
-use aiken/transaction/value.{AssetName}
+use aiken/transaction/value
 use amm_dex_v2/pool_validation
 use amm_dex_v2/types.{
   Asset, AuthenRedeemer, CreatePool, FactoryDatum, FactoryRedeemer,
   MintFactoryAuthen, MintLiquidity,
 }
-use amm_dex_v2/utils
+use amm_dex_v2/utils.{factory_auth_asset_name}
 
 validator(
   // @out_ref is a Reference of an Unspent Transaction Output,
   // which will only be spent on `MintFactoryAuthen` redeemer to make sure this redeemer can only be called once
   out_ref: OutputReference,
-  // the legitimate Factory TokenName
-  factory_auth_asset_name: AssetName,
-  // the legitimate Pool TokenName
-  pool_auth_asset_name: AssetName,
 ) {
   fn validate_authen(redeemer: AuthenRedeemer, context: ScriptContext) {
     let ScriptContext { transaction, purpose } = context
@@ -125,8 +121,6 @@ validator(
           )
         value.from_minted_value(mint) == pool_validation.get_pool_creation_expected_mint(
           authen_policy_id: authen_policy_id,
-          factory_auth_asset_name: factory_auth_asset_name,
-          pool_auth_asset_name: pool_auth_asset_name,
           lp_asset_name: lp_asset_name,
         )
       }

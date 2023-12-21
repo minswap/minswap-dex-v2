@@ -4,13 +4,13 @@ use aiken/transaction.{
   InlineDatum, Input, Output, ScriptContext, Spend, Transaction,
 }
 use aiken/transaction/credential.{Address, ScriptCredential}
-use aiken/transaction/value.{AssetName, PolicyId, ada_asset_name, ada_policy_id}
+use aiken/transaction/value.{PolicyId, ada_asset_name, ada_policy_id}
 use amm_dex_v2/math
 use amm_dex_v2/pool_validation
 use amm_dex_v2/types.{
   Asset, FactoryDatum, FactoryRedeemer, PoolDatum, ValidatorHash,
 }
-use amm_dex_v2/utils
+use amm_dex_v2/utils.{factory_auth_asset_name, pool_auth_asset_name}
 
 validator(
   // The PolicyID of Authen Minting Policy
@@ -19,10 +19,6 @@ validator(
   pool_hash: ValidatorHash,
   // ValidationHash of Order Contract
   order_hash: ValidatorHash,
-  // the legitimate Factory TokenName
-  factory_auth_asset_name: AssetName,
-  // the legitimate Pool TokenName
-  pool_auth_asset_name: AssetName,
 ) {
   fn validate_factory(
     datum: FactoryDatum,
@@ -224,8 +220,6 @@ validator(
       pool_datum_order_hash == order_hash,
       value.from_minted_value(mint) == pool_validation.get_pool_creation_expected_mint(
         authen_policy_id: authen_policy_id,
-        factory_auth_asset_name: factory_auth_asset_name,
-        pool_auth_asset_name: pool_auth_asset_name,
         lp_asset_name: lp_asset_name,
       ),
       // Pool Value must only have necessary Token:

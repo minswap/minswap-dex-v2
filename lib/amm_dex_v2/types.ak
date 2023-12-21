@@ -60,74 +60,61 @@ pub type PoolRedeemer {
   WithdrawLiquidityShare { admin_index: Int }
 }
 
-pub type OrderDirection {
-  AToB
-  BToA
-}
-
 pub type SwapRouting {
   lp_asset: Asset,
-  direction: OrderDirection,
-}
-
-// Decide the Order behavior in case Order is not meet the slippage tolerance
-pub type OrderKillable {
-  // Order will be killed by Batcher and funds come back to the Sender
-  KillOnFailed
-  // Order is still pending and be ignored from the Batching transaction
-  PendingOnFailed
+  a_to_b_direction: Bool,
 }
 
 pub type OrderStep {
   // SwapExactIn is used for exchanging specific amount of single asset in the liquidity pool. 
   // The order will be executed if the received amount is greater than or equal to `minimum_receive`.
   SwapExactIn {
-    // The direction (AToB or BToA) of swap request. 
-    direction: OrderDirection,
+    // The AToB direction of swap request. True for A -> B and False for B -> A
+    a_to_b_direction: Bool,
     // Minimum amount of Asset Out which users want to receive after exchanging
     minimum_receive: Int,
     // Decide the Order behavior in case Order is not meet the slippage tolerance
-    killable: OrderKillable,
+    killable: Bool,
   }
   // StopLoss is used for exchanging specific amount of single asset in the liquidity pool.
   // The order will be executed if the received amount is less than or equal to `stop_loss_receive`
   StopLoss {
-    // The direction (AToB or BToA) of swap request.  
-    direction: OrderDirection,
+    // The AToB direction of swap request. True for A -> B and False for B -> A
+    a_to_b_direction: Bool,
     // Maximum amount of Asset Out which users want to receive after exchanging
     stop_loss_receive: Int,
     // Decide the Order behavior in case Order is not meet the slippage tolerance
-    killable: OrderKillable,
+    killable: Bool,
   }
   // OCO is used for exchanging specific amount of single asset in the liquidity pool.
   // The order will be executed if the received amount is less than or equal to `stop_loss_receive` 
   //    and greater than or equal to `minimum_receive`
   OCO {
-    // The direction (AToB or BToA) of swap request.  
-    direction: OrderDirection,
+    // The AToB direction of swap request. True for A -> B and False for B -> A
+    a_to_b_direction: Bool,
     // Minimum amount of Asset Out which users want to receive after exchanging
     minimum_receive: Int,
     // Maximum amount of Asset Out which users want to receive after exchanging
     stop_loss_receive: Int,
     // Decide the Order behavior in case Order is not meet the slippage tolerance
-    killable: OrderKillable,
+    killable: Bool,
   }
   // SwapExactOut is used for exchanging single asset in the liquidity pool and receiving the exact amout of other asset.
   // The order will be executed if the received amount is equal to `expected_receive`
   SwapExactOut {
-    // The direction (AToB or BToA) of swap request.  
-    direction: OrderDirection,
+    // The AToB direction of swap request. True for A -> B and False for B -> A 
+    a_to_b_direction: Bool,
     // The exact amount of Asset Out which users want to receive after exchanging
     expected_receive: Int,
     // Decide the Order behavior in case Order is not meet the slippage tolerance
-    killable: OrderKillable,
+    killable: Bool,
   }
   // Deposit is used for depositing pool's assets and receiving LP Token
   Deposit {
     // The minimum amount of LP Token which users want to receive after depositing
     minimum_lp: Int,
     // Decide the Order behavior in case Order is not meet the slippage tolerance
-    killable: OrderKillable,
+    killable: Bool,
   }
   // Withdraw is used for withdrawing pool's asset with the exact assets ratio of the liquidity pool at that time
   Withdraw {
@@ -136,23 +123,23 @@ pub type OrderStep {
     // minimum received amounts of Asset B
     minimum_asset_b: Int,
     // Decide the Order behavior in case Order is not meet the slippage tolerance
-    killable: OrderKillable,
+    killable: Bool,
   }
   // ZapOut is used for withdrawing a single pool asset out of Liquidity Pool
   ZapOut {
-    // The direction (AToB or BToA) of ZapOut request. `AToB` in case Asset Out is B and vice versa
-    direction: OrderDirection,
+    // The AToB direction of ZapOut request. `True` in case Asset Out is B and vice versa
+    a_to_b_direction: Bool,
     // Minimum amount of Asset Out which users want to receive after withdrawing
     minimum_receive: Int,
     // Decide the Order behavior in case Order is not meet the slippage tolerance
-    killable: OrderKillable,
+    killable: Bool,
   }
   // PartialSwap is used for exchange partial amount of single Asset. 
   // The Partial Swap can be executed multiple time if the price ratio is matched with user's expectation, 
   //   and the time is defined in `hops`
   PartialSwap {
-    // The direction (AToB or BToA) of swap request.
-    direction: OrderDirection,
+    // The AToB direction of swap request. True for A -> B and False for B -> A
+    a_to_b_direction: Bool,
     // the price ratio which users want to exchange
     io_ratio_numerator: Int,
     io_ratio_denominator: Int,
@@ -173,7 +160,7 @@ pub type OrderStep {
     //    (_received_asset_b_ = _minimum_asset_a_ * _ratio_asset_b_ / _ratio_asset_a_)
     minimum_asset_a: Int,
     // Decide the Order behavior in case Order is not meet the slippage tolerance
-    killable: OrderKillable,
+    killable: Bool,
   }
   // SwapMultiRouting is used for exchanging specific amount of single asset across multiple Liquidity Pools.
   SwapMultiRouting {

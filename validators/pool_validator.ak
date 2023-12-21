@@ -1,7 +1,8 @@
 use aiken/builtin
+use aiken/dict
 use aiken/list
 use aiken/transaction.{ScriptContext, Spend, Transaction}
-use aiken/transaction/value.{AssetName, PolicyId}
+use aiken/transaction/value.{PolicyId}
 use amm_dex_v2/pool_validation
 use amm_dex_v2/types.{
   Batching, MultiRouting, PoolDatum, PoolRedeemer,
@@ -12,17 +13,9 @@ use amm_dex_v2/utils
 validator(
   // The PolicyID of Authen Minting Policy
   authen_policy_id: PolicyId,
-  // Policy ID managed by the Minswap team, used for minting Batcher License and Admin License assets
-  license_policy_id: PolicyId,
-  // the legitimate Pool TokenName
-  pool_auth_asset_name: AssetName,
-  // The TokenName of Admin Asset, determined by Minswap team
-  admin_asset_name: AssetName,
-  // Maximum expiration time of Batcher license from now (to prevent minting infinity license)
-  maximum_deadline_range: Int,
 ) {
   fn validate_pool(
-    datum: PoolDatum,
+    raw_datum: Data,
     redeemer: PoolRedeemer,
     context: ScriptContext,
   ) {
@@ -30,6 +23,7 @@ validator(
       context
     when redeemer is {
       Batching(input_indexes, orders_fee, license_index) -> {
+        expect datum: PoolDatum = raw_datum
         let Transaction { inputs, outputs, datums, validity_range, mint, .. } =
           transaction
         // Batching Redeemer provides @license_index which help save calculation cost
@@ -39,8 +33,6 @@ validator(
           pool_validation.validate_batcher_license_and_find_batcher_address(
             license_input: license_input,
             validity_range: validity_range,
-            license_policy_id: license_policy_id,
-            maximum_deadline_range: maximum_deadline_range,
           )
         and {
           // Input indexes must not be empty list
@@ -53,7 +45,6 @@ validator(
           value.is_zero(value.from_minted_value(mint)),
           pool_validation.validate_batching(
             authen_policy_id: authen_policy_id,
-            pool_auth_asset_name: pool_auth_asset_name,
             all_inputs: inputs,
             all_outputs: outputs,
             all_datums: datums,
@@ -90,15 +81,12 @@ validator(
           pool_validation.validate_batcher_license_and_find_batcher_address(
             license_input: license_input,
             validity_range: validity_range,
-            license_policy_id: license_policy_id,
-            maximum_deadline_range: maximum_deadline_range,
           )
         and {
           // validate Transaction won't mint any assets
           value.is_zero(value.from_minted_value(mint)),
           pool_validation.validate_swap_multi_routing(
             authen_policy_id: authen_policy_id,
-            pool_auth_asset_name: pool_auth_asset_name,
             all_inputs: inputs,
             all_outputs: outputs,
             all_datums: datums,
@@ -112,43 +100,49 @@ validator(
         }
       }
       UpdatePoolFeeOrStakeCredential(action, admin_index) -> {
+        expect datum: PoolDatum = raw_datum
         let Transaction { inputs, outputs, datums, redeemers, mint, .. } =
           transaction
         expect Some(pool_input) = transaction.find_input(inputs, pool_input_ref)
-        pool_validation.validate_update_pool_datum_or_stake_credential(
-          action: action,
-          authen_policy_id: authen_policy_id,
-          pool_auth_asset_name: pool_auth_asset_name,
-          license_policy_id: license_policy_id,
-          admin_asset_name: admin_asset_name,
-          admin_index: admin_index,
-          pool_input: pool_input,
-          pool_in_datum: datum,
-          all_inputs: inputs,
-          all_outputs: outputs,
-          all_datums: datums,
-          all_mints: mint,
-          all_redeemers: redeemers,
-        )
+        and {
+          // Transaction contain only 1 Script (Pool Script). 
+          // It will avoid bad Admin can steal money from Order Contract.
+          dict.size(redeemers) == 1,
+          // This Redeemer won't mint anything 
+          value.is_zero(value.from_minted_value(mint)),
+          pool_validation.validate_update_pool_datum_or_stake_credential(
+            action: action,
+            authen_policy_id: authen_policy_id,
+            admin_index: admin_index,
+            pool_input: pool_input,
+            pool_in_datum: datum,
+            all_inputs: inputs,
+            all_outputs: outputs,
+            all_datums: datums,
+          ),
+        }
       }
       WithdrawLiquidityShare(admin_index) -> {
+        expect datum: PoolDatum = raw_datum
         let Transaction { inputs, outputs, datums, redeemers, mint, .. } =
           transaction
         expect Some(pool_input) = transaction.find_input(inputs, pool_input_ref)
-        pool_validation.validate_withdraw_liquidity_share(
-          authen_policy_id: authen_policy_id,
-          pool_auth_asset_name: pool_auth_asset_name,
-          license_policy_id: license_policy_id,
-          admin_asset_name: admin_asset_name,
-          admin_index: admin_index,
-          pool_input: pool_input,
-          pool_in_datum: datum,
-          all_inputs: inputs,
-          all_outputs: outputs,
-          all_datums: datums,
-          all_mints: mint,
-          all_redeemers: redeemers,
-        )
+        and {
+          // Transaction contain only 1 Script (Pool Script). 
+          // It will avoid bad Admin can steal money from Order Contract.
+          dict.size(redeemers) == 1,
+          // This Redeemer won't mint anything 
+          value.is_zero(value.from_minted_value(mint)),
+          pool_validation.validate_withdraw_liquidity_share(
+            authen_policy_id: authen_policy_id,
+            admin_index: admin_index,
+            pool_input: pool_input,
+            pool_in_datum: datum,
+            all_inputs: inputs,
+            all_outputs: outputs,
+            all_datums: datums,
+          ),
+        }
       }
     }
   }
