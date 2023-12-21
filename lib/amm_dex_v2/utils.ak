@@ -142,9 +142,7 @@ pub fn bytearray_to_positive_int(byte_arr: ByteArray) -> Int {
 
 pub fn do_bytearray_positive_int(byte_arr: ByteArray, idx: Int) -> Int {
   let byte = builtin.index_bytearray(byte_arr, idx)
-  if byte < zero_ascii_code || byte > nine_ascii_code {
-    fail
-  } else {
+  if zero_ascii_code <= byte && byte <= nine_ascii_code {
     if idx == 0 {
       byte - zero_ascii_code
     } else {
@@ -152,6 +150,8 @@ pub fn do_bytearray_positive_int(byte_arr: ByteArray, idx: Int) -> Int {
         byte - zero_ascii_code
       )
     }
+  } else {
+    fail
   }
 }
 
@@ -181,13 +181,13 @@ fn dict_must_get(self: dict.Dict<key, value>, key: key) -> value {
 
 fn dict_do_must_get(self: List<(key, value)>, key k: key) -> value {
   when self is {
-    [] -> fail
     [(k2, v), ..rest] ->
       if k == k2 {
         v
       } else {
         dict_do_must_get(rest, k)
       }
+    [] -> fail
   }
 }
 
@@ -278,18 +278,17 @@ pub fn zip_with(
   predicate: fn(a, b) -> result,
 ) -> List<result> {
   when arr1 is {
+    [x, ..xs] ->
+      when arr2 is {
+        [y, ..ys] ->
+          [predicate(x, y), ..zip_with(xs, ys, predicate)]
+        [] -> fail
+      }
     [] ->
       when arr2 is {
         [] ->
           []
         _ -> fail
-      }
-    [x, ..xs] ->
-      when arr2 is {
-        [] ->
-          []
-        [y, ..ys] ->
-          [predicate(x, y), ..zip_with(xs, ys, predicate)]
       }
   }
 }
