@@ -146,6 +146,7 @@ An Order Datum keeps information about Order Type and some other informations:
 
 
 - _sender_: The address of order's creator, only sender can cancel the order
+- _sender_datum_hash_: (optional) the datum hash of the output after cancelling order by anyone or killing by batcher.
 - _receiver_: The address which receives the funds after order is processed
 - _receiver_datum_hash_: (optional) the datum hash of the output after order is processed.
 - _lp_asset_: The Liquidity Pool's LP Asset that the order will be applied to
@@ -159,6 +160,7 @@ An Order Datum keeps information about Order Type and some other informations:
 
 - **ApplyOrder**
 - **CancelOrder**
+- **TODO: CancelExpiredOrderByAnyone**
 
 
 #### 3.3.2.4 Validation
