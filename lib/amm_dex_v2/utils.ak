@@ -240,6 +240,7 @@ pub fn zip_with(
   expect [x, ..xs] = arr1
   expect [y, ..ys] = arr2
   if xs == [] {
+    expect [] = ys
     [predicate(x, y)]
   } else {
     [predicate(x, y), ..zip_with(xs, ys, predicate)]
