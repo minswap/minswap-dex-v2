@@ -2,7 +2,9 @@ use aiken/builtin
 use aiken/hash
 use aiken/list
 use aiken/transaction.{Datum, DatumHash, InlineDatum, Input, NoDatum, Output}
-use aiken/transaction/credential.{Address, ScriptCredential}
+use aiken/transaction/credential.{
+  Address, ScriptCredential, VerificationKeyCredential,
+}
 use aiken/transaction/value.{Value, ada_asset_name, ada_policy_id}
 use amm_dex_v2/math
 use amm_dex_v2/types.{
@@ -938,12 +940,17 @@ pub fn validate_order_receiver(
 ) -> Bool {
   let Output { address: output_address, datum: raw_order_output_datum, .. } =
     output
-  and {
-    receiver == output_address,
-    is_valid_datum(
-      raw_datum: raw_order_output_datum,
-      datum_hash_opt: receiver_datum_hash_opt,
-    ),
+  let Address { payment_credential: receiver_payment_cred, .. } = receiver
+  let is_correct_address = receiver == output_address
+  when receiver_payment_cred is {
+    VerificationKeyCredential(_) -> is_correct_address
+    ScriptCredential(_) -> and {
+        is_correct_address,
+        is_valid_datum(
+          raw_datum: raw_order_output_datum,
+          datum_hash_opt: receiver_datum_hash_opt,
+        ),
+      }
   }
 }
 
@@ -960,13 +967,20 @@ fn validate_order_output(
     ..
   } = output
 
-  and {
-    receiver == output_address,
-    is_valid_datum(
-      raw_datum: raw_order_output_datum,
-      datum_hash_opt: receiver_datum_hash_opt,
-    ),
-    value == output_value,
+  let is_correct_address_and_value = and {
+      receiver == output_address,
+      value == output_value,
+    }
+  let Address { payment_credential: receiver_payment_cred, .. } = receiver
+  when receiver_payment_cred is {
+    VerificationKeyCredential(_) -> is_correct_address_and_value
+    ScriptCredential(_) -> and {
+        is_correct_address_and_value,
+        is_valid_datum(
+          raw_datum: raw_order_output_datum,
+          datum_hash_opt: receiver_datum_hash_opt,
+        ),
+      }
   }
 }
 
