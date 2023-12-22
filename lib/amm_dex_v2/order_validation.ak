@@ -1,6 +1,7 @@
 use aiken/builtin
+use aiken/hash
 use aiken/list
-use aiken/transaction.{ InlineDatum, Input, NoDatum, Output}
+use aiken/transaction.{Datum, DatumHash, InlineDatum, Input, NoDatum, Output}
 use aiken/transaction/credential.{Address, ScriptCredential}
 use aiken/transaction/value.{Value, ada_asset_name, ada_policy_id}
 use amm_dex_v2/math
@@ -919,6 +920,17 @@ pub fn validate_swap_multi_routing_order(
   }
 }
 
+fn is_valid_datum(
+  raw_datum: Datum,
+  datum_hash_opt: Option<CustomDatumHash>,
+) -> Bool {
+  when raw_datum is {
+    NoDatum -> None
+    DatumHash(dh) -> Some(dh)
+    InlineDatum(dat) -> Some(hash.blake2b_256(builtin.serialise_data(dat)))
+  } == datum_hash_opt
+}
+
 pub fn validate_order_receiver(
   receiver: Address,
   receiver_datum_hash_opt: Option<CustomDatumHash>,
@@ -928,7 +940,7 @@ pub fn validate_order_receiver(
     output
   and {
     receiver == output_address,
-    utils.is_valid_datum(
+    is_valid_datum(
       raw_datum: raw_order_output_datum,
       datum_hash_opt: receiver_datum_hash_opt,
     ),
@@ -950,7 +962,7 @@ fn validate_order_output(
 
   and {
     receiver == output_address,
-    utils.is_valid_datum(
+    is_valid_datum(
       raw_datum: raw_order_output_datum,
       datum_hash_opt: receiver_datum_hash_opt,
     ),
@@ -1045,8 +1057,8 @@ pub fn apply_orders(
         validate_swap_exact_in(
           order_in_value: order_in_value,
           order_output: output,
-          sender_datum_hash_opt: sender_datum_hash_opt,
           sender: sender,
+          sender_datum_hash_opt: sender_datum_hash_opt,
           receiver: receiver,
           receiver_datum_hash_opt: receiver_datum_hash_opt,
           a_to_b_direction: a_to_b_direction,
@@ -1248,7 +1260,7 @@ pub fn apply_orders(
             let expected_order_out_datum =
               OrderDatum {
                 sender,
-          sender_datum_hash_opt: sender_datum_hash_opt,
+                sender_datum_hash_opt,
                 receiver,
                 receiver_datum_hash_opt,
                 lp_asset: order_lp_asset,
@@ -1698,19 +1710,16 @@ pub fn validate_cancel_expired_orders(
           let OrderDatum { sender, sender_datum_hash_opt, expired_time_opt, .. } =
             order_in_datum
 
-          let is_valid_receiver_datum =
-            utils.is_valid_datum(
-              raw_datum: raw_order_output_datum,
-              datum_hash_opt: sender_datum_hash_opt,
-            )
-
           expect Some(expired_time) = expired_time_opt
           expect and {
               expired_time < start_valid_time_range,
               sender == order_out_address,
               // TODO: less fee for this
               order_out_value == value.merge(order_in_value, weighted_tx_fee),
-              is_valid_receiver_datum,
+              is_valid_datum(
+                raw_datum: raw_order_output_datum,
+                datum_hash_opt: sender_datum_hash_opt,
+              ),
             }
           validate_cancel_expired_orders(
             order_inputs: rest_order_inputs,

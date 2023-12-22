@@ -9,7 +9,7 @@ use aiken/transaction.{Datum, DatumHash, InlineDatum, NoDatum}
 use aiken/transaction/value.{
   AssetName, PolicyId, Value, ada_asset_name, ada_policy_id,
 }
-use amm_dex_v2/types.{Asset, CustomDatumHash, DatumMap}
+use amm_dex_v2/types.{Asset, DatumMap}
 
 const minus_ascii_code = 45
 
@@ -440,15 +440,4 @@ test test_merge_value() {
            198718719,
          )
   value.merge(order_value, weighted_fee) == expected_receive
-}
-
-pub fn is_valid_datum(
-  raw_datum: Datum,
-  datum_hash_opt: Option<CustomDatumHash>,
-) -> Bool {
-  when raw_datum is {
-    NoDatum -> None
-    DatumHash(dh) -> Some(dh)
-    InlineDatum(dat) -> Some(hash.blake2b_256(builtin.serialise_data(dat)))
-  } == datum_hash_opt
 }
