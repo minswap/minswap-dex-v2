@@ -53,24 +53,30 @@ pub fn calculate_earned_fee_in_fraction(
   amount_in_denominator: Int,
   trading_fee_numerator: Int,
   trading_fee_denominator: Int,
-  fee_sharing_numerator: Int,
-  fee_sharing_denominator: Int,
+  fee_sharing_opt: Option<(Int, Int)>,
 ) -> Int {
-  amount_in_numerator * trading_fee_numerator * fee_sharing_numerator / (
-    amount_in_denominator * trading_fee_denominator * fee_sharing_denominator
-  )
+  when fee_sharing_opt is {
+    None -> 0
+    Some((fee_sharing_numerator, fee_sharing_denominator)) ->
+      amount_in_numerator * trading_fee_numerator * fee_sharing_numerator / (
+        amount_in_denominator * trading_fee_denominator * fee_sharing_denominator
+      )
+  }
 }
 
 pub fn calculate_earned_fee_in(
   amount_in: Int,
   trading_fee_numerator: Int,
   trading_fee_denominator: Int,
-  fee_sharing_numerator: Int,
-  fee_sharing_denominator: Int,
+  fee_sharing_opt: Option<(Int, Int)>,
 ) -> Int {
-  amount_in * trading_fee_numerator * fee_sharing_numerator / (
-    trading_fee_denominator * fee_sharing_denominator
-  )
+  when fee_sharing_opt is {
+    None -> 0
+    Some((fee_sharing_numerator, fee_sharing_denominator)) ->
+      amount_in * trading_fee_numerator * fee_sharing_numerator / (
+        trading_fee_denominator * fee_sharing_denominator
+      )
+  }
 }
 
 test test_calculate_earned_fee_in() {
@@ -79,8 +85,7 @@ test test_calculate_earned_fee_in() {
       amount_in: 100000000,
       trading_fee_numerator: 3,
       trading_fee_denominator: 1000,
-      fee_sharing_numerator: 1,
-      fee_sharing_denominator: 6,
+      fee_sharing_opt: Some((1, 6)),
     ) == 50000
   let y =
     calculate_earned_fee_in_fraction(
@@ -88,8 +93,7 @@ test test_calculate_earned_fee_in() {
       amount_in_denominator: 1,
       trading_fee_numerator: 3,
       trading_fee_denominator: 1000,
-      fee_sharing_numerator: 1,
-      fee_sharing_denominator: 6,
+      fee_sharing_opt: Some((1, 6)),
     ) == 50000
   x && y
 }
@@ -230,18 +234,13 @@ pub fn calculate_deposit_amount(
         trading_fee_denominator: trading_fee_denominator,
       )
     let earned_fee_a =
-      when profit_sharing_opt is {
-        Some((fee_sharing_numerator, fee_sharing_denominator)) ->
-          calculate_earned_fee_in_fraction(
-            amount_in_numerator: swap_amount_a_numerator,
-            amount_in_denominator: swap_amount_a_denominator,
-            trading_fee_numerator: trading_fee_numerator,
-            trading_fee_denominator: trading_fee_denominator,
-            fee_sharing_numerator: fee_sharing_numerator,
-            fee_sharing_denominator: fee_sharing_denominator,
-          )
-        None -> 0
-      }
+      calculate_earned_fee_in_fraction(
+        amount_in_numerator: swap_amount_a_numerator,
+        amount_in_denominator: swap_amount_a_denominator,
+        trading_fee_numerator: trading_fee_numerator,
+        trading_fee_denominator: trading_fee_denominator,
+        fee_sharing_opt: profit_sharing_opt,
+      )
     let lp_amount =
       ( amount_b * receive_amount_b_denominator + receive_amount_b_numerator ) * total_liquidity / (
         reserve_b * receive_amount_b_denominator - receive_amount_b_numerator
@@ -268,18 +267,13 @@ pub fn calculate_deposit_amount(
         trading_fee_denominator: trading_fee_denominator,
       )
     let earned_fee_b =
-      when profit_sharing_opt is {
-        Some((fee_sharing_numerator, fee_sharing_denominator)) ->
-          calculate_earned_fee_in_fraction(
-            amount_in_numerator: swap_amount_b_numerator,
-            amount_in_denominator: swap_amount_b_denominator,
-            trading_fee_numerator: trading_fee_numerator,
-            trading_fee_denominator: trading_fee_denominator,
-            fee_sharing_numerator: fee_sharing_numerator,
-            fee_sharing_denominator: fee_sharing_denominator,
-          )
-        None -> 0
-      }
+      calculate_earned_fee_in_fraction(
+        amount_in_numerator: swap_amount_b_numerator,
+        amount_in_denominator: swap_amount_b_denominator,
+        trading_fee_numerator: trading_fee_numerator,
+        trading_fee_denominator: trading_fee_denominator,
+        fee_sharing_opt: profit_sharing_opt,
+      )
     let lp_amount =
       ( amount_a * receive_amount_a_denominator + receive_amount_a_numerator ) * total_liquidity / (
         reserve_a * receive_amount_a_denominator - receive_amount_a_numerator
@@ -330,17 +324,12 @@ pub fn calculate_zap_out(
         trading_fee_denominator: trading_fee_denominator,
       )
     let earned_fee_a =
-      when profit_sharing_opt is {
-        Some((fee_sharing_numerator, fee_sharing_denominator)) ->
-          calculate_earned_fee_in(
-            amount_in: withdrawal_asset_a_amount,
-            trading_fee_numerator: trading_fee_numerator,
-            trading_fee_denominator: trading_fee_denominator,
-            fee_sharing_numerator: fee_sharing_numerator,
-            fee_sharing_denominator: fee_sharing_denominator,
-          )
-        None -> 0
-      }
+      calculate_earned_fee_in(
+        amount_in: withdrawal_asset_a_amount,
+        trading_fee_numerator: trading_fee_numerator,
+        trading_fee_denominator: trading_fee_denominator,
+        fee_sharing_opt: profit_sharing_opt,
+      )
     (earned_fee_a, 0, withdrawal_asset_b_amount + extra_amount_out)
   } else {
     let extra_amount_out =
@@ -352,17 +341,12 @@ pub fn calculate_zap_out(
         trading_fee_denominator: trading_fee_denominator,
       )
     let earned_fee_b =
-      when profit_sharing_opt is {
-        Some((fee_sharing_numerator, fee_sharing_denominator)) ->
-          calculate_earned_fee_in(
-            amount_in: withdrawal_asset_b_amount,
-            trading_fee_numerator: trading_fee_numerator,
-            trading_fee_denominator: trading_fee_denominator,
-            fee_sharing_numerator: fee_sharing_numerator,
-            fee_sharing_denominator: fee_sharing_denominator,
-          )
-        None -> 0
-      }
+      calculate_earned_fee_in(
+        amount_in: withdrawal_asset_b_amount,
+        trading_fee_numerator: trading_fee_numerator,
+        trading_fee_denominator: trading_fee_denominator,
+        fee_sharing_opt: profit_sharing_opt,
+      )
     (0, earned_fee_b, withdrawal_asset_a_amount + extra_amount_out)
   }
 }
@@ -449,17 +433,12 @@ pub fn calculate_withdraw_imbalance(
         trading_fee_denominator: trading_fee_denominator,
       )
     let earned_fee_a =
-      when profit_sharing_opt is {
-        Some((fee_sharing_numerator, fee_sharing_denominator)) ->
-          calculate_earned_fee_in(
-            amount_in: swap_amount_a,
-            trading_fee_numerator: trading_fee_numerator,
-            trading_fee_denominator: trading_fee_denominator,
-            fee_sharing_numerator: fee_sharing_numerator,
-            fee_sharing_denominator: fee_sharing_denominator,
-          )
-        None -> 0
-      }
+      calculate_earned_fee_in(
+        amount_in: swap_amount_a,
+        trading_fee_numerator: trading_fee_numerator,
+        trading_fee_denominator: trading_fee_denominator,
+        fee_sharing_opt: profit_sharing_opt,
+      )
     (
       earned_fee_a,
       0,
@@ -489,17 +468,12 @@ pub fn calculate_withdraw_imbalance(
         trading_fee_denominator: trading_fee_denominator,
       )
     let earned_fee_b =
-      when profit_sharing_opt is {
-        Some((fee_sharing_numerator, fee_sharing_denominator)) ->
-          calculate_earned_fee_in(
-            amount_in: swap_amount_b,
-            trading_fee_numerator: trading_fee_numerator,
-            trading_fee_denominator: trading_fee_denominator,
-            fee_sharing_numerator: fee_sharing_numerator,
-            fee_sharing_denominator: fee_sharing_denominator,
-          )
-        None -> 0
-      }
+      calculate_earned_fee_in(
+        amount_in: swap_amount_b,
+        trading_fee_numerator: trading_fee_numerator,
+        trading_fee_denominator: trading_fee_denominator,
+        fee_sharing_opt: profit_sharing_opt,
+      )
     (
       0,
       earned_fee_b,

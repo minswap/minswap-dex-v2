@@ -15,6 +15,26 @@ const minus_ascii_code = 45
 
 const zero_ascii_code = 48
 
+// Policy ID managed by the Minswap team, used for minting Batcher License
+pub const license_policy_id =
+  #"229013ad3a22d2d051a28e7f9214a32444ecf19998f7bdf0c2849862"
+
+// the legitimate Pool TokenName
+pub const pool_auth_asset_name = #"4d5350"
+
+// the legitimate Factory TokenName
+pub const factory_auth_asset_name = #"4d53"
+
+// Policy ID managed by the Minswap team, used for minting Admin License assets
+pub const admin_policy_id =
+  #"229013ad3a22d2d051a28e7f9214a32444ecf19998f7bdf0c2849862"
+
+// The TokenName of Admin Asset, determined by Minswap team
+pub const admin_asset_name = #"4d5341"
+
+// Maximum expiration time of Batcher license from now (to prevent minting infinity license)
+pub const maximum_deadline_range = 77760000000
+
 pub fn int_to_bytearray(i: Int) -> ByteArray {
   if i < 0 {
     let negate_i = i * -1
