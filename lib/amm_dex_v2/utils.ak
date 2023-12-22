@@ -1,6 +1,5 @@
 use aiken/builtin
 use aiken/bytearray
-use aiken/cbor
 use aiken/dict
 use aiken/hash
 use aiken/list
@@ -10,8 +9,6 @@ use aiken/transaction/value.{
   AssetName, PolicyId, Value, ada_asset_name, ada_policy_id,
 }
 use amm_dex_v2/types.{Asset, DatumMap}
-
-// const minus_ascii_code = 45
 
 const zero_ascii_code = 48
 
@@ -36,44 +33,6 @@ pub const admin_asset_name = #"4d5341"
 
 // Maximum expiration time of Batcher license from now (to prevent minting infinity license)
 pub const maximum_deadline_range = 77760000000
-
-// not optimize yet
-// pub fn int_to_bytearray(i: Int) -> ByteArray {
-//   if i < 0 {
-//     let negate_i = i * -1
-//     bytearray.push(int_to_bytearray(negate_i), minus_ascii_code)
-//   } else if builtin.quotient_integer(i, 10) == 0 {
-//     digit_to_bytearray(i)
-//   } else {
-//     bytearray.concat(
-//       int_to_bytearray(builtin.quotient_integer(i, 10)),
-//       digit_to_bytearray(builtin.remainder_integer(i, 10)),
-//     )
-//   }
-// }
-
-// test test_int_to_bytearray() {
-//   let arr =
-//     [-10, 0, 1, 10, 99]
-//   list.all(
-//     arr,
-//     fn(x) { int_to_bytearray(x) == bytearray.from_string(cbor.diagnostic(x)) },
-//   )
-// }
-
-fn digit_to_bytearray(i: Int) -> ByteArray {
-  let empty_byte_array = #""
-  bytearray.push(empty_byte_array, i + zero_ascii_code)
-}
-
-test test_digit_to_bytearray() {
-  let arr =
-    [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
-  list.all(
-    arr,
-    fn(x) { digit_to_bytearray(x) == bytearray.from_string(cbor.diagnostic(x)) },
-  )
-}
 
 pub fn sorted_asset(asset_a: Asset, asset_b: Asset) -> Bool {
   let Asset { policy_id: asset_a_policy_id, asset_name: asset_a_asset_name } =
@@ -136,7 +95,7 @@ test test_compute_lp_asset_name() {
 }
 
 pub fn bytearray_to_positive_int(byte_arr: ByteArray) -> Int {
-  let byte_len = bytearray.length(byte_arr)
+  let byte_len = builtin.length_of_bytearray(byte_arr)
   do_bytearray_positive_int(byte_arr, byte_len - 1)
 }
 
@@ -272,24 +231,18 @@ test test_list_at_index() {
   True
 }
 
+/// must alreay check list length
 pub fn zip_with(
   arr1: List<a>,
   arr2: List<b>,
   predicate: fn(a, b) -> result,
 ) -> List<result> {
-  when arr1 is {
-    [x, ..xs] ->
-      when arr2 is {
-        [y, ..ys] ->
-          [predicate(x, y), ..zip_with(xs, ys, predicate)]
-        [] -> fail
-      }
-    [] ->
-      when arr2 is {
-        [] ->
-          []
-        _ -> fail
-      }
+  expect [x, ..xs] = arr1
+  expect [y, ..ys] = arr2
+  if xs == [] {
+    [predicate(x, y)]
+  } else {
+    [predicate(x, y), ..zip_with(xs, ys, predicate)]
   }
 }
 
@@ -312,6 +265,7 @@ test test_zip_with_throw_err() fail {
 }
 
 pub fn compare_list_length(arr1: List<a>, arr2: List<b>) -> Bool {
+  // use 2 when because same fee but less script size
   when arr1 is {
     [] -> arr2 == []
     _ ->
