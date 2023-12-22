@@ -1,27 +1,27 @@
 use aiken/builtin
-use aiken/dict.{Dict}
+use aiken/dict
 use aiken/interval.{Finite, Interval, IntervalBound}
 use aiken/list
 use aiken/transaction.{
-  InlineDatum, Input, Output, OutputReference, Redeemer, ScriptPurpose,
-  ValidityRange,
+  InlineDatum, Input, Output, OutputReference, ValidityRange,
 }
-use aiken/transaction/credential.{Address, ScriptCredential}
+use aiken/transaction/credential.{Address, PaymentCredential, ScriptCredential}
 use aiken/transaction/value.{
-  AssetName, MintedValue, PolicyId, Value, ada_asset_name, ada_policy_id,
+  AssetName, PolicyId, Value, ada_asset_name, ada_policy_id,
 }
 use amm_dex_v2/order_validation
 use amm_dex_v2/types.{
   Asset, BatchingPool, DatumMap, OrderDatum, PoolDatum, SwapMultiRouting,
   UpdatePoolFee, UpdatePoolFeeOrStakeCredentialAction, UpdatePoolStakeCredential,
 }
-use amm_dex_v2/utils
+use amm_dex_v2/utils.{
+  admin_asset_name, admin_policy_id, factory_auth_asset_name, license_policy_id,
+  maximum_deadline_range, pool_auth_asset_name,
+}
 
 pub fn validate_batcher_license_and_find_batcher_address(
   license_input: Input,
   validity_range: ValidityRange,
-  license_policy_id: PolicyId,
-  maximum_deadline_range: Int,
 ) -> (Address, Int) {
   let Input {
     output: Output { address: batcher_address, value: license_value, .. },
@@ -66,17 +66,13 @@ fn find_pool_input_and_output_in_batching(
   let Output { address: pool_in_address, .. } = pool_in_output
   let Address { payment_credential: pool_payment_credential, .. } =
     pool_in_address
-  // Batching transaction requires single Pool UTxO in both Inputs and Outputs
-  expect [pool_output] =
-    list.filter(
-      outputs,
-      fn(output) {
-        let Output { address: addr, .. } = output
-        let Address { payment_credential: payment_cred, .. } = addr
-        pool_payment_credential == payment_cred
-      },
-    )
 
+  // Batching transaction requires single Pool UTxO in both Inputs and Outputs
+  let pool_output =
+    get_single_pool_output(
+      all_outputs: outputs,
+      pool_payment_credential: pool_payment_credential,
+    )
   let Output { address: pool_out_address, .. } = pool_output
   expect pool_out_address == pool_in_address
   // Due to combination with Minswap Stake Address, Pool Contract can have multiple Base Addresses
@@ -99,7 +95,6 @@ fn get_batching_pool(
   pool_input: Output,
   pool_output: Output,
   authen_policy_id: PolicyId,
-  pool_auth_asset_name: AssetName,
   pool_in_datum: PoolDatum,
   datum_map: DatumMap,
   require_total_liquidity_unchange: Bool,
@@ -234,7 +229,6 @@ fn get_batching_pool(
 
 pub fn validate_batching(
   authen_policy_id: PolicyId,
-  pool_auth_asset_name: AssetName,
   all_inputs: List<Input>,
   all_outputs: List<Output>,
   all_datums: DatumMap,
@@ -243,6 +237,7 @@ pub fn validate_batching(
   batcher_address: Address,
   end_valid_time_range: Int,
   input_indexes: List<Int>,
+  orders_fee: List<Int>,
 ) -> Bool {
   let (pool_input, pool_output) =
     find_pool_input_and_output_in_batching(
@@ -266,7 +261,6 @@ pub fn validate_batching(
       pool_input: pool_input,
       pool_output: pool_output,
       authen_policy_id: authen_policy_id,
-      pool_auth_asset_name: pool_auth_asset_name,
       pool_in_datum: pool_in_datum,
       datum_map: all_datums,
       require_total_liquidity_unchange: False,
@@ -324,13 +318,13 @@ pub fn validate_batching(
     end_valid_time_range: end_valid_time_range,
     order_inputs: sorted_user_inputs,
     order_outputs: user_outputs,
+    orders_fee: orders_fee,
     pool_state: pool_state_in,
   )
 }
 
 pub fn validate_swap_multi_routing(
   authen_policy_id: PolicyId,
-  pool_auth_asset_name: AssetName,
   all_inputs: List<Input>,
   all_outputs: List<Output>,
   all_datums: DatumMap,
@@ -339,11 +333,11 @@ pub fn validate_swap_multi_routing(
   end_valid_time_range: Int,
   routing_in_indexes: List<Int>,
   routing_out_indexes: List<Int>,
+  order_fee: Int,
 ) -> Bool {
   let batching_pools =
     find_multi_routing_pools(
       authen_policy_id: authen_policy_id,
-      pool_auth_asset_name: pool_auth_asset_name,
       pool_input_ref: pool_input_ref,
       inputs: all_inputs,
       outputs: all_outputs,
@@ -399,16 +393,19 @@ pub fn validate_swap_multi_routing(
     receiver,
     receiver_datum_hash_opt,
     step: order_step,
-    batcher_fee,
+    max_batcher_fee,
     output_ada,
     lp_asset: order_lp_asset,
     expired_time_opt,
     ..
   } = order_in_datum
   expect and {
-      // batcher_fee and output_ada must be positive
-      batcher_fee > 0,
+      // max_batcher_fee and output_ada must be positive
+      max_batcher_fee > 0,
       output_ada > 0,
+      // Used Batcher Fee must be positive and less than or equal batcher fee
+      order_fee > 0,
+      order_fee <= max_batcher_fee,
       // Order Output must be returned to receiver and might have receiver_datum_hash_opt
       order_validation.validate_order_receiver(
         receiver: receiver,
@@ -435,8 +432,9 @@ pub fn validate_swap_multi_routing(
         order_in_value: order_in_value,
         order_out_value: order_out_value,
         minimum_receive: minimum_receive,
-        batcher_fee: batcher_fee,
+        max_batcher_fee: max_batcher_fee,
         output_ada: output_ada,
+        used_batcher_fee: order_fee,
       )
     }
     _ -> False
@@ -446,7 +444,6 @@ pub fn validate_swap_multi_routing(
 // TODO: We need carefully verify these logic below 
 fn find_multi_routing_pools(
   authen_policy_id: PolicyId,
-  pool_auth_asset_name: AssetName,
   pool_input_ref: OutputReference,
   inputs: List<Input>,
   outputs: List<Output>,
@@ -523,7 +520,6 @@ fn find_multi_routing_pools(
         pool_input: pool_in_output,
         pool_output: pool_out,
         authen_policy_id: authen_policy_id,
-        pool_auth_asset_name: pool_auth_asset_name,
         pool_in_datum: pool_in_datum,
         datum_map: datum_map,
         require_total_liquidity_unchange: True,
@@ -535,17 +531,12 @@ fn find_multi_routing_pools(
 pub fn validate_update_pool_datum_or_stake_credential(
   action: UpdatePoolFeeOrStakeCredentialAction,
   authen_policy_id: PolicyId,
-  pool_auth_asset_name: AssetName,
-  license_policy_id: PolicyId,
-  admin_asset_name: AssetName,
   admin_index: Int,
   pool_input: Input,
   pool_in_datum: PoolDatum,
   all_inputs: List<Input>,
   all_outputs: List<Output>,
   all_datums: DatumMap,
-  all_mints: MintedValue,
-  all_redeemers: Dict<ScriptPurpose, Redeemer>,
 ) -> Bool {
   let Input { output: pool_in_output, .. } = pool_input
   let Output { address: pool_in_address, value: pool_in_value, .. } =
@@ -555,32 +546,23 @@ pub fn validate_update_pool_datum_or_stake_credential(
 
   let admin_input = utils.list_at_index(all_inputs, admin_index)
   let Input { output: Output { value: admin_value, .. }, .. } = admin_input
-  // validate there is a single Pool UTxO in Transaction Inputs and single Pool UTxO in Transaction Outputs
-  expect [pool_output] =
-    list.filter(
-      all_outputs,
-      fn(o) {
-        let Output { address: addr, .. } = o
-        let Address { payment_credential, .. } = addr
-        payment_credential == pool_in_address_payment_credential
-      },
-    )
+  // validate there is a single Pool UTxO in Transaction Outputs
   let Output {
     address: pool_out_address,
     value: pool_out_value,
     datum: raw_pool_out_datum,
     ..
-  } = pool_output
+  } =
+    get_single_pool_output(
+      all_outputs: all_outputs,
+      pool_payment_credential: pool_in_address_payment_credential,
+    )
+
   expect and {
-      // Transaction contain only 1 Script (Pool Script). 
-      // It will avoid bad Admin can steal money from Order Contract.
-      dict.size(all_redeemers) == 1,
       // Pool Input contains 1 valid Pool NFT Token
       value.quantity_of(pool_in_value, authen_policy_id, pool_auth_asset_name) == 1,
       // validate Admin with valid Admin License Token must be presented in Transaction Inputs
-      value.quantity_of(admin_value, license_policy_id, admin_asset_name) == 1,
-      // This Redeemer won't mint anything 
-      value.is_zero(value.from_minted_value(all_mints)),
+      value.quantity_of(admin_value, admin_policy_id, admin_asset_name) == 1,
     }
   expect pool_out_datum: PoolDatum =
     when raw_pool_out_datum is {
@@ -692,39 +674,30 @@ pub fn validate_fee_sharing_percent(
 
 pub fn validate_withdraw_liquidity_share(
   authen_policy_id: PolicyId,
-  pool_auth_asset_name: AssetName,
-  license_policy_id: PolicyId,
-  admin_asset_name: AssetName,
   admin_index: Int,
   pool_input: Input,
   pool_in_datum: PoolDatum,
   all_inputs: List<Input>,
   all_outputs: List<Output>,
   all_datums: DatumMap,
-  all_mints: MintedValue,
-  all_redeemers: Dict<ScriptPurpose, Redeemer>,
 ) -> Bool {
-  let Input { output: pool_in_output, .. } = pool_input
-  let Output { address: pool_in_address, value: pool_in_value, .. } =
-    pool_in_output
+  let Input {
+    output: Output { address: pool_in_address, value: pool_in_value, .. },
+    ..
+  } = pool_input
   let Address { payment_credential: pool_in_payment_credential, .. } =
     pool_in_address
-  // validate there is a single Pool UTxO in Transaction Inputs and single Pool UTxO in Transaction Outputs
-  expect [pool_output] =
-    list.filter(
-      all_outputs,
-      fn(o) {
-        let Output { address: addr, .. } = o
-        let Address { payment_credential, .. } = addr
-        payment_credential == pool_in_payment_credential
-      },
-    )
+  // validate there is a single Pool UTxO in Transaction Outputs
   let Output {
     address: pool_out_address,
     value: pool_out_value,
     datum: raw_pool_out_datum,
     ..
-  } = pool_output
+  } =
+    get_single_pool_output(
+      all_outputs: all_outputs,
+      pool_payment_credential: pool_in_payment_credential,
+    )
   expect pool_out_datum: PoolDatum =
     when raw_pool_out_datum is {
       InlineDatum(d) -> d
@@ -735,16 +708,11 @@ pub fn validate_withdraw_liquidity_share(
   expect and {
       // Pool Input and Output Address must be unchanged (both Payment and Stake Credential)
       pool_in_address == pool_out_address,
-      // Transaction contain only 1 Script (Pool Script). 
-      // It will avoid bad Admin can steal money from Order Contract.
-      dict.size(all_redeemers) == 1,
       // Pool Datum must be unchanged
       pool_in_datum == pool_out_datum,
       value.quantity_of(pool_in_value, authen_policy_id, pool_auth_asset_name) == 1,
       // validate Admin with valid Admin License Token must be presented in Transaction Inputs.
-      value.quantity_of(admin_value, license_policy_id, admin_asset_name) == 1,
-      // validate Transaction won't mint any assets
-      value.is_zero(value.from_minted_value(all_mints)),
+      value.quantity_of(admin_value, admin_policy_id, admin_asset_name) == 1,
     }
   let PoolDatum {
     asset_a,
@@ -770,24 +738,19 @@ pub fn validate_withdraw_liquidity_share(
   // validate Admin withdraws the exact earned Profit Sharing amount:
   //    Earned Asset A: Reserve A in Value - Reserve A in Datum
   //    Earned Asset B: Reserve B in Value - Reserve B in Datum
-  let earned_a = value_reserve_a_in - datum_reserve_a_in
-  let earned_b = value_reserve_b_in - datum_reserve_b_in
-  let pool_out_sub_earned_a =
-    value.add(
-      self: pool_out_value,
-      policy_id: asset_a_policy_id,
-      asset_name: asset_a_asset_name,
-      quantity: earned_a * -1,
-    )
-  let pool_out_sub_earned_b =
-    value.add(
-      self: pool_out_sub_earned_a,
-      policy_id: asset_b_policy_id,
-      asset_name: asset_b_asset_name,
-      quantity: earned_b * -1,
-    )
-  // validate Pool Out Value must be Pool In Value sub Earned Asset A and Earned Asset B
-  pool_in_value == pool_out_sub_earned_b
+  let expected_pool_out_value =
+    pool_in_value
+      |> value.add(
+           asset_a_policy_id,
+           asset_a_asset_name,
+           ( value_reserve_a_in - datum_reserve_a_in ) * -1,
+         )
+      |> value.add(
+           asset_b_policy_id,
+           asset_b_asset_name,
+           ( value_reserve_b_in - datum_reserve_b_in ) * -1,
+         )
+  pool_out_value == expected_pool_out_value
 }
 
 // This function will validate Mint part in Pool Creation Transaction
@@ -795,12 +758,27 @@ pub fn validate_withdraw_liquidity_share(
 // Otherwise transaction must be failed
 pub fn get_pool_creation_expected_mint(
   authen_policy_id: PolicyId,
-  factory_auth_asset_name: AssetName,
-  pool_auth_asset_name: AssetName,
   lp_asset_name: AssetName,
 ) -> Value {
   value.zero()
     |> value.add(authen_policy_id, factory_auth_asset_name, 1)
     |> value.add(authen_policy_id, pool_auth_asset_name, 1)
     |> value.add(authen_policy_id, lp_asset_name, 9223372036854775807)
+}
+
+// This function get Pool output from output list and make sure there's single Pool Output
+fn get_single_pool_output(
+  all_outputs: List<Output>,
+  pool_payment_credential: PaymentCredential,
+) -> Output {
+  expect [pool_output] =
+    list.filter(
+      all_outputs,
+      fn(o) {
+        let Output { address: addr, .. } = o
+        let Address { payment_credential, .. } = addr
+        payment_credential == pool_payment_credential
+      },
+    )
+  pool_output
 }

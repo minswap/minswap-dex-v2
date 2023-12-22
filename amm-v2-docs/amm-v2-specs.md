@@ -100,20 +100,20 @@ There are 10 order types:
 
 
 - **SwapExactIn**: is used for exchanging specific amount of single asset in the liquidity pool, the order will be executed if the received amount is greater than or equal to `minimum_receive` which is defined below
-   - _direction_: The direction (AToB or BToA) of swap request.
+   - _a_to_b_direction_: The AToB direction of swap request. True for A -> B and False for B -> A
    - _minimum_receive_: Minimum amount of Asset Out which users want to receive after exchanging
    - _killable_: Decide the Order behavior in case Order is not meet the slippage tolerance
 - **StopLoss**: is used for exchanging specific amount of single asset in the liquidity pool, the order will be executed if the received amount is less than or equal to `stop_loss_receive` which is defined below
-   - _direction_: The direction (AToB or BToA) of swap request.
+   - _a_to_b_direction_: The AToB direction of swap request. True for A -> B and False for B -> A
    - _stop_loss_receive_: Maximum amount of Asset Out which users want to receive after exchanging
    - _killable_: Decide the Order behavior in case Order is not meet the slippage tolerance
 - **OCO**: is used for exchanging specific amount of single asset in the liquidity pool, the order will be executed if the received amount is less than or equal to `stop_loss_receive` and greater than or equal to `minimum_receive` which are defined below
-   - _direction_: The direction (AToB or BToA) of swap request.
+   - _a_to_b_direction_: The AToB direction of swap request. True for A -> B and False for B -> A
    - _minimum_receive_: Minimum amount of Asset Out which users want to receive after exchanging
    - _stop_loss_receive_: Maximum amount of Asset Out which users want to receive after exchanging
    - _killable_: Decide the Order behavior in case Order is not meet the slippage tolerance
 - **SwapExactOut**: is used for exchanging single asset in the liquidity pool and receiving the exact amout of other asset, the order will be executed if the received amount is equal to `expected_receive` which is defined below
-   - _direction_: The direction (AToB or BToA) of swap request.
+   - _a_to_b_direction_: The AToB direction of swap request. True for A -> B and False for B -> A
    - _expected_receive_: The exact amount of Asset Out which users want to receive after exchanging
    - _killable_: Decide the Order behavior in case Order is not meet the slippage tolerance
 - **Deposit**: is used for depositing pool's assets and receiving LP Token
@@ -124,14 +124,15 @@ There are 10 order types:
    - _minimum_asset_b_: minimum received amounts of Asset B.
    - _killable_: Decide the Order behavior in case Order is not meet the slippage tolerance
 - **ZapOut**: is used for withdrawing a single pool asset out of Liquidity Pool.
-   - _direction_: The direction (AToB or BToA) of ZapOut request. `AToB` in case Asset Out is B and vice versa
+   - _a_to_b_direction_: The AToB direction of ZapOut request. `True` in case Asset Out is B and vice versa
    - _minimum_receive_: Minimum amount of Asset Out which users want to receive after withdrawing
    - _killable_: Decide the Order behavior in case Order is not meet the slippage tolerance
 - **PartialSwap**: is used for exchanging partial amounts of single Asset. The Partial Swap can be executed multiple times if the price ratio is matched with the user's expectation, and the time is defined in `hops`.  
-   - _direction_: The direction (AToB or BToA) of swap request.
+   - _a_to_b_direction_: The AToB direction of swap request. True for A -> B and False for B -> A
    - _io_ratio_numerator_ and _io_ratio_denominator_: the price ratio which users want to exchange
    - _hops_: The time PartialSwap can be executed.
    - _minimum_swap_amount_required_: The minimum amount which is required to swap per each execution time.
+   - _max_batcher_fee_each_time_: Maximum fee that batcher can take to execute each time
 - **WithdrawImbalance**: is used for withdrawing custom amounts of assets.
    - _ratio_asset_a_ and _ratio_asset_b_: The ratio of Asset A and Asset B users want to receive after withdrawing
    - _minimum_asset_a_: The minimum amount of asset A which users want to receive, The amount of Asset will be followed by the ratio (_received_asset_b_ = _minimum_asset_a_ * _ratio_asset_b_ / _ratio_asset_a_)
@@ -150,7 +151,7 @@ An Order Datum keeps information about Order Type and some other informations:
 - _receiver_datum_hash_: (optional) the datum hash of the output after order is processed.
 - _lp_asset_: The Liquidity Pool's LP Asset that the order will be applied to
 - _step_: The information about Order Type which we mentioned above
-- _batcher_fee_: The fee users have to pay to Batcher to execute batching transaction
+- _max_batcher_fee_: The maximum fee users have to pay to Batcher to execute batching transaction. The actual fee Batcher will take might be less than the maximum fee
 - _output_ada_: As known as Minimum ADA which users need to put to the Order, and these amounts will be returned with _receiver_ Output
 
 
@@ -181,8 +182,6 @@ Authen Minting Policy is responsible for creating initial Factory `Linked List`,
 
 
 - _out_ref_: is a Reference of an Unspent Transaction Output, which will only be spent on `MintFactoryAuthen` redeemer to make sure this redeemer can only be called once
-- _factory_auth_asset_name_: the legitimate Factory TokenName
-- _pool_auth_asset_name_: the legitimate Pool TokenName
 
 
 #### 3.3.3.2 Redeemer
@@ -247,8 +246,6 @@ Anytime new Pool is created, a Factory UTxO will be spent can create the 2 new o
 - _authen_policy_id_: The PolicyID of `Authen Minting Policy`
 - _pool_hash_: ValidatorHash of Pool Contract
 - _order_hash_: ValidationHash of Order Contract
-- _factory_auth_asset_name_: the legitimate Factory TokenName
-- _pool_auth_asset_name_: the legitimate Pool TokenName
 
 
 #### 3.3.4.2 Datum
@@ -293,10 +290,6 @@ Pool validator is the most important part in the system. It's responsible for gu
 
 
 - _authen_policy_id_: The PolicyID of `Authen Minting Policy`
-- _license_policy_id_: is the policy ID managed by the Minswap team, used for minting Batcher License and Admin License assets
-- _pool_auth_asset_name_: the legitimate Pool TokenName
-- _admin_asset_name_: The TokenName of Admin Asset, determined by Minswap team
-- _maximum_deadline_range_: is the maximum expiration time of Batcher license from now (to prevent minting infinity license)
 
 
 #### 3.3.5.2 Datum
@@ -315,12 +308,14 @@ Pool validator is the most important part in the system. It's responsible for gu
  - **Batching**:
    - _batcher_address_: Address of Batcher
    - _input_indexes_: The Indexes of Orders are processing (it will be explained below)
+   - _orders_fee_: The list of batcher fee will be deducted from orders' fund. Batcher can decide the amount of fee for each orders. The Batcher Fee can not exceed the maximum batcher fee.
    - _license_index_: Index of the UTxO holding Batcher License Token in the Transaction Inputs.
  - **MultiRouting**:
    - _batcher_address_: Address of Batcher
    - _license_index_: Index of the UTxO holding Batcher License Token in the Transaction Inputs.
    - _routing_in_indexes_: Indexes of Pool UTxOs in the Transaction Inputs
    - _routing_out_indexes_: Indexes of Pool UTxOs in the Transaction Outputs
+   - _order_fee_: Batcher fee will be deducted from orders' fund. Batcher can decide the amount of fee for each orders. The Batcher Fee can not exceed the maximum batcher fee.
  - **UpdatePoolFeeOrStakeCredential**:
    - _action_: There are 2 actions in this redeemer.
      - _UpdatePoolFee_: Allow Admin to update Liquidity Pool's fee (Trading Fee and Profit Sharing).
