@@ -726,12 +726,12 @@ pub fn validate_withdraw_liquidity_share(
       |> value.add(
            asset_a_policy_id,
            asset_a_asset_name,
-           ( value_reserve_a_in - datum_reserve_a_in ) * -1,
+           datum_reserve_a_in - value_reserve_a_in,
          )
       |> value.add(
            asset_b_policy_id,
            asset_b_asset_name,
-           ( value_reserve_b_in - datum_reserve_b_in ) * -1,
+           datum_reserve_b_in - value_reserve_b_in,
          )
   pool_out_value == expected_pool_out_value
 }
