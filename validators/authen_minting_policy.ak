@@ -7,7 +7,7 @@ use aiken/transaction/value
 use amm_dex_v2/pool_validation
 use amm_dex_v2/types.{
   Asset, AuthenRedeemer, CreatePool, FactoryDatum, FactoryRedeemer,
-  MintFactoryAuthen, MintLiquidity,
+  MintFactoryAuthen,
 }
 use amm_dex_v2/utils.{factory_auth_asset_name}
 
@@ -120,7 +120,6 @@ validator(
           tail == #"ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff00",
         }
       }
-      MintLiquidity -> fail
     }
   }
 }

@@ -165,7 +165,10 @@ test dict_must_get_2() {
     dict.new()
       |> dict.insert(foo, "Aiken", bytearray.compare)
       |> dict.insert(bar, "awesome", bytearray.compare)
-  dict_must_get(m, key: foo) == "Aiken"
+  and {
+    Some(dict_must_get(m, key: foo)) == dict.get(m, key: foo),
+    Some(dict_must_get(m, key: bar)) == dict.get(m, key: bar),
+  }
 }
 
 test dict_must_get_3() fail {
@@ -231,7 +234,6 @@ test test_list_at_index() {
   True
 }
 
-/// must alreay check list length
 pub fn zip_with(
   arr1: List<a>,
   arr2: List<b>,
@@ -266,7 +268,6 @@ test test_zip_with_throw_err() fail {
 }
 
 pub fn compare_list_length(arr1: List<a>, arr2: List<b>) -> Bool {
-  // use 2 when because same fee but less script size
   when arr1 is {
     [] -> arr2 == []
     _ ->
