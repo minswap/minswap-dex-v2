@@ -1009,10 +1009,7 @@ pub fn apply_orders(
   } = input
   let Output { value: order_out_value, .. } = output
   expect order_in_datum: OrderDatum =
-    when raw_order_in_datum is {
-      InlineDatum(d) -> d
-      _ -> utils.must_find_script_datum(datum_map, raw_order_in_datum)
-    }
+    utils.must_find_script_datum(datum_map, raw_order_in_datum)
 
   let OrderDatum {
     sender,
@@ -1266,11 +1263,7 @@ pub fn apply_orders(
             expect ScriptCredential(order_out_script_hash) =
               order_out_payment_cred
             expect order_out_datum: OrderDatum =
-              when raw_order_out_datum is {
-                InlineDatum(d) -> d
-                _ ->
-                  utils.must_find_script_datum(datum_map, raw_order_out_datum)
-              }
+              utils.must_find_script_datum(datum_map, raw_order_out_datum)
             let expected_order_out_datum =
               OrderDatum {
                 sender,
@@ -1716,10 +1709,7 @@ pub fn validate_cancel_expired_orders(
           } = order_output
 
           expect order_in_datum: OrderDatum =
-            when order_in_datum_raw is {
-              InlineDatum(d) -> d
-              _ -> utils.must_find_script_datum(datum_map, order_in_datum_raw)
-            }
+            utils.must_find_script_datum(datum_map, order_in_datum_raw)
 
           let OrderDatum { sender, sender_datum_hash_opt, expired_time_opt, .. } =
             order_in_datum

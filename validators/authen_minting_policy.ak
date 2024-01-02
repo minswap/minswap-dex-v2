@@ -1,14 +1,13 @@
 use aiken/dict
 use aiken/list
 use aiken/transaction.{
-  InlineDatum, Input, Mint, Output, OutputReference, ScriptContext, Spend,
-  Transaction,
+  Input, Mint, Output, OutputReference, ScriptContext, Spend, Transaction,
 }
 use aiken/transaction/value
 use amm_dex_v2/pool_validation
 use amm_dex_v2/types.{
   Asset, AuthenRedeemer, CreatePool, FactoryDatum, FactoryRedeemer,
-  MintFactoryAuthen, MintLiquidity,
+  MintFactoryAuthen,
 }
 use amm_dex_v2/utils.{factory_auth_asset_name}
 
@@ -22,54 +21,6 @@ validator(
     expect Mint(authen_policy_id) = purpose
     when redeemer is {
       // The redeemer can be called once to initialize the whole AMM V2 system
-      MintFactoryAuthen -> {
-        let Transaction { inputs, mint, outputs, datums, .. } = transaction
-
-        // validate that `out_ref` must be presented in the Transaction Inputs
-        expect [_] =
-          list.filter(
-            inputs,
-            fn(input) {
-              let Input { output_reference, .. } = input
-              output_reference == out_ref
-            },
-          )
-
-        // validate that the redeemer only mint a single Factory Token 
-        let mint_value = value.from_minted_value(mint)
-        expect [(minted_pid, minted_an, minted_amount)] =
-          value.flatten(mint_value)
-        expect and {
-            minted_pid == authen_policy_id,
-            minted_an == factory_auth_asset_name,
-            minted_amount == 1,
-          }
-        // validate that there's only 1 Factory UTxO in the Transaction Outputs
-        // The Factory UTxO must contain Factory Token in the value
-        expect [factory_output] =
-          list.filter(
-            outputs,
-            fn(output) {
-              let Output { value: out_value, .. } = output
-              value.quantity_of(
-                out_value,
-                authen_policy_id,
-                factory_auth_asset_name,
-              ) == 1
-            },
-          )
-        let Output { datum: factory_raw_datum, .. } = factory_output
-        expect factory_datum: FactoryDatum =
-          when factory_raw_datum is {
-            InlineDatum(d) -> d
-            _ -> utils.must_find_script_datum(datums, factory_raw_datum)
-          }
-        let FactoryDatum { head, tail } = factory_datum
-        and {
-          head == #"00",
-          tail == #"ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff00",
-        }
-      }
       CreatePool -> {
         let Transaction { inputs, mint, redeemers, .. } = transaction
         // validate that there's a single Factory UTxO in the Transaction Inputs. 
@@ -124,7 +75,51 @@ validator(
           lp_asset_name: lp_asset_name,
         )
       }
-      MintLiquidity -> fail
+      MintFactoryAuthen -> {
+        let Transaction { inputs, mint, outputs, datums, .. } = transaction
+
+        // validate that `out_ref` must be presented in the Transaction Inputs
+        expect [_] =
+          list.filter(
+            inputs,
+            fn(input) {
+              let Input { output_reference, .. } = input
+              output_reference == out_ref
+            },
+          )
+
+        // validate that the redeemer only mint a single Factory Token 
+        let mint_value = value.from_minted_value(mint)
+        expect [(minted_pid, minted_an, minted_amount)] =
+          value.flatten(mint_value)
+        expect and {
+            minted_pid == authen_policy_id,
+            minted_an == factory_auth_asset_name,
+            minted_amount == 1,
+          }
+        // validate that there's only 1 Factory UTxO in the Transaction Outputs
+        // The Factory UTxO must contain Factory Token in the value
+        expect [factory_output] =
+          list.filter(
+            outputs,
+            fn(output) {
+              let Output { value: out_value, .. } = output
+              value.quantity_of(
+                out_value,
+                authen_policy_id,
+                factory_auth_asset_name,
+              ) == 1
+            },
+          )
+        let Output { datum: factory_raw_datum, .. } = factory_output
+        expect factory_datum: FactoryDatum =
+          utils.must_find_script_datum(datums, factory_raw_datum)
+        let FactoryDatum { head, tail } = factory_datum
+        and {
+          head == #"00",
+          tail == #"ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff00",
+        }
+      }
     }
   }
 }

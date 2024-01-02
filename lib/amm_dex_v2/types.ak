@@ -213,7 +213,6 @@ pub type FactoryRedeemer {
 pub type AuthenRedeemer {
   MintFactoryAuthen
   CreatePool
-  MintLiquidity
 }
 
 pub type OrderBatchingRedeemer {
