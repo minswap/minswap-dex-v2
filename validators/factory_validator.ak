@@ -8,7 +8,10 @@ use amm_dex_v2/pool_validation
 use amm_dex_v2/types.{
   Asset, FactoryDatum, FactoryRedeemer, PoolDatum, ValidatorHash,
 }
-use amm_dex_v2/utils.{factory_auth_asset_name, pool_auth_asset_name}
+use amm_dex_v2/utils.{
+  admin_asset_name, admin_policy_id, factory_auth_asset_name,
+  pool_auth_asset_name,
+}
 
 validator(
   // The PolicyID of Authen Minting Policy
@@ -191,6 +194,28 @@ validator(
         |> value.add(asset_b_policy_id, asset_b_asset_name, amount_b)
         |> value.add(authen_policy_id, lp_asset_name, remaining_liquidity)
         |> value.add(authen_policy_id, pool_auth_asset_name, 1)
+    let is_valid_trading_fee =
+      if
+      list.has(
+        [(5, 10000), (3, 1000), (1, 100)],
+        (pool_datum_trading_fee_numerator, pool_datum_trading_fee_denominator),
+      ){
+      
+        True
+      } else {
+        expect [_] =
+          list.filter(
+            outputs,
+            fn(output) {
+              let Output { value: out_value, .. } = output
+              value.quantity_of(out_value, admin_policy_id, admin_asset_name) == 1
+            },
+          )
+        pool_validation.validate_trading_fee_percent(
+          pool_datum_trading_fee_numerator,
+          pool_datum_trading_fee_denominator,
+        )
+      }
     and {
       // asset_a and asset_b must be the same with Factory Redeemer
       pool_datum_asset_a == asset_a,
@@ -201,10 +226,7 @@ validator(
       pool_datum_reserve_a == amount_a,
       pool_datum_reserve_b == amount_b,
       // trading_fee_percentage must be between **0.05%** and **10%**
-      pool_validation.validate_trading_fee_percent(
-        pool_datum_trading_fee_numerator,
-        pool_datum_trading_fee_denominator,
-      ),
+      is_valid_trading_fee,
       // Order Hash in Pool Datum must be matched with Order Hash in parameters
       pool_datum_order_hash == order_hash,
       value.from_minted_value(mint) == pool_validation.get_pool_creation_expected_mint(
