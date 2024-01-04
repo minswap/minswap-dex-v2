@@ -552,42 +552,33 @@ pub fn validate_update_pool_datum_or_stake_credential(
       value.quantity_of(pool_in_value, authen_policy_id, pool_auth_asset_name) == 1,
       // validate Admin with valid Admin License Token must be presented in Transaction Inputs
       value.quantity_of(admin_value, admin_policy_id, admin_asset_name) == 1,
+      // Pool Value must be unchanged
+      pool_in_value == pool_out_value,
     }
   expect pool_out_datum: PoolDatum =
     utils.must_find_script_datum(all_datums, raw_pool_out_datum)
-  let PoolDatum {
-    asset_a: pool_in_asset_a,
-    asset_b: pool_in_asset_b,
-    total_liquidity: pool_in_total_liquidity,
-    reserve_a: pool_in_reserve_a,
-    reserve_b: pool_in_reserve_b,
-    trading_fee_numerator: pool_in_trading_fee_numerator,
-    trading_fee_denominator: pool_in_trading_fee_denominator,
-    order_hash: pool_in_order_hash,
-    profit_sharing_opt: pool_in_profit_sharing_opt,
-  } = pool_in_datum
-  let PoolDatum {
-    asset_a: pool_out_asset_a,
-    asset_b: pool_out_asset_b,
-    total_liquidity: pool_out_total_liquidity,
-    reserve_a: pool_out_reserve_a,
-    reserve_b: pool_out_reserve_b,
-    trading_fee_numerator: pool_out_trading_fee_numerator,
-    trading_fee_denominator: pool_out_trading_fee_denominator,
-    order_hash: pool_out_order_hash,
-    profit_sharing_opt: pool_out_profit_sharing_opt,
-  } = pool_out_datum
-  expect and {
-      pool_in_asset_a == pool_out_asset_a,
-      pool_in_asset_b == pool_out_asset_b,
-      pool_in_total_liquidity == pool_out_total_liquidity,
-      pool_in_reserve_a == pool_out_reserve_a,
-      pool_in_reserve_b == pool_out_reserve_b,
-      pool_in_order_hash == pool_out_order_hash,
-      pool_in_value == pool_out_value,
-    }
   when action is {
     UpdatePoolFee -> {
+      let PoolDatum {
+        asset_a: pool_in_asset_a,
+        asset_b: pool_in_asset_b,
+        total_liquidity: pool_in_total_liquidity,
+        reserve_a: pool_in_reserve_a,
+        reserve_b: pool_in_reserve_b,
+        order_hash: pool_in_order_hash,
+        ..
+      } = pool_in_datum
+      let PoolDatum {
+        asset_a: pool_out_asset_a,
+        asset_b: pool_out_asset_b,
+        total_liquidity: pool_out_total_liquidity,
+        reserve_a: pool_out_reserve_a,
+        reserve_b: pool_out_reserve_b,
+        trading_fee_numerator: pool_out_trading_fee_numerator,
+        trading_fee_denominator: pool_out_trading_fee_denominator,
+        order_hash: pool_out_order_hash,
+        profit_sharing_opt: pool_out_profit_sharing_opt,
+      } = pool_out_datum
       // Profit Sharing can be on/off by setting profit_sharing_opt is None or Some. 
       // Profit Sharing must be between **16.66%** and **50%**
       let is_valid_fee_sharing =
@@ -605,6 +596,13 @@ pub fn validate_update_pool_datum_or_stake_credential(
           }
         }
       and {
+        // Irrelevant fields on Pool Datum must be unchanged
+        pool_in_asset_a == pool_out_asset_a,
+        pool_in_asset_b == pool_out_asset_b,
+        pool_in_total_liquidity == pool_out_total_liquidity,
+        pool_in_reserve_a == pool_out_reserve_a,
+        pool_in_reserve_b == pool_out_reserve_b,
+        pool_in_order_hash == pool_out_order_hash,
         // Pool Address must be unchanged (both Payment and Stake Credential)
         pool_in_address == pool_out_address,
         // Trading Fee must be between **0.05%** and **10%**
@@ -615,12 +613,8 @@ pub fn validate_update_pool_datum_or_stake_credential(
         is_valid_fee_sharing,
       }
     }
-    UpdatePoolStakeCredential -> and {
-        // Trading Fee and Profit Sharing must be unchanged
-        pool_in_trading_fee_numerator == pool_out_trading_fee_numerator,
-        pool_in_trading_fee_denominator == pool_out_trading_fee_denominator,
-        pool_in_profit_sharing_opt == pool_out_profit_sharing_opt,
-      }
+    // Pool Datum must be unchanged
+    UpdatePoolStakeCredential -> pool_in_datum == pool_out_datum
   }
 }
 
