@@ -552,6 +552,8 @@ pub fn validate_update_pool_datum_or_stake_credential(
       value.quantity_of(pool_in_value, authen_policy_id, pool_auth_asset_name) == 1,
       // validate Admin with valid Admin License Token must be presented in Transaction Inputs
       value.quantity_of(admin_value, admin_policy_id, admin_asset_name) == 1,
+      // Pool Value must be unchanged
+      pool_in_value == pool_out_value,
     }
   expect pool_out_datum: PoolDatum =
     utils.must_find_script_datum(all_datums, raw_pool_out_datum)
@@ -601,7 +603,6 @@ pub fn validate_update_pool_datum_or_stake_credential(
         pool_in_reserve_a == pool_out_reserve_a,
         pool_in_reserve_b == pool_out_reserve_b,
         pool_in_order_hash == pool_out_order_hash,
-        pool_in_value == pool_out_value,
         // Pool Address must be unchanged (both Payment and Stake Credential)
         pool_in_address == pool_out_address,
         // Trading Fee must be between **0.05%** and **10%**
