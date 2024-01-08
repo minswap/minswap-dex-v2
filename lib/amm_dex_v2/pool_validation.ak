@@ -412,8 +412,9 @@ pub fn validate_swap_multi_routing(
       },
     }
   when order_step is {
-    SwapMultiRouting(routings, minimum_receive) -> {
+    SwapMultiRouting(routings, swap_amount, minimum_receive) -> {
       expect and {
+          swap_amount > 0,
           minimum_receive > 0,
           // The number of Pool Inputs and Pool Outputs must be the same with _routings_ length
           utils.compare_list_length(batching_pools, routings),
@@ -423,9 +424,8 @@ pub fn validate_swap_multi_routing(
         routings: routings,
         order_in_value: order_in_value,
         order_out_value: order_out_value,
+        swap_amount: swap_amount,
         minimum_receive: minimum_receive,
-        max_batcher_fee: max_batcher_fee,
-        output_ada: output_ada,
         used_batcher_fee: order_fee,
       )
     }

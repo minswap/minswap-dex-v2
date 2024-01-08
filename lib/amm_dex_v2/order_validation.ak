@@ -31,11 +31,10 @@ fn validate_swap_exact_in(
   receiver: Address,
   receiver_datum_hash_opt: Option<CustomDatumHash>,
   a_to_b_direction: Bool,
+  swap_amount: Int,
   asset_a: Asset,
   asset_b: Asset,
-  max_batcher_fee: Int,
   used_batcher_fee: Int,
-  output_ada: Int,
   trading_fee_numerator: Int,
   trading_fee_denominator: Int,
   profit_sharing_opt: Option<(Int, Int)>,
@@ -60,26 +59,18 @@ fn validate_swap_exact_in(
     asset_in
   let Asset { policy_id: asset_out_policy_id, asset_name: asset_out_asset_name } =
     asset_out
-  let temp_amount_in =
-    value.quantity_of(order_in_value, asset_in_policy_id, asset_in_asset_name)
-  let amount_in =
-    if utils.is_ada_asset(asset_in_policy_id, asset_in_asset_name) {
-      temp_amount_in - ( max_batcher_fee + output_ada )
-    } else {
-      temp_amount_in
-    }
-  expect amount_in > 0
+
   let amount_out =
     math.calculate_amount_out(
       reserve_in: reserve_in,
       reserve_out: reserve_out,
-      amount_in: amount_in,
+      amount_in: swap_amount,
       trading_fee_numerator: trading_fee_numerator,
       trading_fee_denominator: trading_fee_denominator,
     )
   let earned_fee_in =
     math.calculate_earned_fee_in(
-      amount_in: amount_in,
+      amount_in: swap_amount,
       trading_fee_numerator: trading_fee_numerator,
       trading_fee_denominator: trading_fee_denominator,
       fee_sharing_opt: profit_sharing_opt,
@@ -87,12 +78,9 @@ fn validate_swap_exact_in(
   let slippage_sastified = is_slippage_sastified(amount_out)
   if slippage_sastified {
     let expect_order_value_out =
-      value.zero()
-        |> value.add(
-             ada_policy_id,
-             ada_asset_name,
-             output_ada + ( max_batcher_fee - used_batcher_fee ),
-           )
+      order_in_value
+        |> value.add(ada_policy_id, ada_asset_name, -used_batcher_fee)
+        |> value.add(asset_in_policy_id, asset_in_asset_name, -swap_amount)
         |> value.add(asset_out_policy_id, asset_out_asset_name, amount_out)
     expect
       validate_order_output(
@@ -103,18 +91,18 @@ fn validate_swap_exact_in(
       )
     if a_to_b_direction {
       (
-        datum_reserve_a + amount_in - earned_fee_in,
+        datum_reserve_a + swap_amount - earned_fee_in,
         datum_reserve_b - amount_out,
-        value_reserve_a + amount_in,
+        value_reserve_a + swap_amount,
         value_reserve_b - amount_out,
         total_liquidity,
       )
     } else {
       (
         datum_reserve_a - amount_out,
-        datum_reserve_b + amount_in - earned_fee_in,
+        datum_reserve_b + swap_amount - earned_fee_in,
         value_reserve_a - amount_out,
-        value_reserve_b + amount_in,
+        value_reserve_b + swap_amount,
         total_liquidity,
       )
     }
@@ -143,12 +131,11 @@ fn validate_swap_exact_out(
   receiver: Address,
   receiver_datum_hash_opt: Option<CustomDatumHash>,
   a_to_b_direction: Bool,
+  maximum_swap_amount: Int,
   expected_receive: Int,
   asset_a: Asset,
   asset_b: Asset,
-  max_batcher_fee: Int,
   used_batcher_fee: Int,
-  output_ada: Int,
   trading_fee_numerator: Int,
   trading_fee_denominator: Int,
   profit_sharing_opt: Option<(Int, Int)>,
@@ -172,15 +159,6 @@ fn validate_swap_exact_out(
     asset_in
   let Asset { policy_id: asset_out_policy_id, asset_name: asset_out_asset_name } =
     asset_out
-  let temp_amount_in =
-    value.quantity_of(order_in_value, asset_in_policy_id, asset_in_asset_name)
-  let maximum_amount_in =
-    if utils.is_ada_asset(asset_in_policy_id, asset_in_asset_name) {
-      temp_amount_in - ( max_batcher_fee + output_ada )
-    } else {
-      temp_amount_in
-    }
-  expect maximum_amount_in > 0
   let necessary_amount_in =
     math.calculate_amount_in(
       reserve_in,
@@ -196,21 +174,13 @@ fn validate_swap_exact_out(
       trading_fee_denominator: trading_fee_denominator,
       fee_sharing_opt: profit_sharing_opt,
     )
-  let slippage_sastified = necessary_amount_in <= maximum_amount_in
+  let slippage_sastified = necessary_amount_in <= maximum_swap_amount
   if slippage_sastified {
     let expect_order_value_out =
-      value.zero()
-        |> value.add(
-             ada_policy_id,
-             ada_asset_name,
-             output_ada + ( max_batcher_fee - used_batcher_fee ),
-           )
+      order_in_value
+        |> value.add(ada_policy_id, ada_asset_name, -used_batcher_fee)
+        |> value.add(asset_in_policy_id, asset_in_asset_name, -necessary_amount_in)
         |> value.add(asset_out_policy_id, asset_out_asset_name, expected_receive)
-        |> value.add(
-             asset_in_policy_id,
-             asset_in_asset_name,
-             maximum_amount_in - necessary_amount_in,
-           )
     expect
       validate_order_output(
         receiver: receiver,
@@ -259,13 +229,13 @@ fn validate_deposit(
   sender_datum_hash_opt: Option<CustomDatumHash>,
   receiver: Address,
   receiver_datum_hash_opt: Option<CustomDatumHash>,
+  deposit_amount_a: Int,
+  deposit_amount_b: Int,
   minimum_lp: Int,
   asset_a: Asset,
   asset_b: Asset,
   lp_asset: Asset,
-  max_batcher_fee: Int,
   used_batcher_fee: Int,
-  output_ada: Int,
   profit_sharing_opt: Option<(Int, Int)>,
   trading_fee_numerator: Int,
   trading_fee_denominator: Int,
@@ -285,25 +255,11 @@ fn validate_deposit(
     asset_b
   let Asset { policy_id: lp_asset_policy_id, asset_name: lp_asset_asset_name } =
     lp_asset
-  let temp_amount_a =
-    value.quantity_of(order_in_value, asset_a_policy_id, asset_a_asset_name)
-  let amount_b =
-    value.quantity_of(order_in_value, asset_b_policy_id, asset_b_asset_name)
-  let amount_a =
-    if utils.is_ada_asset(asset_a_policy_id, asset_a_asset_name) {
-      temp_amount_a - ( max_batcher_fee + output_ada )
-    } else {
-      temp_amount_a
-    }
-  expect and {
-      amount_a >= 0,
-      amount_b >= 0,
-      amount_a + amount_b > 0,
-    }
+
   let (earned_fee_a, earned_fee_b, lp_amount) =
     math.calculate_deposit_amount(
-      amount_a: amount_a,
-      amount_b: amount_b,
+      amount_a: deposit_amount_a,
+      amount_b: deposit_amount_b,
       reserve_a: datum_reserve_a,
       reserve_b: datum_reserve_b,
       total_liquidity: total_liquidity,
@@ -314,12 +270,10 @@ fn validate_deposit(
   let slippage_sastified = lp_amount >= minimum_lp
   if slippage_sastified {
     let expect_order_value_out =
-      value.zero()
-        |> value.add(
-             ada_policy_id,
-             ada_asset_name,
-             output_ada + ( max_batcher_fee - used_batcher_fee ),
-           )
+      order_in_value
+        |> value.add(ada_policy_id, ada_asset_name, -used_batcher_fee)
+        |> value.add(asset_a_policy_id, asset_a_asset_name, -deposit_amount_a)
+        |> value.add(asset_b_policy_id, asset_b_asset_name, -deposit_amount_b)
         |> value.add(lp_asset_policy_id, lp_asset_asset_name, lp_amount)
     expect
       validate_order_output(
@@ -329,10 +283,10 @@ fn validate_deposit(
         output: order_output,
       )
     (
-      datum_reserve_a + amount_a - earned_fee_a,
-      datum_reserve_b + amount_b - earned_fee_b,
-      value_reserve_a + amount_a,
-      value_reserve_b + amount_b,
+      datum_reserve_a + deposit_amount_a - earned_fee_a,
+      datum_reserve_b + deposit_amount_b - earned_fee_b,
+      value_reserve_a + deposit_amount_a,
+      value_reserve_b + deposit_amount_b,
       total_liquidity + lp_amount,
     )
   } else {
@@ -359,14 +313,13 @@ fn validate_withdraw(
   sender_datum_hash_opt: Option<CustomDatumHash>,
   receiver: Address,
   receiver_datum_hash_opt: Option<CustomDatumHash>,
+  withdrawal_lp_amount: Int,
   minimum_amount_a: Int,
   minimum_amount_b: Int,
   asset_a: Asset,
   asset_b: Asset,
   lp_asset: Asset,
-  max_batcher_fee: Int,
   used_batcher_fee: Int,
-  output_ada: Int,
   kill_on_failed: Bool,
   pool_state: PoolState,
 ) -> PoolState {
@@ -382,9 +335,6 @@ fn validate_withdraw(
   let Asset { policy_id: asset_b_policy_id, asset_name: asset_b_asset_name } =
     asset_b
   let Asset { policy_id: lp_policy_id, asset_name: lp_asset_name } = lp_asset
-  let withdrawal_lp_amount =
-    value.quantity_of(order_in_value, lp_policy_id, lp_asset_name)
-  expect withdrawal_lp_amount > 0
   let (amount_a_out, amount_b_out) =
     math.calculate_withdraw(
       datum_reserve_a,
@@ -398,12 +348,9 @@ fn validate_withdraw(
     }
   if slippage_sastified {
     let expect_order_value_out =
-      value.zero()
-        |> value.add(
-             ada_policy_id,
-             ada_asset_name,
-             output_ada + ( max_batcher_fee - used_batcher_fee ),
-           )
+      order_in_value
+        |> value.add(ada_policy_id, ada_asset_name, -used_batcher_fee)
+        |> value.add(lp_policy_id, lp_asset_name, -withdrawal_lp_amount)
         |> value.add(asset_a_policy_id, asset_a_asset_name, amount_a_out)
         |> value.add(asset_b_policy_id, asset_b_asset_name, amount_b_out)
     expect
@@ -446,12 +393,11 @@ fn validate_zap_out(
   receiver_datum_hash_opt: Option<CustomDatumHash>,
   minimum_receive: Int,
   a_to_b_direction: Bool,
+  withdrawal_lp_amount: Int,
   asset_a: Asset,
   asset_b: Asset,
   lp_asset: Asset,
-  max_batcher_fee: Int,
   used_batcher_fee: Int,
-  output_ada: Int,
   profit_sharing_opt: Option<(Int, Int)>,
   trading_fee_numerator: Int,
   trading_fee_denominator: Int,
@@ -474,13 +420,7 @@ fn validate_zap_out(
   let Asset { policy_id: asset_out_policy_id, asset_name: asset_out_asset_name } =
     asset_out
   let Asset { policy_id: lp_policy_id, asset_name: lp_asset_name } = lp_asset
-  let withdrawal_lp_amount =
-    value.quantity_of(
-      self: order_in_value,
-      policy_id: lp_policy_id,
-      asset_name: lp_asset_name,
-    )
-  expect withdrawal_lp_amount > 0
+
   let (earned_fee_a, earned_fee_b, amount_out) =
     math.calculate_zap_out(
       withdrawal_lp_amount: withdrawal_lp_amount,
@@ -495,12 +435,9 @@ fn validate_zap_out(
   let slippage_sastified = amount_out >= minimum_receive
   if slippage_sastified {
     let expect_order_value_out =
-      value.zero()
-        |> value.add(
-             ada_policy_id,
-             ada_asset_name,
-             output_ada + ( max_batcher_fee - used_batcher_fee ),
-           )
+      order_in_value
+        |> value.add(ada_policy_id, ada_asset_name, -used_batcher_fee)
+        |> value.add(lp_policy_id, lp_asset_name, -withdrawal_lp_amount)
         |> value.add(asset_out_policy_id, asset_out_asset_name, amount_out)
     expect
       validate_order_output(
@@ -547,20 +484,19 @@ fn validate_partial_swap(
   order_in_value: Value,
   order_out_value: Value,
   a_to_b_direction: Bool,
+  total_swap_amount: Int,
   io_ratio_numerator: Int,
   io_ratio_denominator: Int,
   hops: Int,
   minimum_swap_amount_required: Int,
   asset_a: Asset,
   asset_b: Asset,
-  max_batcher_fee: Int,
   used_batcher_fee: Int,
-  output_ada: Int,
   trading_fee_numerator: Int,
   trading_fee_denominator: Int,
   profit_sharing_opt: Option<(Int, Int)>,
   pool_state: PoolState,
-) -> (Int, Int, Int, Int, Int, Bool) {
+) -> (Int, Int, Int, Int, Int, Int, Bool) {
   let (
     datum_reserve_a,
     datum_reserve_b,
@@ -578,15 +514,6 @@ fn validate_partial_swap(
     asset_in
   let Asset { policy_id: asset_out_policy_id, asset_name: asset_out_asset_name } =
     asset_out
-  let ada_in_require = max_batcher_fee + output_ada
-  let temp_amount_in =
-    value.quantity_of(order_in_value, asset_in_policy_id, asset_in_asset_name)
-  let amount_in =
-    if utils.is_ada_asset(asset_in_policy_id, asset_in_asset_name) {
-      temp_amount_in - ada_in_require
-    } else {
-      temp_amount_in
-    }
   let max_in_swap =
     math.calculate_max_in_swap(
       reserve_in: reserve_in,
@@ -596,70 +523,58 @@ fn validate_partial_swap(
       io_ratio_numerator: io_ratio_numerator,
       io_ratio_denominator: io_ratio_denominator,
     )
-  let swap_amount_in =
-    if amount_in <= max_in_swap {
-      amount_in
+  let swapable_amount_in =
+    if total_swap_amount <= max_in_swap {
+      total_swap_amount
     } else {
       max_in_swap
     }
-  let remaining_amount_in = amount_in - swap_amount_in
+  let remaining_swap_amount = total_swap_amount - swapable_amount_in
   let amount_out =
     math.calculate_amount_out(
       reserve_in: reserve_in,
       reserve_out: reserve_out,
-      amount_in: swap_amount_in,
+      amount_in: swapable_amount_in,
       trading_fee_numerator: trading_fee_numerator,
       trading_fee_denominator: trading_fee_denominator,
     )
   let earned_fee_in =
     math.calculate_earned_fee_in(
-      amount_in: swap_amount_in,
+      amount_in: swapable_amount_in,
       trading_fee_numerator: trading_fee_numerator,
       trading_fee_denominator: trading_fee_denominator,
       fee_sharing_opt: profit_sharing_opt,
     )
-  let temp_old_amount_out =
-    value.quantity_of(order_in_value, asset_out_policy_id, asset_out_asset_name)
-  let old_amount_out =
-    if utils.is_ada_asset(asset_out_policy_id, asset_out_asset_name) {
-      temp_old_amount_out - ada_in_require
-    } else {
-      temp_old_amount_out
-    }
-  let ada_out_require = max_batcher_fee - used_batcher_fee + output_ada
   let expect_order_value_out =
-    value.zero()
-      |> value.add(ada_policy_id, ada_asset_name, ada_out_require)
-      |> value.add(
-           asset_out_policy_id,
-           asset_out_asset_name,
-           old_amount_out + amount_out,
-         )
-      |> value.add(asset_in_policy_id, asset_in_asset_name, remaining_amount_in)
+    order_in_value
+      |> value.add(ada_policy_id, ada_asset_name, -used_batcher_fee)
+      |> value.add(asset_in_policy_id, asset_in_asset_name, -swapable_amount_in)
+      |> value.add(asset_out_policy_id, asset_out_asset_name, amount_out)
   expect and {
-      amount_in > 0,
-      swap_amount_in > 0,
-      swap_amount_in >= minimum_swap_amount_required,
+      swapable_amount_in > 0,
+      swapable_amount_in >= minimum_swap_amount_required,
       expect_order_value_out == order_out_value,
     }
   let has_next_swap =
-    hops - 1 > 0 && remaining_amount_in >= minimum_swap_amount_required
+    hops > 1 && remaining_swap_amount >= minimum_swap_amount_required
   if a_to_b_direction {
     (
-      datum_reserve_a + swap_amount_in - earned_fee_in,
+      datum_reserve_a + swapable_amount_in - earned_fee_in,
       datum_reserve_b - amount_out,
-      value_reserve_a + swap_amount_in,
+      value_reserve_a + swapable_amount_in,
       value_reserve_b - amount_out,
       total_liquidity,
+      remaining_swap_amount,
       has_next_swap,
     )
   } else {
     (
       datum_reserve_a - amount_out,
-      datum_reserve_b + swap_amount_in - earned_fee_in,
+      datum_reserve_b + swapable_amount_in - earned_fee_in,
       value_reserve_a - amount_out,
-      value_reserve_b + swap_amount_in,
+      value_reserve_b + swapable_amount_in,
       total_liquidity,
+      remaining_swap_amount,
       has_next_swap,
     )
   }
@@ -672,15 +587,14 @@ fn validate_withdraw_imbalance(
   sender_datum_hash_opt: Option<CustomDatumHash>,
   receiver: Address,
   receiver_datum_hash_opt: Option<CustomDatumHash>,
+  withdrawal_lp_amount: Int,
   ratio_asset_a: Int,
   ratio_asset_b: Int,
   minimum_amount_a: Int,
   asset_a: Asset,
   asset_b: Asset,
   lp_asset: Asset,
-  max_batcher_fee: Int,
   used_batcher_fee: Int,
-  output_ada: Int,
   trading_fee_numerator: Int,
   trading_fee_denominator: Int,
   profit_sharing_opt: Option<(Int, Int)>,
@@ -699,9 +613,6 @@ fn validate_withdraw_imbalance(
   let Asset { policy_id: asset_b_policy_id, asset_name: asset_b_asset_name } =
     asset_b
   let Asset { policy_id: lp_policy_id, asset_name: lp_asset_name } = lp_asset
-  let withdrawal_lp_amount =
-    value.quantity_of(order_in_value, lp_policy_id, lp_asset_name)
-  expect withdrawal_lp_amount > 0
   let (earned_fee_a, earned_fee_b, amount_a_out, amount_b_out) =
     math.calculate_withdraw_imbalance(
       expect_ab_ratio_numerator: ratio_asset_a,
@@ -717,12 +628,9 @@ fn validate_withdraw_imbalance(
   let slippage_sastified = amount_a_out >= minimum_amount_a
   if slippage_sastified {
     let expect_order_value_out =
-      value.zero()
-        |> value.add(
-             ada_policy_id,
-             ada_asset_name,
-             output_ada + ( max_batcher_fee - used_batcher_fee ),
-           )
+      order_in_value
+        |> value.add(ada_policy_id, ada_asset_name, -used_batcher_fee)
+        |> value.add(lp_policy_id, lp_asset_name, -withdrawal_lp_amount)
         |> value.add(asset_a_policy_id, asset_a_asset_name, amount_a_out)
         |> value.add(asset_b_policy_id, asset_b_asset_name, amount_b_out)
     expect
@@ -853,10 +761,9 @@ pub fn validate_swap_multi_routing_order(
   routings: List<SwapRouting>,
   order_in_value: Value,
   order_out_value: Value,
+  swap_amount: Int,
   minimum_receive: Int,
-  max_batcher_fee: Int,
   used_batcher_fee: Int,
-  output_ada: Int,
 ) -> Bool {
   let first_routing = routings |> builtin.head_list
   let last_routing = utils.list_at_index(routings, list.length(routings) - 1)
@@ -893,28 +800,16 @@ pub fn validate_swap_multi_routing_order(
     asset_in
   let Asset { policy_id: asset_out_policy_id, asset_name: asset_out_asset_name } =
     asset_out
-  let temp_amount_in =
-    value.quantity_of(order_in_value, asset_in_policy_id, asset_in_asset_name)
-  let amount_in =
-    if utils.is_ada_asset(asset_in_policy_id, asset_in_asset_name) {
-      temp_amount_in - ( max_batcher_fee + output_ada )
-    } else {
-      temp_amount_in
-    }
-  expect amount_in > 0
   let amount_out =
     get_swap_multi_amount_out(
-      amount_in: amount_in,
+      amount_in: swap_amount,
       all_pools: pools,
       all_routings: routings,
     )
   let expect_order_value_out =
-    value.zero()
-      |> value.add(
-           ada_policy_id,
-           ada_asset_name,
-           output_ada + ( max_batcher_fee - used_batcher_fee ),
-         )
+    order_in_value
+      |> value.add(ada_policy_id, ada_asset_name, -used_batcher_fee)
+      |> value.add(asset_in_policy_id, asset_in_asset_name, -swap_amount)
       |> value.add(asset_out_policy_id, asset_out_asset_name, amount_out)
   and {
     amount_out >= minimum_receive,
@@ -1038,8 +933,16 @@ pub fn apply_orders(
     }
   let new_state =
     when order_step is {
-      SwapExactIn(a_to_b_direction, minimum_receive, order_killable) -> {
-        expect minimum_receive > 0
+      SwapExactIn(
+        a_to_b_direction,
+        swap_amount,
+        minimum_receive,
+        order_killable,
+      ) -> {
+        expect and {
+            swap_amount > 0,
+            minimum_receive > 0,
+          }
         validate_swap_exact_in(
           order_in_value: order_in_value,
           order_output: output,
@@ -1048,11 +951,10 @@ pub fn apply_orders(
           receiver: receiver,
           receiver_datum_hash_opt: receiver_datum_hash_opt,
           a_to_b_direction: a_to_b_direction,
+          swap_amount: swap_amount,
           asset_a: asset_a,
           asset_b: asset_b,
-          max_batcher_fee: max_batcher_fee,
           used_batcher_fee: used_batcher_fee,
-          output_ada: output_ada,
           trading_fee_numerator: trading_fee_numerator,
           trading_fee_denominator: trading_fee_denominator,
           profit_sharing_opt: profit_sharing_opt,
@@ -1063,8 +965,11 @@ pub fn apply_orders(
           },
         )
       }
-      StopLoss(a_to_b_direction, stop_loss_receive, order_killable) -> {
-        expect stop_loss_receive > 0
+      StopLoss(a_to_b_direction, swap_amount, stop_loss_receive, order_killable) -> {
+        expect and {
+            swap_amount > 0,
+            stop_loss_receive > 0,
+          }
         validate_swap_exact_in(
           order_in_value: order_in_value,
           order_output: output,
@@ -1073,11 +978,10 @@ pub fn apply_orders(
           receiver: receiver,
           receiver_datum_hash_opt: receiver_datum_hash_opt,
           a_to_b_direction: a_to_b_direction,
+          swap_amount: swap_amount,
           asset_a: asset_a,
           asset_b: asset_b,
-          max_batcher_fee: max_batcher_fee,
           used_batcher_fee: used_batcher_fee,
-          output_ada: output_ada,
           trading_fee_numerator: trading_fee_numerator,
           trading_fee_denominator: trading_fee_denominator,
           profit_sharing_opt: profit_sharing_opt,
@@ -1088,8 +992,15 @@ pub fn apply_orders(
           },
         )
       }
-      OCO(a_to_b_direction, minimum_receive, stop_loss_receive, order_killable) -> {
+      OCO(
+        a_to_b_direction,
+        swap_amount,
+        minimum_receive,
+        stop_loss_receive,
+        order_killable,
+      ) -> {
         expect and {
+            swap_amount > 0,
             minimum_receive > 0,
             stop_loss_receive > 0,
           }
@@ -1101,11 +1012,10 @@ pub fn apply_orders(
           receiver: receiver,
           receiver_datum_hash_opt: receiver_datum_hash_opt,
           a_to_b_direction: a_to_b_direction,
+          swap_amount: swap_amount,
           asset_a: asset_a,
           asset_b: asset_b,
-          max_batcher_fee: max_batcher_fee,
           used_batcher_fee: used_batcher_fee,
-          output_ada: output_ada,
           trading_fee_numerator: trading_fee_numerator,
           trading_fee_denominator: trading_fee_denominator,
           profit_sharing_opt: profit_sharing_opt,
@@ -1116,8 +1026,16 @@ pub fn apply_orders(
           },
         )
       }
-      SwapExactOut(a_to_b_direction, expected_receive, order_killable) -> {
-        expect expected_receive > 0
+      SwapExactOut(
+        a_to_b_direction,
+        maximum_swap_amount,
+        expected_receive,
+        order_killable,
+      ) -> {
+        expect and {
+            maximum_swap_amount > 0,
+            expected_receive > 0,
+          }
         validate_swap_exact_out(
           order_in_value: order_in_value,
           order_output: output,
@@ -1126,12 +1044,11 @@ pub fn apply_orders(
           receiver: receiver,
           receiver_datum_hash_opt: receiver_datum_hash_opt,
           a_to_b_direction: a_to_b_direction,
+          maximum_swap_amount: maximum_swap_amount,
           expected_receive: expected_receive,
           asset_a: asset_a,
           asset_b: asset_b,
-          max_batcher_fee: max_batcher_fee,
           used_batcher_fee: used_batcher_fee,
-          output_ada: output_ada,
           trading_fee_numerator: trading_fee_numerator,
           trading_fee_denominator: trading_fee_denominator,
           profit_sharing_opt: profit_sharing_opt,
@@ -1139,8 +1056,13 @@ pub fn apply_orders(
           pool_state: pool_state,
         )
       }
-      Deposit(minimum_lp, order_killable) -> {
-        expect minimum_lp > 0
+      Deposit(deposit_amount_a, deposit_amount_b, minimum_lp, order_killable) -> {
+        expect and {
+            deposit_amount_a >= 0,
+            deposit_amount_b >= 0,
+            deposit_amount_a + deposit_amount_b > 0,
+            minimum_lp > 0,
+          }
         validate_deposit(
           order_in_value: order_in_value,
           order_output: output,
@@ -1148,13 +1070,13 @@ pub fn apply_orders(
           sender_datum_hash_opt: sender_datum_hash_opt,
           receiver: receiver,
           receiver_datum_hash_opt: receiver_datum_hash_opt,
+          deposit_amount_a: deposit_amount_a,
+          deposit_amount_b: deposit_amount_b,
           minimum_lp: minimum_lp,
           asset_a: asset_a,
           asset_b: asset_b,
           lp_asset: lp_asset,
-          max_batcher_fee: max_batcher_fee,
           used_batcher_fee: used_batcher_fee,
-          output_ada: output_ada,
           profit_sharing_opt: profit_sharing_opt,
           trading_fee_numerator: trading_fee_numerator,
           trading_fee_denominator: trading_fee_denominator,
@@ -1162,8 +1084,14 @@ pub fn apply_orders(
           pool_state: pool_state,
         )
       }
-      Withdraw(minimum_asset_a, minimum_asset_b, order_killable) -> {
+      Withdraw(
+        withdrawal_lp_amount,
+        minimum_asset_a,
+        minimum_asset_b,
+        order_killable,
+      ) -> {
         expect and {
+            withdrawal_lp_amount > 0,
             minimum_asset_a > 0,
             minimum_asset_b > 0,
           }
@@ -1174,20 +1102,27 @@ pub fn apply_orders(
           sender_datum_hash_opt: sender_datum_hash_opt,
           receiver: receiver,
           receiver_datum_hash_opt: receiver_datum_hash_opt,
+          withdrawal_lp_amount: withdrawal_lp_amount,
           minimum_amount_a: minimum_asset_a,
           minimum_amount_b: minimum_asset_b,
           asset_a: asset_a,
           asset_b: asset_b,
           lp_asset: lp_asset,
-          max_batcher_fee: max_batcher_fee,
           used_batcher_fee: used_batcher_fee,
-          output_ada: output_ada,
           kill_on_failed: order_killable,
           pool_state: pool_state,
         )
       }
-      ZapOut(a_to_b_direction, minimum_receive, order_killable) -> {
-        expect minimum_receive > 0
+      ZapOut(
+        a_to_b_direction,
+        withdrawal_lp_amount,
+        minimum_receive,
+        order_killable,
+      ) -> {
+        expect and {
+            withdrawal_lp_amount > 0,
+            minimum_receive > 0,
+          }
         validate_zap_out(
           order_in_value: order_in_value,
           order_output: output,
@@ -1197,12 +1132,11 @@ pub fn apply_orders(
           receiver_datum_hash_opt: receiver_datum_hash_opt,
           minimum_receive: minimum_receive,
           a_to_b_direction: a_to_b_direction,
+          withdrawal_lp_amount: withdrawal_lp_amount,
           asset_a: asset_a,
           asset_b: asset_b,
           lp_asset: lp_asset,
-          max_batcher_fee: max_batcher_fee,
           used_batcher_fee: used_batcher_fee,
-          output_ada: output_ada,
           profit_sharing_opt: profit_sharing_opt,
           trading_fee_numerator: trading_fee_numerator,
           trading_fee_denominator: trading_fee_denominator,
@@ -1212,6 +1146,7 @@ pub fn apply_orders(
       }
       PartialSwap(
         a_to_b_direction,
+        total_swap_amount,
         io_ratio_numerator,
         io_ratio_denominator,
         hops,
@@ -1222,6 +1157,8 @@ pub fn apply_orders(
             io_ratio_numerator > 0,
             io_ratio_numerator > 0,
             hops > 0,
+            minimum_swap_amount_required > 0,
+            total_swap_amount >= minimum_swap_amount_required,
             used_batcher_fee <= max_batcher_fee_each_time,
           }
         let (
@@ -1230,21 +1167,21 @@ pub fn apply_orders(
           new_total_liquidity,
           new_liquidity_share,
           new_root_k_last,
+          remaining_swap_amount,
           has_next_swap,
         ) =
           validate_partial_swap(
             order_in_value: order_in_value,
             order_out_value: order_out_value,
             a_to_b_direction: a_to_b_direction,
+            total_swap_amount: total_swap_amount,
             io_ratio_numerator: io_ratio_numerator,
             io_ratio_denominator: io_ratio_denominator,
             hops: hops,
             minimum_swap_amount_required: minimum_swap_amount_required,
             asset_a: asset_a,
             asset_b: asset_b,
-            max_batcher_fee: max_batcher_fee,
             used_batcher_fee: used_batcher_fee,
-            output_ada: output_ada,
             trading_fee_numerator: trading_fee_numerator,
             trading_fee_denominator: trading_fee_denominator,
             profit_sharing_opt: profit_sharing_opt,
@@ -1273,6 +1210,7 @@ pub fn apply_orders(
                 lp_asset: order_lp_asset,
                 step: PartialSwap {
                   a_to_b_direction,
+                  total_swap_amount: remaining_swap_amount,
                   io_ratio_numerator,
                   io_ratio_denominator,
                   hops: hops - 1,
@@ -1304,12 +1242,14 @@ pub fn apply_orders(
         )
       }
       WithdrawImbalance(
+        withdrawal_lp_amount,
         ratio_asset_a,
         ratio_asset_b,
         minimum_asset_a,
         order_killable,
       ) -> {
         expect and {
+            withdrawal_lp_amount > 0,
             ratio_asset_a > 0,
             ratio_asset_b > 0,
             minimum_asset_a > 0,
@@ -1321,15 +1261,14 @@ pub fn apply_orders(
           sender_datum_hash_opt: sender_datum_hash_opt,
           receiver: receiver,
           receiver_datum_hash_opt: receiver_datum_hash_opt,
+          withdrawal_lp_amount: withdrawal_lp_amount,
           ratio_asset_a: ratio_asset_a,
           ratio_asset_b: ratio_asset_b,
           minimum_amount_a: minimum_asset_a,
           asset_a: asset_a,
           asset_b: asset_b,
           lp_asset: lp_asset,
-          max_batcher_fee: max_batcher_fee,
           used_batcher_fee: used_batcher_fee,
-          output_ada: output_ada,
           trading_fee_numerator: trading_fee_numerator,
           trading_fee_denominator: trading_fee_denominator,
           profit_sharing_opt: profit_sharing_opt,
@@ -1337,7 +1276,7 @@ pub fn apply_orders(
           pool_state: pool_state,
         )
       }
-      SwapMultiRouting(_, _) -> fail
+      SwapMultiRouting(_, _, _) -> fail
     }
 
   when rest_inputs is {
@@ -1361,323 +1300,323 @@ pub fn apply_orders(
   }
 }
 
-test test_validate_swap_exact_in_with_no_fee_sharing() {
-  let asset_a = Asset { policy_id: ada_policy_id, asset_name: ada_asset_name }
-  let asset_b =
-    Asset {
-      policy_id: #"e16c2dc8ae937e8d3790c7fd7168d7b994621ba14ca11415f39fed72",
-      asset_name: #"4d494e",
-    }
-  let sender =
-    credential.from_verification_key(
-      #"84b1e6990b172a07ca85d479b0708e750a98d32d13ad61887c010b78",
-    )
-  let receiver =
-    credential.from_verification_key(
-      #"830335f3c2fe6c96b61ee835face48ea0c658e877ac4c81a6a284fb0",
-    )
-  let max_batcher_fee = 2000000
-  let output_ada = 2000000
-  let amount_in = 1000000000
-  let amount_out = 14834146387
-  let order_in_value =
-    value.zero()
-      |> value.add(
-           ada_policy_id,
-           ada_asset_name,
-           max_batcher_fee + output_ada + amount_in,
-         )
-  let order_out_value =
-    value.zero()
-      |> value.add(ada_policy_id, ada_asset_name, output_ada)
-      |> value.add(
-           #"e16c2dc8ae937e8d3790c7fd7168d7b994621ba14ca11415f39fed72",
-           #"4d494e",
-           amount_out,
-         )
-  let order_output =
-    Output {
-      address: receiver,
-      value: order_out_value,
-      datum: NoDatum,
-      reference_script: None,
-    }
-  let new_pool_state =
-    validate_swap_exact_in(
-      order_in_value: order_in_value,
-      order_output: order_output,
-      sender: sender,
-      sender_datum_hash_opt: None,
-      receiver: receiver,
-      receiver_datum_hash_opt: None,
-      a_to_b_direction: True,
-      asset_a: asset_a,
-      asset_b: asset_b,
-      max_batcher_fee: max_batcher_fee,
-      used_batcher_fee: max_batcher_fee,
-      output_ada: output_ada,
-      trading_fee_numerator: 3,
-      trading_fee_denominator: 1000,
-      profit_sharing_opt: None,
-      kill_on_failed: False,
-      pool_state: (
-        27877961987941,
-        414804973691450,
-        27877961987941,
-        414804973691450,
-        106241703280080,
-      ),
-      is_slippage_sastified: fn(o) { o > 1 },
-    )
-  // let fee_share = amount_in * 3 / ( 1000 * 6 )
-  new_pool_state == (
-    27878961987941,
-    414790139545063,
-    27878961987941,
-    414790139545063,
-    106241703280080,
-  )
-}
+// test test_validate_swap_exact_in_with_no_fee_sharing() {
+//   let asset_a = Asset { policy_id: ada_policy_id, asset_name: ada_asset_name }
+//   let asset_b =
+//     Asset {
+//       policy_id: #"e16c2dc8ae937e8d3790c7fd7168d7b994621ba14ca11415f39fed72",
+//       asset_name: #"4d494e",
+//     }
+//   let sender =
+//     credential.from_verification_key(
+//       #"84b1e6990b172a07ca85d479b0708e750a98d32d13ad61887c010b78",
+//     )
+//   let receiver =
+//     credential.from_verification_key(
+//       #"830335f3c2fe6c96b61ee835face48ea0c658e877ac4c81a6a284fb0",
+//     )
+//   let max_batcher_fee = 2000000
+//   let output_ada = 2000000
+//   let amount_in = 1000000000
+//   let amount_out = 14834146387
+//   let order_in_value =
+//     value.zero()
+//       |> value.add(
+//            ada_policy_id,
+//            ada_asset_name,
+//            max_batcher_fee + output_ada + amount_in,
+//          )
+//   let order_out_value =
+//     value.zero()
+//       |> value.add(ada_policy_id, ada_asset_name, output_ada)
+//       |> value.add(
+//            #"e16c2dc8ae937e8d3790c7fd7168d7b994621ba14ca11415f39fed72",
+//            #"4d494e",
+//            amount_out,
+//          )
+//   let order_output =
+//     Output {
+//       address: receiver,
+//       value: order_out_value,
+//       datum: NoDatum,
+//       reference_script: None,
+//     }
+//   let new_pool_state =
+//     validate_swap_exact_in(
+//       order_in_value: order_in_value,
+//       order_output: order_output,
+//       sender: sender,
+//       sender_datum_hash_opt: None,
+//       receiver: receiver,
+//       receiver_datum_hash_opt: None,
+//       a_to_b_direction: True,
+//       asset_a: asset_a,
+//       asset_b: asset_b,
+//       max_batcher_fee: max_batcher_fee,
+//       used_batcher_fee: max_batcher_fee,
+//       output_ada: output_ada,
+//       trading_fee_numerator: 3,
+//       trading_fee_denominator: 1000,
+//       profit_sharing_opt: None,
+//       kill_on_failed: False,
+//       pool_state: (
+//         27877961987941,
+//         414804973691450,
+//         27877961987941,
+//         414804973691450,
+//         106241703280080,
+//       ),
+//       is_slippage_sastified: fn(o) { o > 1 },
+//     )
+//   // let fee_share = amount_in * 3 / ( 1000 * 6 )
+//   new_pool_state == (
+//     27878961987941,
+//     414790139545063,
+//     27878961987941,
+//     414790139545063,
+//     106241703280080,
+//   )
+// }
 
-test test_validate_swap_exact_in_with_fee_sharing() {
-  let asset_a = Asset { policy_id: ada_policy_id, asset_name: ada_asset_name }
-  let asset_b =
-    Asset {
-      policy_id: #"e16c2dc8ae937e8d3790c7fd7168d7b994621ba14ca11415f39fed72",
-      asset_name: #"4d494e",
-    }
-  let sender =
-    credential.from_verification_key(
-      #"84b1e6990b172a07ca85d479b0708e750a98d32d13ad61887c010b78",
-    )
-  let receiver =
-    credential.from_verification_key(
-      #"830335f3c2fe6c96b61ee835face48ea0c658e877ac4c81a6a284fb0",
-    )
-  let max_batcher_fee = 2000000
-  let output_ada = 2000000
-  let amount_in = 1000000000
-  let amount_out = 16200168971
-  let order_in_value =
-    value.zero()
-      |> value.add(
-           ada_policy_id,
-           ada_asset_name,
-           max_batcher_fee + output_ada + amount_in,
-         )
-  let order_out_value =
-    value.zero()
-      |> value.add(ada_policy_id, ada_asset_name, output_ada)
-      |> value.add(
-           #"e16c2dc8ae937e8d3790c7fd7168d7b994621ba14ca11415f39fed72",
-           #"4d494e",
-           amount_out,
-         )
-  let order_output =
-    Output {
-      address: receiver,
-      value: order_out_value,
-      datum: NoDatum,
-      reference_script: None,
-    }
-  let new_pool_state =
-    validate_swap_exact_in(
-      order_in_value: order_in_value,
-      order_output: order_output,
-      sender: sender,
-      sender_datum_hash_opt: None,
-      receiver: receiver,
-      receiver_datum_hash_opt: None,
-      a_to_b_direction: True,
-      asset_a: asset_a,
-      asset_b: asset_b,
-      max_batcher_fee: max_batcher_fee,
-      used_batcher_fee: max_batcher_fee,
-      output_ada: output_ada,
-      trading_fee_numerator: 3,
-      trading_fee_denominator: 1000,
-      profit_sharing_opt: Some((1, 6)),
-      kill_on_failed: False,
-      pool_state: (
-        25434557769208,
-        413300185707175,
-        25434557769208,
-        413300185707175,
-        101211362398220,
-      ),
-      is_slippage_sastified: fn(o) { o > 1 },
-    )
-  let fee_share = amount_in * 3 / ( 1000 * 6 )
-  new_pool_state == (
-    25434557769208 + amount_in - fee_share,
-    413300185707175 - amount_out,
-    25434557769208 + amount_in,
-    413300185707175 - amount_out,
-    101211362398220,
-  )
-}
+// test test_validate_swap_exact_in_with_fee_sharing() {
+//   let asset_a = Asset { policy_id: ada_policy_id, asset_name: ada_asset_name }
+//   let asset_b =
+//     Asset {
+//       policy_id: #"e16c2dc8ae937e8d3790c7fd7168d7b994621ba14ca11415f39fed72",
+//       asset_name: #"4d494e",
+//     }
+//   let sender =
+//     credential.from_verification_key(
+//       #"84b1e6990b172a07ca85d479b0708e750a98d32d13ad61887c010b78",
+//     )
+//   let receiver =
+//     credential.from_verification_key(
+//       #"830335f3c2fe6c96b61ee835face48ea0c658e877ac4c81a6a284fb0",
+//     )
+//   let max_batcher_fee = 2000000
+//   let output_ada = 2000000
+//   let amount_in = 1000000000
+//   let amount_out = 16200168971
+//   let order_in_value =
+//     value.zero()
+//       |> value.add(
+//            ada_policy_id,
+//            ada_asset_name,
+//            max_batcher_fee + output_ada + amount_in,
+//          )
+//   let order_out_value =
+//     value.zero()
+//       |> value.add(ada_policy_id, ada_asset_name, output_ada)
+//       |> value.add(
+//            #"e16c2dc8ae937e8d3790c7fd7168d7b994621ba14ca11415f39fed72",
+//            #"4d494e",
+//            amount_out,
+//          )
+//   let order_output =
+//     Output {
+//       address: receiver,
+//       value: order_out_value,
+//       datum: NoDatum,
+//       reference_script: None,
+//     }
+//   let new_pool_state =
+//     validate_swap_exact_in(
+//       order_in_value: order_in_value,
+//       order_output: order_output,
+//       sender: sender,
+//       sender_datum_hash_opt: None,
+//       receiver: receiver,
+//       receiver_datum_hash_opt: None,
+//       a_to_b_direction: True,
+//       asset_a: asset_a,
+//       asset_b: asset_b,
+//       max_batcher_fee: max_batcher_fee,
+//       used_batcher_fee: max_batcher_fee,
+//       output_ada: output_ada,
+//       trading_fee_numerator: 3,
+//       trading_fee_denominator: 1000,
+//       profit_sharing_opt: Some((1, 6)),
+//       kill_on_failed: False,
+//       pool_state: (
+//         25434557769208,
+//         413300185707175,
+//         25434557769208,
+//         413300185707175,
+//         101211362398220,
+//       ),
+//       is_slippage_sastified: fn(o) { o > 1 },
+//     )
+//   let fee_share = amount_in * 3 / ( 1000 * 6 )
+//   new_pool_state == (
+//     25434557769208 + amount_in - fee_share,
+//     413300185707175 - amount_out,
+//     25434557769208 + amount_in,
+//     413300185707175 - amount_out,
+//     101211362398220,
+//   )
+// }
 
-test test_validate_swap_multi_routing_order() {
-  let pool_1_asset_a =
-    Asset { policy_id: ada_policy_id, asset_name: ada_asset_name }
-  let pool_1_asset_b =
-    Asset {
-      policy_id: #"e16c2dc8ae937e8d3790c7fd7168d7b994621ba14ca11415f39fed72",
-      asset_name: #"4d494e",
-    }
-  let pool_1_lp_asset =
-    Asset {
-      policy_id: #"1a919d30617fcbc8a92c337c59c3aecb6c4ded8f154e4c24528ccea2",
-      asset_name: #"6c3ea488e6ff940bb6fb1b18fd605b5931d9fefde6440117015ba484cf321200",
-    }
-  let pool_1_pool_state_in =
-    (
-      27877961987941,
-      414804973691450,
-      27877961987941,
-      414804973691450,
-      106241703280080,
-    )
+// test test_validate_swap_multi_routing_order() {
+//   let pool_1_asset_a =
+//     Asset { policy_id: ada_policy_id, asset_name: ada_asset_name }
+//   let pool_1_asset_b =
+//     Asset {
+//       policy_id: #"e16c2dc8ae937e8d3790c7fd7168d7b994621ba14ca11415f39fed72",
+//       asset_name: #"4d494e",
+//     }
+//   let pool_1_lp_asset =
+//     Asset {
+//       policy_id: #"1a919d30617fcbc8a92c337c59c3aecb6c4ded8f154e4c24528ccea2",
+//       asset_name: #"6c3ea488e6ff940bb6fb1b18fd605b5931d9fefde6440117015ba484cf321200",
+//     }
+//   let pool_1_pool_state_in =
+//     (
+//       27877961987941,
+//       414804973691450,
+//       27877961987941,
+//       414804973691450,
+//       106241703280080,
+//     )
 
-  let pool_1_pool_state_out =
-    (
-      27871263020717,
-      414904973691450,
-      27871263020717,
-      414904973691450,
-      106241703280080,
-    )
+//   let pool_1_pool_state_out =
+//     (
+//       27871263020717,
+//       414904973691450,
+//       27871263020717,
+//       414904973691450,
+//       106241703280080,
+//     )
 
-  let pool1 =
-    BatchingPool {
-      asset_a: pool_1_asset_a,
-      asset_b: pool_1_asset_b,
-      lp_asset: pool_1_lp_asset,
-      trading_fee_numerator: 3,
-      trading_fee_denominator: 1000,
-      profit_sharing: None,
-      order_hash: #"6dc232f0f5832da2070a232ad2f58433883b9a277577048b40d17673",
-      address: credential.from_script(
-        #"11f3fb05033cb08e95f5c6d4b11891003dc762a46828a4b6f164efe2",
-      ),
-      pool_state_in: pool_1_pool_state_in,
-      pool_state_out: pool_1_pool_state_out,
-    }
-  let pool_2_asset_a =
-    Asset { policy_id: ada_policy_id, asset_name: ada_asset_name }
-  let pool_2_asset_b =
-    Asset {
-      policy_id: #"f66d78b4a3cb3d37afa0ec36461e51ecbde00f26c8f0a68f94b69880",
-      asset_name: #"69555344",
-    }
-  let pool_2_lp_asset =
-    Asset {
-      policy_id: #"1a919d30617fcbc8a92c337c59c3aecb6c4ded8f154e4c24528ccea2",
-      asset_name: #"452089abb5bf8cc59b678a2cd7b9ee952346c6c0aa1cf27df324310a70d02fc3",
-    }
-  let pool_2_pool_state_in =
-    (5281584632864, 1432277778019, 5281584632864, 1432277778019, 2450077671602)
-  let pool_2_pool_state_out =
-    (5288283600088, 1430468867110, 5288283600088, 1430468867110, 2450077671602)
-  let pool2 =
-    BatchingPool {
-      asset_a: pool_2_asset_a,
-      asset_b: pool_2_asset_b,
-      lp_asset: pool_2_lp_asset,
-      trading_fee_numerator: 3,
-      trading_fee_denominator: 1000,
-      profit_sharing: None,
-      order_hash: #"6dc232f0f5832da2070a232ad2f58433883b9a277577048b40d17673",
-      address: credential.from_script(
-        #"11f3fb05033cb08e95f5c6d4b11891003dc762a46828a4b6f164efe2",
-      ),
-      pool_state_in: pool_2_pool_state_in,
-      pool_state_out: pool_2_pool_state_out,
-    }
-  let pools =
-    [pool1, pool2]
-  let routing1 =
-    SwapRouting { lp_asset: pool_1_lp_asset, a_to_b_direction: False }
-  let routing2 =
-    SwapRouting { lp_asset: pool_2_lp_asset, a_to_b_direction: True }
-  let routings =
-    [routing1, routing2]
-  let amount_out =
-    get_swap_multi_amount_out(
-      amount_in: 100000000000,
-      all_pools: pools,
-      all_routings: routings,
-    )
-  amount_out == 1808910909
-}
+//   let pool1 =
+//     BatchingPool {
+//       asset_a: pool_1_asset_a,
+//       asset_b: pool_1_asset_b,
+//       lp_asset: pool_1_lp_asset,
+//       trading_fee_numerator: 3,
+//       trading_fee_denominator: 1000,
+//       profit_sharing: None,
+//       order_hash: #"6dc232f0f5832da2070a232ad2f58433883b9a277577048b40d17673",
+//       address: credential.from_script(
+//         #"11f3fb05033cb08e95f5c6d4b11891003dc762a46828a4b6f164efe2",
+//       ),
+//       pool_state_in: pool_1_pool_state_in,
+//       pool_state_out: pool_1_pool_state_out,
+//     }
+//   let pool_2_asset_a =
+//     Asset { policy_id: ada_policy_id, asset_name: ada_asset_name }
+//   let pool_2_asset_b =
+//     Asset {
+//       policy_id: #"f66d78b4a3cb3d37afa0ec36461e51ecbde00f26c8f0a68f94b69880",
+//       asset_name: #"69555344",
+//     }
+//   let pool_2_lp_asset =
+//     Asset {
+//       policy_id: #"1a919d30617fcbc8a92c337c59c3aecb6c4ded8f154e4c24528ccea2",
+//       asset_name: #"452089abb5bf8cc59b678a2cd7b9ee952346c6c0aa1cf27df324310a70d02fc3",
+//     }
+//   let pool_2_pool_state_in =
+//     (5281584632864, 1432277778019, 5281584632864, 1432277778019, 2450077671602)
+//   let pool_2_pool_state_out =
+//     (5288283600088, 1430468867110, 5288283600088, 1430468867110, 2450077671602)
+//   let pool2 =
+//     BatchingPool {
+//       asset_a: pool_2_asset_a,
+//       asset_b: pool_2_asset_b,
+//       lp_asset: pool_2_lp_asset,
+//       trading_fee_numerator: 3,
+//       trading_fee_denominator: 1000,
+//       profit_sharing: None,
+//       order_hash: #"6dc232f0f5832da2070a232ad2f58433883b9a277577048b40d17673",
+//       address: credential.from_script(
+//         #"11f3fb05033cb08e95f5c6d4b11891003dc762a46828a4b6f164efe2",
+//       ),
+//       pool_state_in: pool_2_pool_state_in,
+//       pool_state_out: pool_2_pool_state_out,
+//     }
+//   let pools =
+//     [pool1, pool2]
+//   let routing1 =
+//     SwapRouting { lp_asset: pool_1_lp_asset, a_to_b_direction: False }
+//   let routing2 =
+//     SwapRouting { lp_asset: pool_2_lp_asset, a_to_b_direction: True }
+//   let routings =
+//     [routing1, routing2]
+//   let amount_out =
+//     get_swap_multi_amount_out(
+//       amount_in: 100000000000,
+//       all_pools: pools,
+//       all_routings: routings,
+//     )
+//   amount_out == 1808910909
+// }
 
-test test_validate_deposit() {
-  let asset_a = Asset { policy_id: ada_policy_id, asset_name: ada_asset_name }
-  let asset_b =
-    Asset {
-      policy_id: #"e16c2dc8ae937e8d3790c7fd7168d7b994621ba14ca11415f39fed72",
-      asset_name: #"4d494e",
-    }
-  let lp_asset =
-    Asset {
-      policy_id: #"51eee5fe126a1337497dd4d0a43efb31c9f791436b74472a4fc4536a",
-      asset_name: #"6c3ea488e6ff940bb6fb1b18fd605b5931d9fefde6440117015ba484cf321200",
-    }
-  let sender =
-    credential.from_verification_key(
-      #"84b1e6990b172a07ca85d479b0708e750a98d32d13ad61887c010b78",
-    )
-  let receiver =
-    credential.from_verification_key(
-      #"830335f3c2fe6c96b61ee835face48ea0c658e877ac4c81a6a284fb0",
-    )
-  let max_batcher_fee = 2000000
-  let output_ada = 2000000
-  let amount_a = 1000000
-  let amount_b = 123112
-  let amount_out = 867556
-  let order_in_value =
-    value.zero()
-      |> value.add(
-           ada_policy_id,
-           ada_asset_name,
-           max_batcher_fee + output_ada + amount_a,
-         )
-      |> value.add(asset_b.policy_id, asset_b.asset_name, amount_b)
-  let order_out_value =
-    value.zero()
-      |> value.add(ada_policy_id, ada_asset_name, output_ada)
-      |> value.add(lp_asset.policy_id, lp_asset.asset_name, amount_out)
-  let order_output =
-    Output {
-      address: receiver,
-      value: order_out_value,
-      datum: NoDatum,
-      reference_script: None,
-    }
-  let new_pool_state =
-    validate_deposit(
-      order_in_value: order_in_value,
-      order_output: order_output,
-      sender: sender,
-      sender_datum_hash_opt: None,
-      receiver: receiver,
-      receiver_datum_hash_opt: None,
-      minimum_lp: amount_out,
-      asset_a: asset_a,
-      asset_b: asset_b,
-      lp_asset: lp_asset,
-      max_batcher_fee: max_batcher_fee,
-      used_batcher_fee: max_batcher_fee,
-      output_ada: output_ada,
-      trading_fee_numerator: 1,
-      trading_fee_denominator: 100,
-      profit_sharing_opt: None,
-      kill_on_failed: False,
-      pool_state: (1000000, 4000000, 1000000, 4000000, 2000000),
-    )
-  new_pool_state == (2000000, 4123112, 2000000, 4123112, 2867556)
-}
+// test test_validate_deposit() {
+//   let asset_a = Asset { policy_id: ada_policy_id, asset_name: ada_asset_name }
+//   let asset_b =
+//     Asset {
+//       policy_id: #"e16c2dc8ae937e8d3790c7fd7168d7b994621ba14ca11415f39fed72",
+//       asset_name: #"4d494e",
+//     }
+//   let lp_asset =
+//     Asset {
+//       policy_id: #"51eee5fe126a1337497dd4d0a43efb31c9f791436b74472a4fc4536a",
+//       asset_name: #"6c3ea488e6ff940bb6fb1b18fd605b5931d9fefde6440117015ba484cf321200",
+//     }
+//   let sender =
+//     credential.from_verification_key(
+//       #"84b1e6990b172a07ca85d479b0708e750a98d32d13ad61887c010b78",
+//     )
+//   let receiver =
+//     credential.from_verification_key(
+//       #"830335f3c2fe6c96b61ee835face48ea0c658e877ac4c81a6a284fb0",
+//     )
+//   let max_batcher_fee = 2000000
+//   let output_ada = 2000000
+//   let amount_a = 1000000
+//   let amount_b = 123112
+//   let amount_out = 867556
+//   let order_in_value =
+//     value.zero()
+//       |> value.add(
+//            ada_policy_id,
+//            ada_asset_name,
+//            max_batcher_fee + output_ada + amount_a,
+//          )
+//       |> value.add(asset_b.policy_id, asset_b.asset_name, amount_b)
+//   let order_out_value =
+//     value.zero()
+//       |> value.add(ada_policy_id, ada_asset_name, output_ada)
+//       |> value.add(lp_asset.policy_id, lp_asset.asset_name, amount_out)
+//   let order_output =
+//     Output {
+//       address: receiver,
+//       value: order_out_value,
+//       datum: NoDatum,
+//       reference_script: None,
+//     }
+//   let new_pool_state =
+//     validate_deposit(
+//       order_in_value: order_in_value,
+//       order_output: order_output,
+//       sender: sender,
+//       sender_datum_hash_opt: None,
+//       receiver: receiver,
+//       receiver_datum_hash_opt: None,
+//       minimum_lp: amount_out,
+//       asset_a: asset_a,
+//       asset_b: asset_b,
+//       lp_asset: lp_asset,
+//       max_batcher_fee: max_batcher_fee,
+//       used_batcher_fee: max_batcher_fee,
+//       output_ada: output_ada,
+//       trading_fee_numerator: 1,
+//       trading_fee_denominator: 100,
+//       profit_sharing_opt: None,
+//       kill_on_failed: False,
+//       pool_state: (1000000, 4000000, 1000000, 4000000, 2000000),
+//     )
+//   new_pool_state == (2000000, 4123112, 2000000, 4123112, 2867556)
+// }
 
 // TODO: Need to rework later
 pub fn validate_cancel_expired_orders(

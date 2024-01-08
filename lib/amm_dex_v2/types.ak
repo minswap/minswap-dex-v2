@@ -71,6 +71,8 @@ pub type OrderStep {
   SwapExactIn {
     // The AToB direction of swap request. True for A -> B and False for B -> A
     a_to_b_direction: Bool,
+    // Amount of Asset In which users want to exchange
+    swap_amount: Int,
     // Minimum amount of Asset Out which users want to receive after exchanging
     minimum_receive: Int,
     // Decide the Order behavior in case Order is not meet the slippage tolerance
@@ -81,6 +83,8 @@ pub type OrderStep {
   StopLoss {
     // The AToB direction of swap request. True for A -> B and False for B -> A
     a_to_b_direction: Bool,
+    // Amount of Asset In which users want to exchange
+    swap_amount: Int,
     // Maximum amount of Asset Out which users want to receive after exchanging
     stop_loss_receive: Int,
     // Decide the Order behavior in case Order is not meet the slippage tolerance
@@ -92,6 +96,8 @@ pub type OrderStep {
   OCO {
     // The AToB direction of swap request. True for A -> B and False for B -> A
     a_to_b_direction: Bool,
+    // Amount of Asset In which users want to exchange
+    swap_amount: Int,
     // Minimum amount of Asset Out which users want to receive after exchanging
     minimum_receive: Int,
     // Maximum amount of Asset Out which users want to receive after exchanging
@@ -104,6 +110,8 @@ pub type OrderStep {
   SwapExactOut {
     // The AToB direction of swap request. True for A -> B and False for B -> A 
     a_to_b_direction: Bool,
+    // Maximum amount of Asset In which users want to exchange
+    maximum_swap_amount: Int,
     // The exact amount of Asset Out which users want to receive after exchanging
     expected_receive: Int,
     // Decide the Order behavior in case Order is not meet the slippage tolerance
@@ -111,6 +119,10 @@ pub type OrderStep {
   }
   // Deposit is used for depositing pool's assets and receiving LP Token
   Deposit {
+    // Amount of Asset A which users want to deposit
+    deposit_amount_a: Int,
+    // Amount of Asset B which users want to deposit
+    deposit_amount_b: Int,
     // The minimum amount of LP Token which users want to receive after depositing
     minimum_lp: Int,
     // Decide the Order behavior in case Order is not meet the slippage tolerance
@@ -118,6 +130,8 @@ pub type OrderStep {
   }
   // Withdraw is used for withdrawing pool's asset with the exact assets ratio of the liquidity pool at that time
   Withdraw {
+    // Amount of LP Asset which users want to withdraw
+    withdrawal_lp_amount: Int,
     // minimum received amounts of Asset A
     minimum_asset_a: Int,
     // minimum received amounts of Asset B
@@ -129,6 +143,8 @@ pub type OrderStep {
   ZapOut {
     // The AToB direction of ZapOut request. `True` in case Asset Out is B and vice versa
     a_to_b_direction: Bool,
+    // Amount of LP Asset which users want to withdraw
+    withdrawal_lp_amount: Int,
     // Minimum amount of Asset Out which users want to receive after withdrawing
     minimum_receive: Int,
     // Decide the Order behavior in case Order is not meet the slippage tolerance
@@ -140,6 +156,8 @@ pub type OrderStep {
   PartialSwap {
     // The AToB direction of swap request. True for A -> B and False for B -> A
     a_to_b_direction: Bool,
+    // Total amount of Asset In which users want to exchange 
+    total_swap_amount: Int,
     // the price ratio which users want to exchange
     io_ratio_numerator: Int,
     io_ratio_denominator: Int,
@@ -152,6 +170,8 @@ pub type OrderStep {
   }
   // WithdrawImbalance is used for withdrawing custom amount of assets.
   WithdrawImbalance {
+    // Amount of LP Asset which users want to withdraw
+    withdrawal_lp_amount: Int,
     //  The ratio of Asset A and Asset B users want to receive after withdrawing
     ratio_asset_a: Int,
     ratio_asset_b: Int,
@@ -167,6 +187,8 @@ pub type OrderStep {
     // The routings (including a list of _direction_ and _lp_asset_), 
     // which is defined Liquidity Pools the swap is routing through
     routings: List<SwapRouting>,
+    // Amount of Asset In which users want to exchange
+    swap_amount: Int,
     // Minimum amount of Asset Out which users want to receive after exchanging
     minimum_receive: Int,
   }
