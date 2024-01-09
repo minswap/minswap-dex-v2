@@ -18,8 +18,6 @@ validator(
   authen_policy_id: PolicyId,
   // ValidatorHash of Pool Contract
   pool_hash: ValidatorHash,
-  // ValidationHash of Order Contract
-  order_hash: ValidatorHash,
 ) {
   fn validate_factory(
     datum: FactoryDatum,
@@ -162,7 +160,6 @@ validator(
       reserve_b: pool_datum_reserve_b,
       trading_fee_numerator: pool_datum_trading_fee_numerator,
       trading_fee_denominator: pool_datum_trading_fee_denominator,
-      order_hash: pool_datum_order_hash,
       profit_sharing_opt: pool_datum_profit_sharing_opt,
     } = pool_out_datum
     // profit_sharing must be empty
@@ -227,8 +224,6 @@ validator(
       pool_datum_reserve_b == amount_b,
       // trading_fee_percentage must be between **0.05%** and **10%**
       is_valid_trading_fee,
-      // Order Hash in Pool Datum must be matched with Order Hash in parameters
-      pool_datum_order_hash == order_hash,
       value.from_minted_value(mint) == pool_validation.get_pool_creation_expected_mint(
         authen_policy_id: authen_policy_id,
         lp_asset_name: lp_asset_name,

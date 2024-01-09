@@ -256,8 +256,6 @@ Anytime new Pool is created, a Factory UTxO will be spent can create the 2 new o
 
 - _authen_policy_id_: The PolicyID of `Authen Minting Policy`
 - _pool_hash_: ValidatorHash of Pool Contract
-- _order_hash_: ValidationHash of Order Contract
-
 
 #### 3.3.4.2 Datum
 - _head_: The Head of Factory `LinkedList`` element
@@ -282,7 +280,6 @@ Anytime new Pool is created, a Factory UTxO will be spent can create the 2 new o
      - _total_liquidity_ must be sqrt(_amount_a_ * _amount_b_)
      - _reserve_a_ and _reserve_b_ must be _amount_a_ and _amount_b_
      - _trading_fee_percentage_ must be between **0.05%** and **10%**
-     - _order_hash_ must be the same with parameter
      - _profit_sharing_ must be empty
    - Pool Value must only have necessary Token: Asset A, Asset B, remaining LP Token (_MAX_INT64_ - _total_liquidity_), 1 Pool NFT Token and 3 ADA (required ADA for an UTxO)
    - validate that transaction only mint 3 types of tokens:
@@ -311,7 +308,6 @@ Pool validator is the most important part in the system. It's responsible for gu
 - _reserve_b_: Asset B's balance of Liquidity Providers
 - _trading_fee_numerator_: Numerator of Trading Fee
 - _trading_fee_denominator_: Denominator of Trading Fee
-- _order_hash_: ValidatorHash of Order Contract
 - _profit_sharing_opt_: (Optional) Numerator and Denominator of Profit Sharing percentage, this is the percentage of Trading Fee. (eg, Trading Fee is 3%, Profit Sharing is 1/6 -> Profit Sharing = 1/6 * 3%)
 
 
@@ -395,7 +391,6 @@ Pool validator is the most important part in the system. It's responsible for gu
       -  _total_liquidity_
       -  _reserve_a_
       -  _reseve_b_
-      -  _order_hash_
    -  Each _action_ must be followed:
       -  _UpdatePoolFee_:
             - Trading Fee must be between **0.05%** and **10%**
@@ -510,7 +505,6 @@ Transaction structure:
        - reserve_b: y (5)
        - trading_fee_numerator: Followed by OnChain validation
        - trading_fee_denominator: Followed by OnChain validation
-       - order_hash
        - profit_sharing_opt: None
    - Change UTxOs
 
@@ -666,7 +660,6 @@ Transaction structure:
        - _reserve_b_
        - _trading_fee_numerator_
        - _trading_fee_denominator_
-       - _order_hash_
        - _profit_sharing_opt_
      - Redeemer: Batching
        - _batcher_address_
@@ -689,7 +682,6 @@ Transaction structure:
        - _reserve_b_ (followed by OnChain calculation)
        - _trading_fee_numerator_ (unchanged)
        - _trading_fee_denominator_ (unchanged)
-       - _order_hash_ (unchanged)
        - _profit_sharing_opt_ (unchanged)
    - Order Outputs:
      - Address: _receiver_
@@ -784,7 +776,6 @@ Transaction structure:
        - _reserve_b_
        - _trading_fee_numerator_
        - _trading_fee_denominator_
-       - _order_hash_
        - _profit_sharing_opt_
      - Redeemer: MultiRouting
        - _batcher_address_
@@ -813,7 +804,6 @@ Transaction structure:
        - _reserve_b_ (followed by OnChain calculation)
        - _trading_fee_numerator_ (unchanged)
        - _trading_fee_denominator_ (unchanged)
-       - _order_hash_ (unchanged)
        - _profit_sharing_opt_ (unchanged)
    - Order Output
      - Address: _receiver_
@@ -850,7 +840,6 @@ Transaction structures:
        - _reserve_b_
        - _trading_fee_numerator_
        - _trading_fee_denominator_
-       - _order_hash_
        - _profit_sharing_opt_
      - Redeemer: UpdatePoolFeeOrStakeCredential
        - _action_
@@ -896,7 +885,6 @@ Transaction structures:
        - _reserve_b_
        - _trading_fee_numerator_
        - _trading_fee_denominator_
-       - _order_hash_
        - _profit_sharing_opt_
      - Redeemer: WithdrawLiquidityShare
        - _admin_index_

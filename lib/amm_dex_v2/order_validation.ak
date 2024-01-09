@@ -886,7 +886,6 @@ pub fn apply_orders(
   lp_asset: Asset,
   trading_fee_numerator: Int,
   trading_fee_denominator: Int,
-  order_hash: ByteArray,
   profit_sharing_opt: Option<(Int, Int)>,
   end_valid_time_range: Int,
   order_inputs: List<Input>,
@@ -899,7 +898,12 @@ pub fn apply_orders(
   expect [used_batcher_fee, ..rest_batcher_fees] = orders_fee
 
   let Input {
-    output: Output { value: order_in_value, datum: raw_order_in_datum, .. },
+    output: Output {
+      address: order_in_address,
+      value: order_in_value,
+      datum: raw_order_in_datum,
+      ..
+    },
     ..
   } = input
   let Output { value: order_out_value, .. } = output
@@ -1188,15 +1192,10 @@ pub fn apply_orders(
         expect
           if has_next_swap {
             let Output {
-              address: Address {
-                payment_credential: order_out_payment_cred,
-                ..
-              },
+              address: order_out_address,
               datum: raw_order_out_datum,
               ..
             } = output
-            expect ScriptCredential(order_out_script_hash) =
-              order_out_payment_cred
             expect order_out_datum: OrderDatum =
               utils.must_find_script_datum(datum_map, raw_order_out_datum)
             let expected_order_out_datum =
@@ -1220,7 +1219,7 @@ pub fn apply_orders(
               }
             and {
               expected_order_out_datum == order_out_datum,
-              order_out_script_hash == order_hash,
+              order_in_address == order_out_address,
             }
           } else {
             // Order Output must be returned to receiver and might have receiver_datum_hash_opt
@@ -1286,7 +1285,6 @@ pub fn apply_orders(
         lp_asset: lp_asset,
         trading_fee_numerator: trading_fee_numerator,
         trading_fee_denominator: trading_fee_denominator,
-        order_hash: order_hash,
         profit_sharing_opt: profit_sharing_opt,
         end_valid_time_range: end_valid_time_range,
         order_inputs: rest_inputs,

@@ -32,7 +32,6 @@ pub type PoolDatum {
   reserve_b: Int,
   trading_fee_numerator: Int,
   trading_fee_denominator: Int,
-  order_hash: ValidatorHash,
   profit_sharing_opt: Option<ProfitSharing>,
 }
 
@@ -247,7 +246,6 @@ pub type BatchingPool {
   trading_fee_numerator: Int,
   trading_fee_denominator: Int,
   profit_sharing: Option<(Int, Int)>,
-  order_hash: ValidatorHash,
   address: Address,
   pool_state_in: PoolState,
   pool_state_out: PoolState,
