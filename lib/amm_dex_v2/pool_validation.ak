@@ -386,15 +386,13 @@ pub fn validate_swap_multi_routing(
     receiver_datum_hash_opt,
     step: order_step,
     max_batcher_fee,
-    output_ada,
     lp_asset: order_lp_asset,
     expired_time_opt,
     ..
   } = order_in_datum
   expect and {
-      // max_batcher_fee and output_ada must be positive
+      // max_batcher_fee must be positive
       max_batcher_fee > 0,
-      output_ada > 0,
       // Used Batcher Fee must be positive and less than or equal batcher fee
       order_fee > 0,
       order_fee <= max_batcher_fee,

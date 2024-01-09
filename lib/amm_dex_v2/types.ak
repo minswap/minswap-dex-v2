@@ -210,8 +210,6 @@ pub type OrderDatum {
   // The maximum fee users have to pay to Batcher to execute batching transaction
   // The actual fee Batcher will take might be less than the maximum fee
   max_batcher_fee: Int,
-  // As known as Minimum ADA which users need to put to the Order, and these amounts will be returned with _receiver_ Output
-  output_ada: Int,
   // Order Expired time. If the order is not executed after Expired Time, anyone can help the owner cancel it 
   expired_time_opt: Option<Int>,
 }
