@@ -101,44 +101,55 @@ There are 10 order types:
 
 - **SwapExactIn**: is used for exchanging specific amount of single asset in the liquidity pool, the order will be executed if the received amount is greater than or equal to `minimum_receive` which is defined below
    - _a_to_b_direction_: The AToB direction of swap request. True for A -> B and False for B -> A
+   - _swap_amount_: Amount of Asset In which users want to exchange
    - _minimum_receive_: Minimum amount of Asset Out which users want to receive after exchanging
    - _killable_: Decide the Order behavior in case Order is not meet the slippage tolerance
 - **StopLoss**: is used for exchanging specific amount of single asset in the liquidity pool, the order will be executed if the received amount is less than or equal to `stop_loss_receive` which is defined below
    - _a_to_b_direction_: The AToB direction of swap request. True for A -> B and False for B -> A
+   - _swap_amount_: Amount of Asset In which users want to exchange
    - _stop_loss_receive_: Maximum amount of Asset Out which users want to receive after exchanging
    - _killable_: Decide the Order behavior in case Order is not meet the slippage tolerance
 - **OCO**: is used for exchanging specific amount of single asset in the liquidity pool, the order will be executed if the received amount is less than or equal to `stop_loss_receive` and greater than or equal to `minimum_receive` which are defined below
    - _a_to_b_direction_: The AToB direction of swap request. True for A -> B and False for B -> A
+   - _swap_amount_: Amount of Asset In which users want to exchange
    - _minimum_receive_: Minimum amount of Asset Out which users want to receive after exchanging
    - _stop_loss_receive_: Maximum amount of Asset Out which users want to receive after exchanging
    - _killable_: Decide the Order behavior in case Order is not meet the slippage tolerance
 - **SwapExactOut**: is used for exchanging single asset in the liquidity pool and receiving the exact amout of other asset, the order will be executed if the received amount is equal to `expected_receive` which is defined below
    - _a_to_b_direction_: The AToB direction of swap request. True for A -> B and False for B -> A
+   - _swap_amount_: Amount of Asset In which users want to exchange
    - _expected_receive_: The exact amount of Asset Out which users want to receive after exchanging
    - _killable_: Decide the Order behavior in case Order is not meet the slippage tolerance
 - **Deposit**: is used for depositing pool's assets and receiving LP Token
+   - _deposit_amount_a_: Amount of Asset A which users want to deposit
+   - _deposit_amount_b_: Amount of Asset B which users want to deposit
    - _minimum_lp_: The minimum amount of LP Token which users want to receive after depositing
    - _killable_: Decide the Order behavior in case Order is not meet the slippage tolerance
 - **Withdraw**: is used for withdrawing pool's asset with the exact assets ratio of the liquidity pool at that time
+   - _withdrawal_lp_amount_: Amount of LP Asset which users want to withdraw 
    - _minimum_asset_a_: minimum received amounts of Asset A.
    - _minimum_asset_b_: minimum received amounts of Asset B.
    - _killable_: Decide the Order behavior in case Order is not meet the slippage tolerance
 - **ZapOut**: is used for withdrawing a single pool asset out of Liquidity Pool.
    - _a_to_b_direction_: The AToB direction of ZapOut request. `True` in case Asset Out is B and vice versa
+   - _withdrawal_lp_amount_: Amount of LP Asset which users want to withdraw
    - _minimum_receive_: Minimum amount of Asset Out which users want to receive after withdrawing
    - _killable_: Decide the Order behavior in case Order is not meet the slippage tolerance
 - **PartialSwap**: is used for exchanging partial amounts of single Asset. The Partial Swap can be executed multiple times if the price ratio is matched with the user's expectation, and the time is defined in `hops`.  
    - _a_to_b_direction_: The AToB direction of swap request. True for A -> B and False for B -> A
+   - _total_swap_amount_: Total amount of Asset In which users want to exchange
    - _io_ratio_numerator_ and _io_ratio_denominator_: the price ratio which users want to exchange
    - _hops_: The time PartialSwap can be executed.
    - _minimum_swap_amount_required_: The minimum amount which is required to swap per each execution time.
    - _max_batcher_fee_each_time_: Maximum fee that batcher can take to execute each time
 - **WithdrawImbalance**: is used for withdrawing custom amounts of assets.
+   - _withdrawal_lp_amount_: Amount of LP Asset which users want to withdraw
    - _ratio_asset_a_ and _ratio_asset_b_: The ratio of Asset A and Asset B users want to receive after withdrawing
    - _minimum_asset_a_: The minimum amount of asset A which users want to receive, The amount of Asset will be followed by the ratio (_received_asset_b_ = _minimum_asset_a_ * _ratio_asset_b_ / _ratio_asset_a_)
    - _killable_: Decide the Order behavior in case Order is not meet the slippage tolerance
 - **SwapMultiRouting**: is used for exchanging a specific amount of single asset across multiple Liquidity Pools.
    - _routings_: The routings (including a list of _direction_ and _lp_asset_), which is defined Liquidity Pools the swap is routing through
+   - _swap_amount_: Amount of Asset In which users want to exchange
    - _minimum_receive_: Minimum amount of Asset Out which users want to receive after exchanging
 
 
@@ -152,7 +163,7 @@ An Order Datum keeps information about Order Type and some other informations:
 - _lp_asset_: The Liquidity Pool's LP Asset that the order will be applied to
 - _step_: The information about Order Type which we mentioned above
 - _max_batcher_fee_: The maximum fee users have to pay to Batcher to execute batching transaction. The actual fee Batcher will take might be less than the maximum fee
-- _output_ada_: As known as Minimum ADA which users need to put to the Order, and these amounts will be returned with _receiver_ Output
+- _expired_time_opt_: Order Expired time. If the order is not executed after Expired Time, anyone can help the owner cancel it
 
 
 #### 3.3.2.3 Redeemer
@@ -245,8 +256,6 @@ Anytime new Pool is created, a Factory UTxO will be spent can create the 2 new o
 
 - _authen_policy_id_: The PolicyID of `Authen Minting Policy`
 - _pool_hash_: ValidatorHash of Pool Contract
-- _order_hash_: ValidationHash of Order Contract
-
 
 #### 3.3.4.2 Datum
 - _head_: The Head of Factory `LinkedList`` element
@@ -271,7 +280,6 @@ Anytime new Pool is created, a Factory UTxO will be spent can create the 2 new o
      - _total_liquidity_ must be sqrt(_amount_a_ * _amount_b_)
      - _reserve_a_ and _reserve_b_ must be _amount_a_ and _amount_b_
      - _trading_fee_percentage_ must be between **0.05%** and **10%**
-     - _order_hash_ must be the same with parameter
      - _profit_sharing_ must be empty
    - Pool Value must only have necessary Token: Asset A, Asset B, remaining LP Token (_MAX_INT64_ - _total_liquidity_), 1 Pool NFT Token and 3 ADA (required ADA for an UTxO)
    - validate that transaction only mint 3 types of tokens:
@@ -300,7 +308,6 @@ Pool validator is the most important part in the system. It's responsible for gu
 - _reserve_b_: Asset B's balance of Liquidity Providers
 - _trading_fee_numerator_: Numerator of Trading Fee
 - _trading_fee_denominator_: Denominator of Trading Fee
-- _order_hash_: ValidatorHash of Order Contract
 - _profit_sharing_opt_: (Optional) Numerator and Denominator of Profit Sharing percentage, this is the percentage of Trading Fee. (eg, Trading Fee is 3%, Profit Sharing is 1/6 -> Profit Sharing = 1/6 * 3%)
 
 
@@ -345,7 +352,7 @@ Pool validator is the most important part in the system. It's responsible for gu
      - Important note that order inputs are sorted lexicographically due to Cardano ledger's design, so the Batcher will pre-calculate correct order inputs indexes, pass through the redeemer (_input_indexes_) and validator will sort the Order Inputs with the indexes to make sure that Orders will be processed with FIFO ordering
      - Each order must validate:
        - All amount fields in Order Step must be positive
-       - _batcher_fee_ and _output_ada_ must be positive
+       - _batcher_fee_ must be positive
        - _lp_asset_ in **OrderDatum** must be the same with processing Liquidity Pool
        - Order Output must be returned to _receiver_ and might have _receiver_datum_hash_opt_
        - TODO: Write a doc to explain Order Calculation formula
@@ -365,7 +372,7 @@ Pool validator is the most important part in the system. It's responsible for gu
      - Pool NFT Token
    - validate transaction must have single **SwapMultiRouting** Order and:
      - All amount fields in Order Step must be positive
-     - _batcher_fee_ and _output_ada_ must be positive
+     - _batcher_fee_ must be positive
      - _lp_asset_ in **OrderDatum** must be the same with LP Asset of first Liquidity Pool in routing list
      - Order Output must be returned to _receiver_ and might having _receiver_datum_hash_opt_
      - The number of Pool Inputs and Pool Outputs must be the same with _routings_ length
@@ -384,7 +391,6 @@ Pool validator is the most important part in the system. It's responsible for gu
       -  _total_liquidity_
       -  _reserve_a_
       -  _reseve_b_
-      -  _order_hash_
    -  Each _action_ must be followed:
       -  _UpdatePoolFee_:
             - Trading Fee must be between **0.05%** and **10%**
@@ -499,7 +505,6 @@ Transaction structure:
        - reserve_b: y (5)
        - trading_fee_numerator: Followed by OnChain validation
        - trading_fee_denominator: Followed by OnChain validation
-       - order_hash
        - profit_sharing_opt: None
    - Change UTxOs
 
@@ -524,81 +529,100 @@ Transaction structure:
        - _receiver_datum_hash_
        - _lp_asset_
        - _batcher_fee_
-       - _output_ada_
+       - _expired_time_opt_
        - _step_:
          - _SwapExactIn_:
            - Step:
-             - _direction_
+             - _a_to_b_direction_
+             - _swap_amount_
              - _minimum_receive_ (TODO: Link formula section here)
+             - _killable_
            - Value:
-             - _batcher_fee_ + _output_ada_ ADA
+             - _batcher_fee_ + additional ADA to cover output (if need)
              - Token is swapping
          - _StopLoss_:
            - Step:
-             - _direction_
+             - _a_to_b_direction_
+             - _swap_amount_
              - _stop_loss_receive_ (TODO: Link formula section here)
+             - _killable_
            - Value:
-             - _batcher_fee_ + _output_ada_ ADA
+             - _batcher_fee_ + additional ADA to cover output (if need)
              - Token is swapping
          - _OCO_:
            - Step:
-             - _direction_
+             - _a_to_b_direction_
+             - _swap_amount_
              - _minimum_receive_ (TODO: Link formula section here)
              - _stop_loss_receive_ (TODO: Link formula section here)
+             - _killable_
            - Value:
-             - _batcher_fee_ + _output_ada_ ADA
+             - _batcher_fee_ + additional ADA to cover output (if need)
              - Token is swapping
          - _SwapExactOut_:
            - Step:
-             - _direction_
+             - _a_to_b_direction_
+             - _maximum_swap_amount_
              - _expected_receive_ (TODO: Link formula section here)
+             - _killable_
            - Value:
-             - _batcher_fee_ + _output_ada_ ADA
+             - _batcher_fee_ + additional ADA to cover output (if need)
              - Token is swapping
          - _Deposit_:
            - Step:
+             - _deposit_amount_a_
+             - _deposit_amount_b_
              - _minimum_lp_ (TODO: Link formula section here)
            - Value:
-             - _batcher_fee_ + _output_ada_ ADA
+             - _batcher_fee_ + additional ADA to cover output (if need)
              - Token A and Token B (amount of token A or B can be zero)
          - _Withdraw_:
            - Step:
+             - _withdrawal_lp_amount_
              - _minimum_asset_a_ (TODO: Link formula section here)
              - _minimum_asset_b_ (TODO: Link formula section here)
+             - _killable_
            - Value:
-             - _batcher_fee_ + _output_ada_ ADA
+             - _batcher_fee_ + additional ADA to cover output (if need)
              - LP Asset
          - _ZapOut_:
            - Step:
-             - _direction_
+             - _a_to_b_direction_
+             - _withdrawal_lp_amount_
              - _minimum_receive_ (TODO: Link formula section here)
+             - _killable_
            - Value:
-             - _batcher_fee_ + _output_ada_ ADA
+             - _batcher_fee_ + additional ADA to cover output (if need)
              - LP Asset
          - _WithdrawImbalance_:
            - Step:
+             - _withdrawal_lp_amount_
              - _ratio_asset_a_ (TODO: Link formula section here)
              - _ratio_asset_b_ (TODO: Link formula section here)
              - _minimum_asset_a_ (TODO: Link formula section here)
+             - _killable_
            - Value:
-             - _batcher_fee_ + _output_ada_ ADA
+             - _batcher_fee_ + additional ADA to cover output (if need)
              - LP Asset
          - _PartialSwap_:
            - Step:
-             - _direction_ (TODO: Link formula section here)
+             - _a_to_b_direction_ (TODO: Link formula section here)
+             - _total_swap_amount_
              - _io_ratio_numerator_ (TODO: Link formula section here)
              - _io_ratio_denominator_ (TODO: Link formula section here)
              - _hops_ (TODO: Link formula section here)
              - _minimum_swap_amount_required_ (TODO: Link formula section here)
+             - _max_batcher_fee_each_time_
            - Value:
-             - _batcher_fee_ * _hops_ + _output_ada_ ADA
+             - _batcher_fee_ * _hops_ + additional ADA to cover output (if need)
              - Token is swapping and received Token of previous swap (if you are order's creator, you no need to care about _received Token_)
          - _SwapMultiRouting_:
            - Step:
              - _routings_ (TODO: Link formula section here)
+             - _swap_amount_
              - _minimum_receive_ (TODO: Link formula section here)
            - Value:
-             - _batcher_fee_ + _output_ada_ ADA
+             - _batcher_fee_ + additional ADA to cover output (if need)
              - Token is swapping
    - Change UTxOs
 
@@ -636,7 +660,6 @@ Transaction structure:
        - _reserve_b_
        - _trading_fee_numerator_
        - _trading_fee_denominator_
-       - _order_hash_
        - _profit_sharing_opt_
      - Redeemer: Batching
        - _batcher_address_
@@ -659,7 +682,6 @@ Transaction structure:
        - _reserve_b_ (followed by OnChain calculation)
        - _trading_fee_numerator_ (unchanged)
        - _trading_fee_denominator_ (unchanged)
-       - _order_hash_ (unchanged)
        - _profit_sharing_opt_ (unchanged)
    - Order Outputs:
      - Address: _receiver_
@@ -667,37 +689,33 @@ Transaction structure:
      - Value:
        - _SwapExactIn_:
          - Value:
-           - _output_ada_ ADA
+           - change in ADA
            - Received Token (must be greater than or equal to _minimum_receive_)
        - _StopLoss_:
          - Value:
-           - _output_ada_ ADA
+           - change in ADA
            - Received Token (must be less than or equal to _stop_loss_receive_)
        - _OCO_:
-         - Step:
-           - _direction_
-           - _minimum_receive_ (TODO: Link formula section here)
-           - _stop_loss_receive_ (TODO: Link formula section here)
          - Value:
-           - _output_ada_ ADA
+           - change in ADA
            - Received Token (must be less than or equal to _stop_loss_receive_ and greater than or equal to _minimum_receive_)
        - _SwapExactOut_:
          - Value:
-           - _output_ada_ ADA
+           - change in ADA
            - Received Token (must be equal to _expected_receive_)
            - Change of Swapping Token (if have)
        - _Deposit_:
          - Value:
-           - _output_ada_ ADA
+           - change in ADA
            - LP Token (must be greater than or equal to _minimum_lp_)
        - _Withdraw_:
          - Value:
-           - _output_ada_ ADA
+           - change in ADA
            - Token A (must be greater than or equal to _minimum_asset_a_)
            - Token B (must be greater than or equal to _minimum_asset_b_)
        - _ZapOut_:
          - Value:
-           - _output_ada_ ADA
+           - change in ADA
            - Received Token (must be greater than or equal to _minimum_receive_)
        - _WithdrawImbalance_:
          - Step:
@@ -705,13 +723,13 @@ Transaction structure:
            - _ratio_asset_b_ (TODO: Link formula section here)
            - _minimum_asset_a_ (TODO: Link formula section here)
          - Value:
-           - _output_ada_ ADA
+           - change in ADA
            - Token A (must be greater than or equal to _minimum_asset_a_)
            - Token B (must be greater than or equal to _minimum_asset_a_ * _ratio_asset_b_ / _ratio_asset_a_)
        - _PartialSwap_: partial is more complex, the result has 2 cases
          - Return all the funds to _receiver_ if _hops_ = 1 or remaining Swapping Token is less than _minimum_swap_amount_required_
            - Value:
-             - _batcher_fee_ * (_hops_ - 1) + _output_ada_ ADA
+             - _batcher_fee_ * (_hops_ - 1) + change in ADA
              - remaining swapping Token and received Token
          - Create new _PartialSwap_ Order if _hops_ > 1 and remaining Swapping Token is greater than _minimum_swap_amount_required_
            - Datum:
@@ -720,15 +738,15 @@ Transaction structure:
              - _receiver_datum_hash_ (unchanged)
              - _lp_asset_ (unchanged)
              - _batcher_fee_ (unchanged)
-             - _output_ada_ (unchanged)
              - _step_: _PartialSwap_
-               - _direction_ (unchanged)
+               - _a_to_b_direction_ (unchanged)
+               - _total_swap_amount_: old _total_swap_amount_ - _swaped_amount_ in this hop 
                - _io_ratio_numerator_ (unchanged)
                - _io_ratio_denominator_ (unchanged)
                - _hops_: _old_hops_ - 1
                - _minimum_swap_amount_required_ (unchanged)
            - Value:
-             - _batcher_fee_ * (_hops_ - 1) + _output_ada_ ADA
+             - _batcher_fee_ * (_hops_ - 1) + change in ADA
              - remaining swapping Token and received Token
    - Batcher Change UTxOs
 
@@ -758,7 +776,6 @@ Transaction structure:
        - _reserve_b_
        - _trading_fee_numerator_
        - _trading_fee_denominator_
-       - _order_hash_
        - _profit_sharing_opt_
      - Redeemer: MultiRouting
        - _batcher_address_
@@ -787,13 +804,12 @@ Transaction structure:
        - _reserve_b_ (followed by OnChain calculation)
        - _trading_fee_numerator_ (unchanged)
        - _trading_fee_denominator_ (unchanged)
-       - _order_hash_ (unchanged)
        - _profit_sharing_opt_ (unchanged)
    - Order Output
      - Address: _receiver_
      - DatumHash: _receiver_datum_hash_opt_
      - Value:
-       - _output_ada_ ADA
+       - change in ADA
        - Received Token (must be greater than or equal to _minimum_receive_)
    - Batcher Change UTxOs
 
@@ -824,7 +840,6 @@ Transaction structures:
        - _reserve_b_
        - _trading_fee_numerator_
        - _trading_fee_denominator_
-       - _order_hash_
        - _profit_sharing_opt_
      - Redeemer: UpdatePoolFeeOrStakeCredential
        - _action_
@@ -870,7 +885,6 @@ Transaction structures:
        - _reserve_b_
        - _trading_fee_numerator_
        - _trading_fee_denominator_
-       - _order_hash_
        - _profit_sharing_opt_
      - Redeemer: WithdrawLiquidityShare
        - _admin_index_

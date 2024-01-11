@@ -3,7 +3,7 @@ use aiken/dict
 use aiken/interval.{Finite, Interval, IntervalBound}
 use aiken/list
 use aiken/transaction.{Input, Output, OutputReference, ValidityRange}
-use aiken/transaction/credential.{Address, PaymentCredential, ScriptCredential}
+use aiken/transaction/credential.{Address, PaymentCredential}
 use aiken/transaction/value.{
   AssetName, PolicyId, Value, ada_asset_name, ada_policy_id,
 }
@@ -109,7 +109,6 @@ fn get_batching_pool(
     reserve_b: pool_in_datum_reserve_b,
     trading_fee_numerator: pool_in_trading_fee_numerator,
     trading_fee_denominator: pool_in_trading_fee_denominator,
-    order_hash: pool_in_order_hash,
     profit_sharing_opt: pool_in_profit_sharing_opt,
   } = pool_in_datum
   expect pool_out_datum: PoolDatum =
@@ -122,7 +121,6 @@ fn get_batching_pool(
     reserve_b: pool_out_datum_reserve_b,
     trading_fee_numerator: pool_out_trading_fee_numerator,
     trading_fee_denominator: pool_out_trading_fee_denominator,
-    order_hash: pool_out_order_hash,
     profit_sharing_opt: pool_out_profit_sharing_opt,
   } = pool_out_datum
 
@@ -137,7 +135,6 @@ fn get_batching_pool(
       pool_in_asset_b == pool_out_asset_b,
       pool_in_trading_fee_numerator == pool_out_trading_fee_numerator,
       pool_in_trading_fee_denominator == pool_out_trading_fee_denominator,
-      pool_in_order_hash == pool_out_order_hash,
       pool_in_profit_sharing_opt == pool_out_profit_sharing_opt,
     }
   let Asset { policy_id: asset_a_policy_id, asset_name: asset_a_asset_name } =
@@ -203,7 +200,6 @@ fn get_batching_pool(
     trading_fee_numerator: pool_in_trading_fee_numerator,
     trading_fee_denominator: pool_in_trading_fee_denominator,
     profit_sharing: pool_in_profit_sharing_opt,
-    order_hash: pool_in_order_hash,
     address: pool_in_address,
     pool_state_in: (
       pool_in_datum_reserve_a,
@@ -247,7 +243,6 @@ pub fn validate_batching(
     trading_fee_numerator,
     trading_fee_denominator,
     profit_sharing,
-    order_hash,
     address: pool_address,
     pool_state_in,
     pool_state_out,
@@ -266,11 +261,7 @@ pub fn validate_batching(
       fn(input) {
         let Input { output: out, .. } = input
         let Output { address: addr, .. } = out
-        let Address { payment_credential: payment_cred, .. } = addr
-        when payment_cred is {
-          ScriptCredential(hash) -> hash == order_hash
-          _ -> False
-        }
+        addr != pool_address && addr != batcher_address
       },
     )
   // Currently, transaction inputs will be sorted by TxId and TxIndex of UTxO.
@@ -308,7 +299,6 @@ pub fn validate_batching(
     lp_asset: lp_asset,
     trading_fee_numerator: trading_fee_numerator,
     trading_fee_denominator: trading_fee_denominator,
-    order_hash: order_hash,
     profit_sharing_opt: profit_sharing,
     end_valid_time_range: end_valid_time_range,
     order_inputs: sorted_user_inputs,
@@ -342,7 +332,6 @@ pub fn validate_swap_multi_routing(
     )
 
   let BatchingPool {
-    order_hash,
     address: Address { payment_credential: pool_payment_credential, .. },
     lp_asset: pool_lp_asset,
     ..
@@ -352,17 +341,9 @@ pub fn validate_swap_multi_routing(
     list.filter(
       all_inputs,
       fn(input) {
-        let Input {
-          output: Output {
-            address: Address { payment_credential: payment_cred, .. },
-            ..
-          },
-          ..
-        } = input
-        when payment_cred is {
-          ScriptCredential(hash) -> hash == order_hash
-          _ -> False
-        }
+        let Input { output: Output { address: addr, .. }, .. } = input
+        let Address { payment_credential: payment_cred, .. } = addr
+        addr != batcher_address && payment_cred != pool_payment_credential
       },
     )
   expect [order_output] =
@@ -386,15 +367,13 @@ pub fn validate_swap_multi_routing(
     receiver_datum_hash_opt,
     step: order_step,
     max_batcher_fee,
-    output_ada,
     lp_asset: order_lp_asset,
     expired_time_opt,
     ..
   } = order_in_datum
   expect and {
-      // max_batcher_fee and output_ada must be positive
+      // max_batcher_fee must be positive
       max_batcher_fee > 0,
-      output_ada > 0,
       // Used Batcher Fee must be positive and less than or equal batcher fee
       order_fee > 0,
       order_fee <= max_batcher_fee,
@@ -412,8 +391,9 @@ pub fn validate_swap_multi_routing(
       },
     }
   when order_step is {
-    SwapMultiRouting(routings, minimum_receive) -> {
+    SwapMultiRouting(routings, swap_amount, minimum_receive) -> {
       expect and {
+          swap_amount > 0,
           minimum_receive > 0,
           // The number of Pool Inputs and Pool Outputs must be the same with _routings_ length
           utils.compare_list_length(batching_pools, routings),
@@ -423,9 +403,8 @@ pub fn validate_swap_multi_routing(
         routings: routings,
         order_in_value: order_in_value,
         order_out_value: order_out_value,
+        swap_amount: swap_amount,
         minimum_receive: minimum_receive,
-        max_batcher_fee: max_batcher_fee,
-        output_ada: output_ada,
         used_batcher_fee: order_fee,
       )
     }
@@ -565,7 +544,6 @@ pub fn validate_update_pool_datum_or_stake_credential(
         total_liquidity: pool_in_total_liquidity,
         reserve_a: pool_in_reserve_a,
         reserve_b: pool_in_reserve_b,
-        order_hash: pool_in_order_hash,
         ..
       } = pool_in_datum
       let PoolDatum {
@@ -576,7 +554,6 @@ pub fn validate_update_pool_datum_or_stake_credential(
         reserve_b: pool_out_reserve_b,
         trading_fee_numerator: pool_out_trading_fee_numerator,
         trading_fee_denominator: pool_out_trading_fee_denominator,
-        order_hash: pool_out_order_hash,
         profit_sharing_opt: pool_out_profit_sharing_opt,
       } = pool_out_datum
       // Profit Sharing can be on/off by setting profit_sharing_opt is None or Some. 
@@ -602,7 +579,6 @@ pub fn validate_update_pool_datum_or_stake_credential(
         pool_in_total_liquidity == pool_out_total_liquidity,
         pool_in_reserve_a == pool_out_reserve_a,
         pool_in_reserve_b == pool_out_reserve_b,
-        pool_in_order_hash == pool_out_order_hash,
         // Pool Address must be unchanged (both Payment and Stake Credential)
         pool_in_address == pool_out_address,
         // Trading Fee must be between **0.05%** and **10%**
