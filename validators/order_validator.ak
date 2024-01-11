@@ -63,7 +63,6 @@ validator(
           outputs,
           redeemers,
           validity_range,
-          fee,
           datums,
           ..
         } = transaction
@@ -116,12 +115,9 @@ validator(
         expect Finite(start_valid_time_range) = lower_bound_type
 
         // We need to consider this logic
-        let weighted_tx_fee =
-          utils.calculate_weighed_fee(fee: fee, num: orders_input_length)
         order_validation.validate_cancel_expired_orders(
           order_inputs: order_inputs,
           all_outputs: outputs,
-          weighted_tx_fee: weighted_tx_fee,
           datum_map: datums,
           start_valid_time_range: start_valid_time_range,
         )

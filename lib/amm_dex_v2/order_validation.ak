@@ -918,7 +918,7 @@ pub fn apply_orders(
     step: order_step,
     max_batcher_fee,
     lp_asset: order_lp_asset,
-    expired_time_opt,
+    expired_opt,
   } = order_in_datum
   expect and {
       // max_batcher_fee must be positive
@@ -928,9 +928,9 @@ pub fn apply_orders(
       used_batcher_fee <= max_batcher_fee,
       // lp_asset must be the same with processing Liquidity Pool
       lp_asset == order_lp_asset,
-      when expired_time_opt is {
+      when expired_opt is {
         None -> True
-        Some(expired_time) -> end_valid_time_range <= expired_time
+        Some((expired_time, _)) -> end_valid_time_range <= expired_time
       },
     }
   let new_state =
@@ -1215,7 +1215,7 @@ pub fn apply_orders(
                   max_batcher_fee_each_time,
                 },
                 max_batcher_fee: max_batcher_fee - used_batcher_fee,
-                expired_time_opt,
+                expired_opt,
               }
             and {
               expected_order_out_datum == order_out_datum,
@@ -1617,56 +1617,49 @@ pub fn apply_orders(
 pub fn validate_cancel_expired_orders(
   order_inputs: List<Input>,
   all_outputs: List<Output>,
-  weighted_tx_fee: Value,
   datum_map: DatumMap,
   start_valid_time_range: Int,
 ) -> Bool {
-  when order_inputs is {
-    [] -> True
-    [order_input, ..rest_order_inputs] ->
-      when all_outputs is {
-        [] -> False
-        [order_output, ..rest_all_outputs] -> {
-          let Input {
-            output: Output {
-              value: order_in_value,
-              datum: order_in_datum_raw,
-              ..
-            },
-            ..
-          } = order_input
-          let Output {
-            address: order_out_address,
-            value: order_out_value,
-            datum: raw_order_output_datum,
-            ..
-          } = order_output
+  expect [order_input, ..rest_order_inputs] = order_inputs
+  expect [order_output, ..rest_all_outputs] = all_outputs
+  let Input {
+    output: Output { value: order_in_value, datum: order_in_datum_raw, .. },
+    ..
+  } = order_input
+  let Output {
+    address: order_out_address,
+    value: order_out_value,
+    datum: raw_order_output_datum,
+    ..
+  } = order_output
 
-          expect order_in_datum: OrderDatum =
-            utils.must_find_script_datum(datum_map, order_in_datum_raw)
+  expect order_in_datum: OrderDatum =
+    utils.must_find_script_datum(datum_map, order_in_datum_raw)
 
-          let OrderDatum { sender, sender_datum_hash_opt, expired_time_opt, .. } =
-            order_in_datum
+  let OrderDatum { sender, sender_datum_hash_opt, expired_opt, .. } =
+    order_in_datum
 
-          expect Some(expired_time) = expired_time_opt
-          expect and {
-              expired_time < start_valid_time_range,
-              sender == order_out_address,
-              // TODO: less fee for this
-              order_out_value == value.merge(order_in_value, weighted_tx_fee),
-              is_valid_datum(
-                raw_datum: raw_order_output_datum,
-                datum_hash_opt: sender_datum_hash_opt,
-              ),
-            }
-          validate_cancel_expired_orders(
-            order_inputs: rest_order_inputs,
-            all_outputs: rest_all_outputs,
-            weighted_tx_fee: weighted_tx_fee,
-            datum_map: datum_map,
-            start_valid_time_range: start_valid_time_range,
-          )
-        }
-      }
+  expect Some((expired_time, max_tip)) = expired_opt
+  expect and {
+      expired_time < start_valid_time_range,
+      sender == order_out_address,
+      value.lovelace_of(order_out_value) >= value.lovelace_of(order_in_value) - max_tip,
+      value.without_lovelace(order_out_value) == value.without_lovelace(
+        order_in_value,
+      ),
+      is_valid_datum(
+        raw_datum: raw_order_output_datum,
+        datum_hash_opt: sender_datum_hash_opt,
+      ),
+    }
+  if rest_order_inputs == [] {
+    True
+  } else {
+    validate_cancel_expired_orders(
+      order_inputs: rest_order_inputs,
+      all_outputs: rest_all_outputs,
+      datum_map: datum_map,
+      start_valid_time_range: start_valid_time_range,
+    )
   }
 }

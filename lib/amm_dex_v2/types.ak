@@ -209,8 +209,11 @@ pub type OrderDatum {
   // The maximum fee users have to pay to Batcher to execute batching transaction
   // The actual fee Batcher will take might be less than the maximum fee
   max_batcher_fee: Int,
-  // Order Expired time. If the order is not executed after Expired Time, anyone can help the owner cancel it 
-  expired_time_opt: Option<Int>,
+  // Order Expired time. If the order is not executed after Expired Time, anyone can help the owner cancel it
+  // <expired time,max_tip>
+  // order_out.get(ADA) >= order_in.get(ADA) - max_tip
+  // order_out.remove(ADA) == order_in.remove(ADA)
+  expired_opt: Option<(Int, Int)>,
 }
 
 pub type OrderRedeemer {
