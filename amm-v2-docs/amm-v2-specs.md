@@ -80,20 +80,38 @@ Order Batching validator is a Withdrawal Script, is responsible for validating P
 - **OrderBatchingRedeemer**: The redeemer contains `pool_input_index`, it's used for finding Pool Input faster, it will be called on Batching Transaction.
    - validate that there's a Pool Input which have Address's Payment Credential matching with `pool_hash`
 
+#### 3.3.2 Expired Order Cancel Validator
 
-#### 3.3.2 Order Validator
+
+Expired Order Cancel validator is a Withdrawal Script, is responsible for validating expired orders are cancelled in the correct way by anyone.
+The orders' funds have to be paid back to sender
+
+
+#### 3.3.1.2 Parameter
+Nothing
+
+
+#### 3.3.2.3 Redeemer
+Any Data
+
+#### 3.3.2.3 Validation
+- validate the transaction inputs only contains Order scripts
+- validate *start_valid_time_range* must be greater than the *expired time*
+- All users' funds have to be paid back to senders. *Cancel tip* might be deducted from the funds, anyone make the transaction can choose the tip amount and the amount must not exceed the maximum tip
+
+#### 3.3.3 Order Validator
 
 
 Order validator is responsible for holding "User Requests" funds and details about what users want to do with the liquidity pool. An order can only be applied to the liquidity pool by Batcher or cancelled by User's payment signature / Script Owner Representation (in case Owner is a Smart Contract)
 
 
-#### 3.3.2.1 Parameter
+#### 3.3.3.1 Parameter
 
 
 - _stake_credential_: the Stake Credential of `Order Batching Validator`
 
 
-#### 3.3.2.2 Datum
+#### 3.3.3.2 Datum
 
 
 There are 10 order types:
@@ -166,7 +184,7 @@ An Order Datum keeps information about Order Type and some other informations:
 - _expired_time_opt_: Order Expired time. If the order is not executed after Expired Time, anyone can help the owner cancel it
 
 
-#### 3.3.2.3 Redeemer
+#### 3.3.3.3 Redeemer
 
 
 - **ApplyOrder**
@@ -174,7 +192,7 @@ An Order Datum keeps information about Order Type and some other informations:
 - **TODO: CancelExpiredOrderByAnyone**
 
 
-#### 3.3.2.4 Validation
+#### 3.3.3.4 Validation
 
 
 - **ApplyOrder**: the redeemer will allow spending Order UTxO in Batching transaction
@@ -183,24 +201,24 @@ An Order Datum keeps information about Order Type and some other informations:
    - validate that the transaction has _sender_'s signature or _sender_ script UTxO in the Transaction Inputs
 
 
-#### 3.3.3 Authen Minting Policy
+#### 3.3.4 Authen Minting Policy
 
 
 Authen Minting Policy is responsible for creating initial Factory `Linked List`, minting legitimate Factory, Liquidity Pool and Liquidity Pool `Share` Tokens
 
 
-#### 3.3.3.1 Parameter
+#### 3.3.4.1 Parameter
 
 
 - _out_ref_: is a Reference of an Unspent Transaction Output, which will only be spent on `MintFactoryAuthen` redeemer to make sure this redeemer can only be called once
 
 
-#### 3.3.3.2 Redeemer
+#### 3.3.4.2 Redeemer
 - **MintFactoryAuthen**
 - **CreatePool**
 
 
-#### 3.3.3.3 Validation
+#### 3.3.4.3 Validation
 
 
 - **MintFactoryAuthen**: The redeemer can be called once to initialize the whole AMM V2 system
@@ -217,7 +235,7 @@ Authen Minting Policy is responsible for creating initial Factory `Linked List`,
      - MAX_INT64 LP Token, LP Token must have PolicyID is **AuthenMintingPolicy** and TokenName is Hash of Pool's Asset A and Asset B (`SHA_256(SHA_256(AssetA), SHA_256(AssetB))`). Asset A and Asset B are in Factory Redeemer and they must be sorted
 
 
-#### 3.3.4 Factory Validator
+#### 3.3.5 Factory Validator
 
 
 Factory Validator is responsible for creating a non-duplicated Liquidity Pool. Each Factory UTxO is an element of Factory `Linked List`, contains a head and tail which are existing Pool's LP Asset Token Name except `#"00"` and `#"ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff00"` aka intial head and tail
@@ -251,24 +269,24 @@ Anytime new Pool is created, a Factory UTxO will be spent can create the 2 new o
 - old head < Pool LP Token Name < old tail
 
 
-#### 3.3.4.1 Parameter
+#### 3.3.5.1 Parameter
 
 
 - _authen_policy_id_: The PolicyID of `Authen Minting Policy`
 - _pool_hash_: ValidatorHash of Pool Contract
 
-#### 3.3.4.2 Datum
+#### 3.3.5.2 Datum
 - _head_: The Head of Factory `LinkedList`` element
 - _tail_: The Head of Factory `LinkedList`` element
 
 
-#### 3.3.4.3 Redeemer
+#### 3.3.5.3 Redeemer
  - **Factory Redeemer**:
    - _asset_a_: Asset A of new Liquidity Pool
    - _asset_b_: Asset B of new Liquidity Pool
 
 
-#### 3.3.4.4 Validation
+#### 3.3.5.4 Validation
 - **Factory Redeemer**:
    - validate that Asset A and Asset B must be sorted
    - validate that there's single Factory UTxO in Transaction Input and contain single legitimate Factory NFT Token
@@ -288,19 +306,19 @@ Anytime new Pool is created, a Factory UTxO will be spent can create the 2 new o
      - MAX_INT64 LP Token, LP Token must have PolicyID is **AuthenMintingPolicy** and TokenName is Hash of Pool's Asset A and Asset B (`SHA_256(SHA_256(AssetA), SHA_256(AssetB))`). Asset A and Asset B are in Factory Redeemer and they must be sorted
 
 
-#### 3.3.5 Pool Validator
+#### 3.3.6 Pool Validator
 
 
 Pool validator is the most important part in the system. It's responsible for guaranteeing that Orders must be processed in the correct way and Liquidity Providers' funds cannot be stolen in any way.
 
 
-#### 3.3.5.1 Parameter
+#### 3.3.6.1 Parameter
 
 
 - _authen_policy_id_: The PolicyID of `Authen Minting Policy`
 
 
-#### 3.3.5.2 Datum
+#### 3.3.6.2 Datum
 - _asset_a_: The Pool's Asset A
 - _asset_b_: The Pool's Asset B
 - _total_liquidity_: Total Share of Liquidity Providers
@@ -311,7 +329,7 @@ Pool validator is the most important part in the system. It's responsible for gu
 - _profit_sharing_opt_: (Optional) Numerator and Denominator of Profit Sharing percentage, this is the percentage of Trading Fee. (eg, Trading Fee is 3%, Profit Sharing is 1/6 -> Profit Sharing = 1/6 * 3%)
 
 
-#### 3.3.5.3 Redeemer
+#### 3.3.6.3 Redeemer
  - **Batching**:
    - _batcher_address_: Address of Batcher
    - _input_indexes_: The Indexes of Orders are processing (it will be explained below)
@@ -332,7 +350,7 @@ Pool validator is the most important part in the system. It's responsible for gu
    - _admin_index_: Index of the UTxO holding Admin License Token in the Transaction Inputs.
 
 
-#### 3.3.5.4 Validation
+#### 3.3.6.4 Validation
 - **Batching**: This redeemer will be called on Batching Transaction. It can process all types of Orders except **SwapMultiRouting** Order
    - validate batcher with valid License Token must be presented in Transaction Inputs:
      - Batcher must sign a Batching transaction.
