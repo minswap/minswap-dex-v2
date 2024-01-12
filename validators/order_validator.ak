@@ -110,14 +110,25 @@ validator(
         )
       let first_script_input = script_inputs |> builtin.head_list
 
-      let Input { output: Output { address: first_script_address, .. }, .. } =
-        first_script_input
+      let Input {
+        output: Output {
+          address: Address {
+            payment_credential: first_payment_script_credential,
+            ..
+          },
+          ..
+        },
+        ..
+      } = first_script_input
       expect [] =
         list.filter(
           script_inputs,
           fn(input) {
-            let Input { output: Output { address, .. }, .. } = input
-            first_script_address != address
+            let Input {
+              output: Output { address: Address { payment_credential, .. }, .. },
+              ..
+            } = input
+            first_payment_script_credential != payment_credential
           },
         )
       let Interval {
