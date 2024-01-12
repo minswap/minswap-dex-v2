@@ -15,7 +15,7 @@ There're 5 contracts in the AMM V2 system:
 
 
 - Order Contract: represents "User Action", contains necessary funds and is waiting to be applied into a Pool
-- Order Batching Contract: verify the representation of Liquidity Pool while spending Order Contract in Batching transaction
+- Order Batching Contract: verify the representation of Liquidity Pool while spending Order Contract in Batching transaction if not validate CancelExpiredOrderByAnyone 
 - Pool Contract: a.k.a Liquidity Pool, which holds all User's assets for trading.
 - Factory Contract: verify the correctness of Pool Creation. Each Factory UTxO is an element of a Factory `Linked List`
 - Authen Minting Policy: is responsible for creating initial Factory `Linked List`, minting legitimate Factory, Liquidity Pool and Liquidity Pool `Share` Tokens
@@ -59,6 +59,7 @@ There're 5 contracts in the AMM V2 system:
 
 
 Order Batching validator is a Withdrawal Script, is responsible for validating Pool Representation in the Transaction Inputs. This validator will help reduce `Order Validator` cost in Batching Transaction.
+If validator can not find pool in Input, it validate CancelExpiredOrderByAnyone logic. Every order must be expired, order output must go to sender and enough value after reduce tip.
 
 
 #### 3.3.1.1 Parameter
@@ -163,7 +164,7 @@ An Order Datum keeps information about Order Type and some other informations:
 - _lp_asset_: The Liquidity Pool's LP Asset that the order will be applied to
 - _step_: The information about Order Type which we mentioned above
 - _max_batcher_fee_: The maximum fee users have to pay to Batcher to execute batching transaction. The actual fee Batcher will take might be less than the maximum fee
-- _expired_time_opt_: Order Expired time. If the order is not executed after Expired Time, anyone can help the owner cancel it
+- _expired_setting_opt_: contain Order Expired time and max tip for cancelling expired order. If the order is not executed after Expired Time, anyone can help the owner cancel it
 
 
 #### 3.3.2.3 Redeemer
@@ -171,7 +172,7 @@ An Order Datum keeps information about Order Type and some other informations:
 
 - **ApplyOrder**
 - **CancelOrder**
-- **TODO: CancelExpiredOrderByAnyone**
+- **CancelExpiredOrderByAnyone**
 
 
 #### 3.3.2.4 Validation
@@ -181,6 +182,8 @@ An Order Datum keeps information about Order Type and some other informations:
    - validate that an Order can be spent if there's a `Order Batching` validator in the `withdrawals`
 - **CancelOrder**: the redeemer will allow _sender_ to spend Order UTxO to get back locked funds.
    - validate that the transaction has _sender_'s signature or _sender_ script UTxO in the Transaction Inputs
+- **CancelExpiredOrderByAnyone**: the redeemer will allow anyone to spend Order UTxO to unlock funds going back to user
+   - validate that an Order can be spent if there's a `Order Batching` validator in the `withdrawals`
 
 
 #### 3.3.3 Authen Minting Policy
@@ -529,7 +532,7 @@ Transaction structure:
        - _receiver_datum_hash_
        - _lp_asset_
        - _batcher_fee_
-       - _expired_time_opt_
+       - _expired_setting_opt_
        - _step_:
          - _SwapExactIn_:
            - Step:
