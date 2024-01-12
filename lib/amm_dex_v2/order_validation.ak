@@ -918,7 +918,7 @@ pub fn apply_orders(
     step: order_step,
     max_batcher_fee,
     lp_asset: order_lp_asset,
-    expired_time_opt,
+    expiry_setting_opt,
   } = order_in_datum
   expect and {
       // max_batcher_fee must be positive
@@ -928,9 +928,9 @@ pub fn apply_orders(
       used_batcher_fee <= max_batcher_fee,
       // lp_asset must be the same with processing Liquidity Pool
       lp_asset == order_lp_asset,
-      when expired_time_opt is {
+      when expiry_setting_opt is {
         None -> True
-        Some(expired_time) -> end_valid_time_range <= expired_time
+        Some((expired_time, _)) -> end_valid_time_range <= expired_time
       },
     }
   let new_state =
@@ -1215,7 +1215,7 @@ pub fn apply_orders(
                   max_batcher_fee_each_time,
                 },
                 max_batcher_fee: max_batcher_fee - used_batcher_fee,
-                expired_time_opt,
+                expiry_setting_opt,
               }
             and {
               expected_order_out_datum == order_out_datum,
@@ -1295,378 +1295,58 @@ pub fn apply_orders(
   }
 }
 
-// test test_validate_swap_exact_in_with_no_fee_sharing() {
-//   let asset_a = Asset { policy_id: ada_policy_id, asset_name: ada_asset_name }
-//   let asset_b =
-//     Asset {
-//       policy_id: #"e16c2dc8ae937e8d3790c7fd7168d7b994621ba14ca11415f39fed72",
-//       asset_name: #"4d494e",
-//     }
-//   let sender =
-//     credential.from_verification_key(
-//       #"84b1e6990b172a07ca85d479b0708e750a98d32d13ad61887c010b78",
-//     )
-//   let receiver =
-//     credential.from_verification_key(
-//       #"830335f3c2fe6c96b61ee835face48ea0c658e877ac4c81a6a284fb0",
-//     )
-//   let max_batcher_fee = 2000000
-//   let output_ada = 2000000
-//   let amount_in = 1000000000
-//   let amount_out = 14834146387
-//   let order_in_value =
-//     value.zero()
-//       |> value.add(
-//            ada_policy_id,
-//            ada_asset_name,
-//            max_batcher_fee + output_ada + amount_in,
-//          )
-//   let order_out_value =
-//     value.zero()
-//       |> value.add(ada_policy_id, ada_asset_name, output_ada)
-//       |> value.add(
-//            #"e16c2dc8ae937e8d3790c7fd7168d7b994621ba14ca11415f39fed72",
-//            #"4d494e",
-//            amount_out,
-//          )
-//   let order_output =
-//     Output {
-//       address: receiver,
-//       value: order_out_value,
-//       datum: NoDatum,
-//       reference_script: None,
-//     }
-//   let new_pool_state =
-//     validate_swap_exact_in(
-//       order_in_value: order_in_value,
-//       order_output: order_output,
-//       sender: sender,
-//       sender_datum_hash_opt: None,
-//       receiver: receiver,
-//       receiver_datum_hash_opt: None,
-//       a_to_b_direction: True,
-//       asset_a: asset_a,
-//       asset_b: asset_b,
-//       max_batcher_fee: max_batcher_fee,
-//       used_batcher_fee: max_batcher_fee,
-//       output_ada: output_ada,
-//       trading_fee_numerator: 3,
-//       trading_fee_denominator: 1000,
-//       profit_sharing_opt: None,
-//       kill_on_failed: False,
-//       pool_state: (
-//         27877961987941,
-//         414804973691450,
-//         27877961987941,
-//         414804973691450,
-//         106241703280080,
-//       ),
-//       is_slippage_sastified: fn(o) { o > 1 },
-//     )
-//   // let fee_share = amount_in * 3 / ( 1000 * 6 )
-//   new_pool_state == (
-//     27878961987941,
-//     414790139545063,
-//     27878961987941,
-//     414790139545063,
-//     106241703280080,
-//   )
-// }
-
-// test test_validate_swap_exact_in_with_fee_sharing() {
-//   let asset_a = Asset { policy_id: ada_policy_id, asset_name: ada_asset_name }
-//   let asset_b =
-//     Asset {
-//       policy_id: #"e16c2dc8ae937e8d3790c7fd7168d7b994621ba14ca11415f39fed72",
-//       asset_name: #"4d494e",
-//     }
-//   let sender =
-//     credential.from_verification_key(
-//       #"84b1e6990b172a07ca85d479b0708e750a98d32d13ad61887c010b78",
-//     )
-//   let receiver =
-//     credential.from_verification_key(
-//       #"830335f3c2fe6c96b61ee835face48ea0c658e877ac4c81a6a284fb0",
-//     )
-//   let max_batcher_fee = 2000000
-//   let output_ada = 2000000
-//   let amount_in = 1000000000
-//   let amount_out = 16200168971
-//   let order_in_value =
-//     value.zero()
-//       |> value.add(
-//            ada_policy_id,
-//            ada_asset_name,
-//            max_batcher_fee + output_ada + amount_in,
-//          )
-//   let order_out_value =
-//     value.zero()
-//       |> value.add(ada_policy_id, ada_asset_name, output_ada)
-//       |> value.add(
-//            #"e16c2dc8ae937e8d3790c7fd7168d7b994621ba14ca11415f39fed72",
-//            #"4d494e",
-//            amount_out,
-//          )
-//   let order_output =
-//     Output {
-//       address: receiver,
-//       value: order_out_value,
-//       datum: NoDatum,
-//       reference_script: None,
-//     }
-//   let new_pool_state =
-//     validate_swap_exact_in(
-//       order_in_value: order_in_value,
-//       order_output: order_output,
-//       sender: sender,
-//       sender_datum_hash_opt: None,
-//       receiver: receiver,
-//       receiver_datum_hash_opt: None,
-//       a_to_b_direction: True,
-//       asset_a: asset_a,
-//       asset_b: asset_b,
-//       max_batcher_fee: max_batcher_fee,
-//       used_batcher_fee: max_batcher_fee,
-//       output_ada: output_ada,
-//       trading_fee_numerator: 3,
-//       trading_fee_denominator: 1000,
-//       profit_sharing_opt: Some((1, 6)),
-//       kill_on_failed: False,
-//       pool_state: (
-//         25434557769208,
-//         413300185707175,
-//         25434557769208,
-//         413300185707175,
-//         101211362398220,
-//       ),
-//       is_slippage_sastified: fn(o) { o > 1 },
-//     )
-//   let fee_share = amount_in * 3 / ( 1000 * 6 )
-//   new_pool_state == (
-//     25434557769208 + amount_in - fee_share,
-//     413300185707175 - amount_out,
-//     25434557769208 + amount_in,
-//     413300185707175 - amount_out,
-//     101211362398220,
-//   )
-// }
-
-// test test_validate_swap_multi_routing_order() {
-//   let pool_1_asset_a =
-//     Asset { policy_id: ada_policy_id, asset_name: ada_asset_name }
-//   let pool_1_asset_b =
-//     Asset {
-//       policy_id: #"e16c2dc8ae937e8d3790c7fd7168d7b994621ba14ca11415f39fed72",
-//       asset_name: #"4d494e",
-//     }
-//   let pool_1_lp_asset =
-//     Asset {
-//       policy_id: #"1a919d30617fcbc8a92c337c59c3aecb6c4ded8f154e4c24528ccea2",
-//       asset_name: #"6c3ea488e6ff940bb6fb1b18fd605b5931d9fefde6440117015ba484cf321200",
-//     }
-//   let pool_1_pool_state_in =
-//     (
-//       27877961987941,
-//       414804973691450,
-//       27877961987941,
-//       414804973691450,
-//       106241703280080,
-//     )
-
-//   let pool_1_pool_state_out =
-//     (
-//       27871263020717,
-//       414904973691450,
-//       27871263020717,
-//       414904973691450,
-//       106241703280080,
-//     )
-
-//   let pool1 =
-//     BatchingPool {
-//       asset_a: pool_1_asset_a,
-//       asset_b: pool_1_asset_b,
-//       lp_asset: pool_1_lp_asset,
-//       trading_fee_numerator: 3,
-//       trading_fee_denominator: 1000,
-//       profit_sharing: None,
-//       order_hash: #"6dc232f0f5832da2070a232ad2f58433883b9a277577048b40d17673",
-//       address: credential.from_script(
-//         #"11f3fb05033cb08e95f5c6d4b11891003dc762a46828a4b6f164efe2",
-//       ),
-//       pool_state_in: pool_1_pool_state_in,
-//       pool_state_out: pool_1_pool_state_out,
-//     }
-//   let pool_2_asset_a =
-//     Asset { policy_id: ada_policy_id, asset_name: ada_asset_name }
-//   let pool_2_asset_b =
-//     Asset {
-//       policy_id: #"f66d78b4a3cb3d37afa0ec36461e51ecbde00f26c8f0a68f94b69880",
-//       asset_name: #"69555344",
-//     }
-//   let pool_2_lp_asset =
-//     Asset {
-//       policy_id: #"1a919d30617fcbc8a92c337c59c3aecb6c4ded8f154e4c24528ccea2",
-//       asset_name: #"452089abb5bf8cc59b678a2cd7b9ee952346c6c0aa1cf27df324310a70d02fc3",
-//     }
-//   let pool_2_pool_state_in =
-//     (5281584632864, 1432277778019, 5281584632864, 1432277778019, 2450077671602)
-//   let pool_2_pool_state_out =
-//     (5288283600088, 1430468867110, 5288283600088, 1430468867110, 2450077671602)
-//   let pool2 =
-//     BatchingPool {
-//       asset_a: pool_2_asset_a,
-//       asset_b: pool_2_asset_b,
-//       lp_asset: pool_2_lp_asset,
-//       trading_fee_numerator: 3,
-//       trading_fee_denominator: 1000,
-//       profit_sharing: None,
-//       order_hash: #"6dc232f0f5832da2070a232ad2f58433883b9a277577048b40d17673",
-//       address: credential.from_script(
-//         #"11f3fb05033cb08e95f5c6d4b11891003dc762a46828a4b6f164efe2",
-//       ),
-//       pool_state_in: pool_2_pool_state_in,
-//       pool_state_out: pool_2_pool_state_out,
-//     }
-//   let pools =
-//     [pool1, pool2]
-//   let routing1 =
-//     SwapRouting { lp_asset: pool_1_lp_asset, a_to_b_direction: False }
-//   let routing2 =
-//     SwapRouting { lp_asset: pool_2_lp_asset, a_to_b_direction: True }
-//   let routings =
-//     [routing1, routing2]
-//   let amount_out =
-//     get_swap_multi_amount_out(
-//       amount_in: 100000000000,
-//       all_pools: pools,
-//       all_routings: routings,
-//     )
-//   amount_out == 1808910909
-// }
-
-// test test_validate_deposit() {
-//   let asset_a = Asset { policy_id: ada_policy_id, asset_name: ada_asset_name }
-//   let asset_b =
-//     Asset {
-//       policy_id: #"e16c2dc8ae937e8d3790c7fd7168d7b994621ba14ca11415f39fed72",
-//       asset_name: #"4d494e",
-//     }
-//   let lp_asset =
-//     Asset {
-//       policy_id: #"51eee5fe126a1337497dd4d0a43efb31c9f791436b74472a4fc4536a",
-//       asset_name: #"6c3ea488e6ff940bb6fb1b18fd605b5931d9fefde6440117015ba484cf321200",
-//     }
-//   let sender =
-//     credential.from_verification_key(
-//       #"84b1e6990b172a07ca85d479b0708e750a98d32d13ad61887c010b78",
-//     )
-//   let receiver =
-//     credential.from_verification_key(
-//       #"830335f3c2fe6c96b61ee835face48ea0c658e877ac4c81a6a284fb0",
-//     )
-//   let max_batcher_fee = 2000000
-//   let output_ada = 2000000
-//   let amount_a = 1000000
-//   let amount_b = 123112
-//   let amount_out = 867556
-//   let order_in_value =
-//     value.zero()
-//       |> value.add(
-//            ada_policy_id,
-//            ada_asset_name,
-//            max_batcher_fee + output_ada + amount_a,
-//          )
-//       |> value.add(asset_b.policy_id, asset_b.asset_name, amount_b)
-//   let order_out_value =
-//     value.zero()
-//       |> value.add(ada_policy_id, ada_asset_name, output_ada)
-//       |> value.add(lp_asset.policy_id, lp_asset.asset_name, amount_out)
-//   let order_output =
-//     Output {
-//       address: receiver,
-//       value: order_out_value,
-//       datum: NoDatum,
-//       reference_script: None,
-//     }
-//   let new_pool_state =
-//     validate_deposit(
-//       order_in_value: order_in_value,
-//       order_output: order_output,
-//       sender: sender,
-//       sender_datum_hash_opt: None,
-//       receiver: receiver,
-//       receiver_datum_hash_opt: None,
-//       minimum_lp: amount_out,
-//       asset_a: asset_a,
-//       asset_b: asset_b,
-//       lp_asset: lp_asset,
-//       max_batcher_fee: max_batcher_fee,
-//       used_batcher_fee: max_batcher_fee,
-//       output_ada: output_ada,
-//       trading_fee_numerator: 1,
-//       trading_fee_denominator: 100,
-//       profit_sharing_opt: None,
-//       kill_on_failed: False,
-//       pool_state: (1000000, 4000000, 1000000, 4000000, 2000000),
-//     )
-//   new_pool_state == (2000000, 4123112, 2000000, 4123112, 2867556)
-// }
-
-// TODO: Need to rework later
 pub fn validate_cancel_expired_orders(
   order_inputs: List<Input>,
   all_outputs: List<Output>,
-  weighted_tx_fee: Value,
   datum_map: DatumMap,
   start_valid_time_range: Int,
 ) -> Bool {
-  when order_inputs is {
-    [] -> True
-    [order_input, ..rest_order_inputs] ->
-      when all_outputs is {
-        [] -> False
-        [order_output, ..rest_all_outputs] -> {
-          let Input {
-            output: Output {
-              value: order_in_value,
-              datum: order_in_datum_raw,
-              ..
-            },
-            ..
-          } = order_input
-          let Output {
-            address: order_out_address,
-            value: order_out_value,
-            datum: raw_order_output_datum,
-            ..
-          } = order_output
+  expect [order_input, ..rest_order_inputs] = order_inputs
+  expect [order_output, ..rest_all_outputs] = all_outputs
+  let Input {
+    output: Output { value: order_in_value, datum: order_in_datum_raw, .. },
+    ..
+  } = order_input
+  let Output {
+    address: order_out_address,
+    value: order_out_value,
+    datum: raw_order_output_datum,
+    ..
+  } = order_output
 
-          expect order_in_datum: OrderDatum =
-            utils.must_find_script_datum(datum_map, order_in_datum_raw)
+  expect order_in_datum: OrderDatum =
+    utils.must_find_script_datum(datum_map, order_in_datum_raw)
 
-          let OrderDatum { sender, sender_datum_hash_opt, expired_time_opt, .. } =
-            order_in_datum
+  let OrderDatum { sender, sender_datum_hash_opt, expiry_setting_opt, .. } =
+    order_in_datum
 
-          expect Some(expired_time) = expired_time_opt
-          expect and {
-              expired_time < start_valid_time_range,
-              sender == order_out_address,
-              // TODO: less fee for this
-              order_out_value == value.merge(order_in_value, weighted_tx_fee),
-              is_valid_datum(
-                raw_datum: raw_order_output_datum,
-                datum_hash_opt: sender_datum_hash_opt,
-              ),
-            }
-          validate_cancel_expired_orders(
-            order_inputs: rest_order_inputs,
-            all_outputs: rest_all_outputs,
-            weighted_tx_fee: weighted_tx_fee,
-            datum_map: datum_map,
-            start_valid_time_range: start_valid_time_range,
-          )
-        }
-      }
+  expect Some((expired_time, max_tip)) = expiry_setting_opt
+  expect and {
+      // the transaction must be created after expired time
+      expired_time < start_valid_time_range,
+      // the output have to paid back to sender
+      sender == order_out_address,
+      // ADA in the order might be deducted for tipping a canceller
+      // The tip must not exceed the maximum tip
+      // Other tokens must be returned to sender
+      value.lovelace_of(order_out_value) >= value.lovelace_of(order_in_value) - max_tip,
+      value.without_lovelace(order_out_value) == value.without_lovelace(
+        order_in_value,
+      ),
+      // If sender is script address, the output have to attach the defined datum
+      is_valid_datum(
+        raw_datum: raw_order_output_datum,
+        datum_hash_opt: sender_datum_hash_opt,
+      ),
+    }
+  if rest_order_inputs == [] {
+    True
+  } else {
+    validate_cancel_expired_orders(
+      order_inputs: rest_order_inputs,
+      all_outputs: rest_all_outputs,
+      datum_map: datum_map,
+      start_valid_time_range: start_valid_time_range,
+    )
   }
 }
