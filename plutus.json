@@ -87,11 +87,11 @@
       "hash": "2109ade2f74be47e1d94617a37967dd924098ce763826935e4bd248d"
     },
     {
-      "title": "order_validator.validate_order_spending_in_batching",
+      "title": "order_validator.validate_order_spending",
       "redeemer": {
         "title": "redeemer",
         "schema": {
-          "$ref": "#/definitions/amm_dex_v2~1types~1OrderBatchingRedeemer"
+          "$ref": "#/definitions/amm_dex_v2~1types~1OrderSpendingRedeemer"
         }
       },
       "parameters": [
@@ -324,11 +324,11 @@
         }
       ]
     },
-    "amm_dex_v2/types/OrderBatchingRedeemer": {
-      "title": "OrderBatchingRedeemer",
+    "amm_dex_v2/types/OrderSpendingRedeemer": {
+      "title": "OrderSpendingRedeemer",
       "anyOf": [
         {
-          "title": "OrderBatchingRedeemer",
+          "title": "OrderSpendingRedeemer",
           "dataType": "constructor",
           "index": 0,
           "fields": [

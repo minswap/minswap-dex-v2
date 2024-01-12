@@ -236,7 +236,7 @@ pub type AuthenRedeemer {
   CreatePool
 }
 
-pub type OrderBatchingRedeemer {
+pub type OrderSpendingRedeemer {
   // it's used for finding Pool Input faster
   pool_input_index: Int,
 }

@@ -325,33 +325,3 @@ pub fn is_list_unique(list: List<a>) -> Bool {
     [x, ..xs] -> !contains_element(xs, x) && is_list_unique(xs)
   }
 }
-
-test test_merge_value() {
-  let order_value =
-    value.zero()
-      |> value.add(ada_policy_id, ada_asset_name, 100000000)
-      |> value.add(
-           #"e16c2dc8ae937e8d3790c7fd7168d7b994621ba14ca11415f39fed72",
-           #"4d494e",
-           200000000,
-         )
-
-  let weighted_fee =
-    value.zero()
-      |> value.add(ada_policy_id, ada_asset_name, -160001)
-      |> value.add(
-           #"e16c2dc8ae937e8d3790c7fd7168d7b994621ba14ca11415f39fed72",
-           #"4d494e",
-           -1281281,
-         )
-
-  let expected_receive =
-    value.zero()
-      |> value.add(ada_policy_id, ada_asset_name, 99839999)
-      |> value.add(
-           #"e16c2dc8ae937e8d3790c7fd7168d7b994621ba14ca11415f39fed72",
-           #"4d494e",
-           198718719,
-         )
-  value.merge(order_value, weighted_fee) == expected_receive
-}

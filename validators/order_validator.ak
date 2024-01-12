@@ -9,8 +9,8 @@ use aiken/transaction/credential.{
 }
 use amm_dex_v2/order_validation
 use amm_dex_v2/types.{
-  ApplyOrder, CancelExpiredOrderByAnyone, CancelOrderByOwner,
-  OrderBatchingRedeemer, OrderDatum, OrderRedeemer, ValidatorHash,
+  ApplyOrder, CancelExpiredOrderByAnyone, CancelOrderByOwner, OrderDatum,
+  OrderRedeemer, OrderSpendingRedeemer, ValidatorHash,
 }
 use amm_dex_v2/utils
 
@@ -70,12 +70,12 @@ validator(
   // the hash of Liquidity Pool Script
   pool_hash: ValidatorHash,
 ) {
-  fn validate_order_spending_in_batching(
-    redeemer: OrderBatchingRedeemer,
+  fn validate_order_spending(
+    redeemer: OrderSpendingRedeemer,
     context: ScriptContext,
   ) -> Bool {
     expect ScriptContext { transaction, purpose: WithdrawFrom(_) } = context
-    let OrderBatchingRedeemer { pool_input_index } = redeemer
+    let OrderSpendingRedeemer { pool_input_index } = redeemer
 
     let Transaction { inputs, .. } = transaction
     let Input {
@@ -90,8 +90,11 @@ validator(
     if ScriptCredential(pool_hash) == pool_payment_credential {
       True
     } else {
+      // Otherwise it have to validating expired orders are cancelled in the correct way by anyone.
       let Transaction { outputs, validity_range, datums, .. } = transaction
-      let script_inputs =
+      // Assume all script inputs are order scripts.
+      // All scripts that have the same Order Datum structure will be accepted in this transaction.
+      let order_inputs =
         list.filter(
           inputs,
           fn(input) {
@@ -112,7 +115,7 @@ validator(
       } = validity_range
       expect Finite(start_valid_time_range) = lower_bound_type
       order_validation.validate_cancel_expired_orders(
-        order_inputs: script_inputs,
+        order_inputs: order_inputs,
         all_outputs: outputs,
         datum_map: datums,
         start_valid_time_range: start_valid_time_range,

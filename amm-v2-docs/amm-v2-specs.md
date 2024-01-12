@@ -15,7 +15,7 @@ There're 5 contracts in the AMM V2 system:
 
 
 - Order Contract: represents "User Action", contains necessary funds and is waiting to be applied into a Pool
-- Order Batching Contract: verify the representation of Liquidity Pool while spending Order Contract in Batching transaction if not validate CancelExpiredOrderByAnyone 
+- Order Spending Contract: takes resposibility to verify two Order contract's redeemer
 - Pool Contract: a.k.a Liquidity Pool, which holds all User's assets for trading.
 - Factory Contract: verify the correctness of Pool Creation. Each Factory UTxO is an element of a Factory `Linked List`
 - Authen Minting Policy: is responsible for creating initial Factory `Linked List`, minting legitimate Factory, Liquidity Pool and Liquidity Pool `Share` Tokens
@@ -55,12 +55,11 @@ There're 5 contracts in the AMM V2 system:
 ### 3.3 Smart Contract
 
 
-#### 3.3.1 Order Batching Validator
+#### 3.3.1 Order Spending Validator
 
 
-Order Batching validator is a Withdrawal Script, is responsible for validating Pool Representation in the Transaction Inputs. This validator will help reduce `Order Validator` cost in Batching Transaction.
-If validator can not find pool in Input, it validate CancelExpiredOrderByAnyone logic. Every order must be expired, order output must go to sender and enough value after reduce tip.
-
+Order Spending validator is a Withdrawal Script and takes the responsibility to validate two Order contract's redeemer *ApplyOrder* and *CancelExpiredOrderByAnyone*.
+To avoid overlapping validation in each utxo, we forward these conditions to this script and the Order script will rely on it
 
 #### 3.3.1.1 Parameter
 
@@ -71,15 +70,21 @@ If validator can not find pool in Input, it validate CancelExpiredOrderByAnyone 
 #### 3.3.1.2 Redeemer
 
 
-- **OrderBatchingRedeemer**:
+- **OrderSpendingRedeemer**:
  - _pool_input_index_: Index of Pool UTxO in Transaction Inputs.
 
 
 #### 3.3.1.3 Validation
 
 
-- **OrderBatchingRedeemer**: The redeemer contains `pool_input_index`, it's used for finding Pool Input faster, it will be called on Batching Transaction.
-   - validate that there's a Pool Input which have Address's Payment Credential matching with `pool_hash`
+- **OrderBatchingRedeemer**: The redeemer contains `pool_input_index`, it's used for finding Pool Input faster
+  - In case the inputs at *pool_input_index* is Pool Input (Address's Payment Credential matching with `pool_hash`), the contract is passed and forward the validation to Pool Contract
+  - Otherwise, it trigger validation for cancelling expired order:
+    - this flow will assume all script inputs are orders and must have the Order datum structure
+    - each input must be matched with an output in the same index
+    - validate the transaction must be created after expired time
+    - validate ADA in the order might be deducted for tipping a canceller. The tip must not exceed the maximum tip and other tokens must be returned to sender
+    - If sender is script address, the output have to attach the defined datum
 
 
 #### 3.3.2 Order Validator
@@ -91,7 +96,7 @@ Order validator is responsible for holding "User Requests" funds and details abo
 #### 3.3.2.1 Parameter
 
 
-- _stake_credential_: the Stake Credential of `Order Batching Validator`
+- _stake_credential_: the Stake Credential of `Order Spending Validator`
 
 
 #### 3.3.2.2 Datum
