@@ -1,4 +1,3 @@
-use aiken/builtin
 use aiken/dict
 use aiken/interval.{Finite, Interval, IntervalBound}
 use aiken/list
@@ -10,9 +9,10 @@ use aiken/transaction/credential.{
 }
 use amm_dex_v2/order_validation
 use amm_dex_v2/types.{
-  ApplyOrder, CancelExpiredOrderByAnyone, CancelOrderByOwner, OrderDatum,
-  OrderRedeemer, ValidatorHash,
+  ApplyOrder, CancelExpiredOrderByAnyone, CancelOrderByOwner,
+  OrderBatchingRedeemer, OrderDatum, OrderRedeemer, ValidatorHash,
 }
+use amm_dex_v2/utils
 
 validator(
   // the Stake Credential of Order Batching Validator
@@ -71,29 +71,26 @@ validator(
   pool_hash: ValidatorHash,
 ) {
   fn validate_order_spending_in_batching(
-    _redeemer: Data,
+    redeemer: OrderBatchingRedeemer,
     context: ScriptContext,
   ) -> Bool {
     expect ScriptContext { transaction, purpose: WithdrawFrom(_) } = context
-    let Transaction { inputs, outputs, validity_range, datums, .. } =
-      transaction
-    let having_pool =
-      list.any(
-        inputs,
-        fn(input) {
-          let Input {
-            output: Output { address: Address { payment_credential, .. }, .. },
-            ..
-          } = input
-          when payment_credential is {
-            ScriptCredential(hash) -> hash == pool_hash
-            _ -> False
-          }
-        },
-      )
-    if having_pool {
+    let OrderBatchingRedeemer { pool_input_index } = redeemer
+
+    let Transaction { inputs, .. } = transaction
+    let Input {
+      output: Output {
+        address: Address { payment_credential: pool_payment_credential, .. },
+        ..
+      },
+      ..
+    } = utils.list_at_index(inputs, pool_input_index)
+
+    // validate that there's a Pool Input which have Address's Payment Credential matching with `pool_hash`
+    if ScriptCredential(pool_hash) == pool_payment_credential {
       True
     } else {
+      let Transaction { outputs, validity_range, datums, .. } = transaction
       let script_inputs =
         list.filter(
           inputs,
@@ -108,29 +105,7 @@ validator(
             }
           },
         )
-      let first_script_input = script_inputs |> builtin.head_list
 
-      let Input {
-        output: Output {
-          address: Address {
-            payment_credential: first_payment_script_credential,
-            ..
-          },
-          ..
-        },
-        ..
-      } = first_script_input
-      expect [] =
-        list.filter(
-          script_inputs,
-          fn(input) {
-            let Input {
-              output: Output { address: Address { payment_credential, .. }, .. },
-              ..
-            } = input
-            first_payment_script_credential != payment_credential
-          },
-        )
       let Interval {
         lower_bound: IntervalBound { bound_type: lower_bound_type, .. },
         ..
