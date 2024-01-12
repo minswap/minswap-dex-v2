@@ -16,7 +16,8 @@ use amm_dex_v2/utils
 
 validator(
   // the Stake Credential of Order Batching Validator
-  stake_credential: StakeCredential,
+  batching_withdrawal_cred: StakeCredential,
+  expired_order_withdrawal_cred: StakeCredential,
 ) {
   fn validate_order(raw_datum: Data, raw_redeemer: Data, context: ScriptContext) {
     let ScriptContext { transaction, purpose } = context
@@ -26,7 +27,7 @@ validator(
       ApplyOrder -> {
         let Transaction { withdrawals, .. } = transaction
         // validate that an Order can be spent if there's a `Order Batching` validator in the `withdrawals`
-        dict.has_key(withdrawals, stake_credential)
+        dict.has_key(withdrawals, batching_withdrawal_cred)
       }
       CancelOrderByOwner -> {
         let Transaction { inputs, extra_signatories, .. } = transaction
@@ -43,89 +44,30 @@ validator(
           ScriptCredential(_) ->
             // In case owner is script address, this script will require at least 1 owner UTxO in input
             // If owner UTxO has enough condition to unlock itself, it can unlock this script as well
-            list.length(
-              list.filter(
-                inputs,
-                fn(input) {
-                  let Input { output, .. } = input
-                  let Output { address: out_address, .. } = output
-                  let Address { payment_credential: out_payment_credential, .. } =
-                    out_address
-                  out_payment_credential == owner_payment_credential
-                },
-              ),
-            ) > 0
+            list.any(
+              inputs,
+              fn(input) {
+                let Input { output, .. } = input
+                let Output { address: out_address, .. } = output
+                let Address { payment_credential: out_payment_credential, .. } =
+                  out_address
+                out_payment_credential == owner_payment_credential
+              },
+            )
         }
       }
       CancelExpiredOrderByAnyone -> {
-        let Transaction {
-          inputs,
-          outputs,
-          redeemers,
-          validity_range,
-          datums,
-          ..
-        } = transaction
-        expect Spend(order_ref) = purpose
-        expect Some(own_order_input) =
-          list.find(
-            inputs,
-            fn(input) {
-              let Input { output_reference: out_ref, .. } = input
-              out_ref == order_ref
-            },
-          )
-        let Input { output: Output { address: own_order_address, .. }, .. } =
-          own_order_input
-        let Address { payment_credential: own_order_payment_cred, .. } =
-          own_order_address
-        let order_inputs =
-          list.filter(
-            inputs,
-            fn(input) {
-              let Input { output: Output { address: addr, .. }, .. } = input
-              let Address { payment_credential: payment_cred, .. } = addr
-              when payment_cred is {
-                ScriptCredential(_) -> {
-                  expect payment_cred == own_order_payment_cred
-                  True
-                }
-                VerificationKeyCredential(_) -> False
-              }
-            },
-          )
-        let orders_input_length = list.length(order_inputs)
-        let outputs_length = list.length(outputs)
-        let redeemers_list = dict.to_list(redeemers)
-        expect and {
-            orders_input_length == dict.size(redeemers),
-            outputs_length >= orders_input_length,
-            list.all(
-              redeemers_list,
-              fn(r) {
-                let (_, redeemer) = r
-                redeemer == raw_redeemer
-              },
-            ),
-          }
-        let Interval {
-          lower_bound: IntervalBound { bound_type: lower_bound_type, .. },
-          ..
-        } = validity_range
-        expect Finite(start_valid_time_range) = lower_bound_type
-
-        // We need to consider this logic
-        order_validation.validate_cancel_expired_orders(
-          order_inputs: order_inputs,
-          all_outputs: outputs,
-          datum_map: datums,
-          start_valid_time_range: start_valid_time_range,
-        )
+        let Transaction { withdrawals, .. } = transaction
+        // validate that an Order can be spent if there's a `Expired Order Cancelling` validator in the `withdrawals`
+        dict.has_key(withdrawals, expired_order_withdrawal_cred)
       }
     }
   }
 }
 
+// This validator will be used in Batching transaction.
+// It will make sure that Pool contract is presented in the Transaction Input
+// The rest validation logic is forwared to Pool Contract
 validator(
   // the hash of Liquidity Pool Script
   pool_hash: ValidatorHash,
@@ -145,5 +87,71 @@ validator(
     expect ScriptCredential(hash) = payment_credential
     // validate that there's a Pool Input which have Address's Payment Credential matching with `pool_hash`
     pool_hash == hash
+  }
+}
+
+// This validator will be used in cancelling Expired Orders transaction.
+// It only allows PubKey Address can trigger the cancel
+validator {
+  fn validate_expired_order_cancelling(
+    _raw_redeemer: Data,
+    context: ScriptContext,
+  ) -> Bool {
+    expect ScriptContext { transaction, purpose: WithdrawFrom(_) } = context
+
+    let Transaction { inputs, outputs, redeemers, validity_range, datums, .. } =
+      transaction
+    // Assume all script inputs are order scripts.
+    // All scripts that have the same Order Datum structure will be accepted in this transaction.
+    let order_inputs =
+      list.filter(
+        inputs,
+        fn(input) {
+          let Input {
+            output: Output {
+              address: Address { payment_credential: payment_cred, .. },
+              ..
+            },
+            ..
+          } = input
+          when payment_cred is {
+            ScriptCredential(_) -> True
+            _ -> False
+          }
+        },
+      )
+
+    let orders_input_length = list.length(order_inputs)
+    let outputs_length = list.length(outputs)
+    let redeemers_list = dict.to_list(redeemers)
+    expect and {
+        // Redeemers contains a Withdrawal element, so we subtract 1 here
+        orders_input_length == dict.size(redeemers) - 1,
+        outputs_length >= orders_input_length,
+        list.all(
+          redeemers_list,
+          fn(r) {
+            let (pp, redeemer) = r
+            when pp is {
+              Spend(_) -> {
+                expect x: OrderRedeemer = redeemer
+                x == CancelExpiredOrderByAnyone
+              }
+              _ -> True
+            }
+          },
+        ),
+      }
+    let Interval {
+      lower_bound: IntervalBound { bound_type: lower_bound_type, .. },
+      ..
+    } = validity_range
+    expect Finite(start_valid_time_range) = lower_bound_type
+    order_validation.validate_cancel_expired_orders(
+      order_inputs: order_inputs,
+      all_outputs: outputs,
+      datum_map: datums,
+      start_valid_time_range: start_valid_time_range,
+    )
   }
 }
