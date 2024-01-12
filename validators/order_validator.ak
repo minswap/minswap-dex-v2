@@ -1,3 +1,4 @@
+use aiken/builtin
 use aiken/dict
 use aiken/interval.{Finite, Interval, IntervalBound}
 use aiken/list
@@ -107,7 +108,7 @@ validator(
             }
           },
         )
-      expect [first_script_input, _] = script_inputs
+      let first_script_input = script_inputs |> builtin.head_list
 
       let Input { output: Output { address: first_script_address, .. }, .. } =
         first_script_input
