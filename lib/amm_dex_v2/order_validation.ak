@@ -1613,7 +1613,6 @@ pub fn apply_orders(
 //   new_pool_state == (2000000, 4123112, 2000000, 4123112, 2867556)
 // }
 
-// TODO: Need to rework later
 pub fn validate_cancel_expired_orders(
   order_inputs: List<Input>,
   all_outputs: List<Output>,
