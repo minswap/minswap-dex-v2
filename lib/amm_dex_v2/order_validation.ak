@@ -918,7 +918,7 @@ pub fn apply_orders(
     step: order_step,
     max_batcher_fee,
     lp_asset: order_lp_asset,
-    expired_opt,
+    expiry_setting_opt,
   } = order_in_datum
   expect and {
       // max_batcher_fee must be positive
@@ -928,7 +928,7 @@ pub fn apply_orders(
       used_batcher_fee <= max_batcher_fee,
       // lp_asset must be the same with processing Liquidity Pool
       lp_asset == order_lp_asset,
-      when expired_opt is {
+      when expiry_setting_opt is {
         None -> True
         Some((expired_time, _)) -> end_valid_time_range <= expired_time
       },
@@ -1215,7 +1215,7 @@ pub fn apply_orders(
                   max_batcher_fee_each_time,
                 },
                 max_batcher_fee: max_batcher_fee - used_batcher_fee,
-                expired_opt,
+                expiry_setting_opt,
               }
             and {
               expected_order_out_datum == order_out_datum,
@@ -1636,10 +1636,10 @@ pub fn validate_cancel_expired_orders(
   expect order_in_datum: OrderDatum =
     utils.must_find_script_datum(datum_map, order_in_datum_raw)
 
-  let OrderDatum { sender, sender_datum_hash_opt, expired_opt, .. } =
+  let OrderDatum { sender, sender_datum_hash_opt, expiry_setting_opt, .. } =
     order_in_datum
 
-  expect Some((expired_time, max_tip)) = expired_opt
+  expect Some((expired_time, max_tip)) = expiry_setting_opt
   expect and {
       expired_time < start_valid_time_range,
       sender == order_out_address,

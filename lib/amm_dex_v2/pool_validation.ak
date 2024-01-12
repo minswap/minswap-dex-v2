@@ -368,7 +368,7 @@ pub fn validate_swap_multi_routing(
     step: order_step,
     max_batcher_fee,
     lp_asset: order_lp_asset,
-    expired_opt,
+    expiry_setting_opt,
     ..
   } = order_in_datum
   expect and {
@@ -385,7 +385,7 @@ pub fn validate_swap_multi_routing(
       ),
       // lp_asset in OrderDatum must be the same with LP Asset of first Liquidity Pool in routing list
       pool_lp_asset == order_lp_asset,
-      when expired_opt is {
+      when expiry_setting_opt is {
         None -> True
         Some((expired_time, _)) -> end_valid_time_range <= expired_time
       },
