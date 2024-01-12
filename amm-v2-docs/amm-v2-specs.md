@@ -184,11 +184,11 @@ An Order Datum keeps information about Order Type and some other informations:
 
 
 - **ApplyOrder**: the redeemer will allow spending Order UTxO in Batching transaction
-   - validate that an Order can be spent if there's a `Order Batching` validator in the `withdrawals`
+   - validate that an Order can be spent if there's a `Order Spending` validator in the `withdrawals`
 - **CancelOrder**: the redeemer will allow _sender_ to spend Order UTxO to get back locked funds.
    - validate that the transaction has _sender_'s signature or _sender_ script UTxO in the Transaction Inputs
 - **CancelExpiredOrderByAnyone**: the redeemer will allow anyone to spend Order UTxO to unlock funds going back to user
-   - validate that an Order can be spent if there's a `Order Batching` validator in the `withdrawals`
+   - validate that an Order can be spent if there's a `Order Spending` validator in the `withdrawals`
 
 
 #### 3.3.3 Authen Minting Policy
