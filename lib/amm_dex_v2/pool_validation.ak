@@ -9,8 +9,9 @@ use aiken/transaction/value.{
 }
 use amm_dex_v2/order_validation
 use amm_dex_v2/types.{
-  Asset, BatchingPool, DatumMap, OrderDatum, PoolDatum, SwapMultiRouting,
-  UpdatePoolFee, UpdatePoolFeeOrStakeCredentialAction, UpdatePoolStakeCredential,
+  Asset, BatchingPool, DatumMap, OrderDatum, PoolDatum, PoolState,
+  SwapMultiRouting, UpdatePoolFee, UpdatePoolFeeOrStakeCredentialAction,
+  UpdatePoolStakeCredential,
 }
 use amm_dex_v2/utils.{
   admin_asset_name, admin_policy_id, factory_auth_asset_name, license_policy_id,
@@ -89,14 +90,28 @@ fn find_pool_input_and_output_in_batching(
   (pool_in_output, pool_output)
 }
 
-fn get_batching_pool(
+fn get_batching_pool_function(
   pool_input: Output,
   pool_output: Output,
   authen_policy_id: PolicyId,
   pool_in_datum: PoolDatum,
   datum_map: DatumMap,
   require_total_liquidity_unchange: Bool,
-) -> BatchingPool {
+) -> fn(
+  fn(
+    Asset,
+    Asset,
+    Asset,
+    Int,
+    Int,
+    Option<(Int, Int)>,
+    Address,
+    PoolState,
+    PoolState,
+  ) ->
+    a,
+) ->
+  a {
   let Output { address: pool_in_address, value: pool_in_value, .. } = pool_input
   let Output { value: pool_out_value, datum: pool_out_datum_raw, .. } =
     pool_output
@@ -193,28 +208,43 @@ fn get_batching_pool(
       estimate_pool_out_value == pool_out_value,
       remaining_liquidity_supply_out - remaining_liquidity_supply_in == pool_in_total_liquidity - pool_out_total_liquidity,
     }
-  BatchingPool {
-    asset_a: pool_in_asset_a,
-    asset_b: pool_in_asset_b,
-    lp_asset,
-    trading_fee_numerator: pool_in_trading_fee_numerator,
-    trading_fee_denominator: pool_in_trading_fee_denominator,
-    profit_sharing: pool_in_profit_sharing_opt,
-    address: pool_in_address,
-    pool_state_in: (
-      pool_in_datum_reserve_a,
-      pool_in_datum_reserve_b,
-      value_reserve_a_in,
-      value_reserve_b_in,
-      pool_in_total_liquidity,
-    ),
-    pool_state_out: (
-      pool_out_datum_reserve_a,
-      pool_out_datum_reserve_b,
-      value_reserve_a_out,
-      value_reserve_b_out,
-      pool_out_total_liquidity,
-    ),
+  fn(
+    apply_function: fn(
+      Asset,
+      Asset,
+      Asset,
+      Int,
+      Int,
+      Option<(Int, Int)>,
+      Address,
+      PoolState,
+      PoolState,
+    ) ->
+      a,
+  ) -> a {
+    apply_function(
+      pool_in_asset_a,
+      pool_in_asset_b,
+      lp_asset,
+      pool_in_trading_fee_numerator,
+      pool_in_trading_fee_denominator,
+      pool_in_profit_sharing_opt,
+      pool_in_address,
+      (
+        pool_in_datum_reserve_a,
+        pool_in_datum_reserve_b,
+        value_reserve_a_in,
+        value_reserve_b_in,
+        pool_in_total_liquidity,
+      ),
+      (
+        pool_out_datum_reserve_a,
+        pool_out_datum_reserve_b,
+        value_reserve_a_out,
+        value_reserve_b_out,
+        pool_out_total_liquidity,
+      ),
+    )
   }
 }
 
@@ -236,76 +266,78 @@ pub fn validate_batching(
       inputs: all_inputs,
       outputs: all_outputs,
     )
-  let BatchingPool {
+
+  fn(
     asset_a,
     asset_b,
     lp_asset,
     trading_fee_numerator,
     trading_fee_denominator,
     profit_sharing,
-    address: pool_address,
+    pool_address,
     pool_state_in,
     pool_state_out,
-  } =
-    get_batching_pool(
-      pool_input: pool_input,
-      pool_output: pool_output,
-      authen_policy_id: authen_policy_id,
-      pool_in_datum: pool_in_datum,
+  ) -> Bool {
+    let user_inputs =
+      list.filter(
+        all_inputs,
+        fn(input) {
+          let Input { output: out, .. } = input
+          let Output { address: addr, .. } = out
+          addr != pool_address && addr != batcher_address
+        },
+      )
+    // Currently, transaction inputs will be sorted by TxId and TxIndex of UTxO.
+    // We have to calculate indexes of orders inputs sorting by the ASC created time
+    // on the off-chain and on-chain will sort the TxIns by the indexes
+    // Input Indexes in parameter will be reversed indexs of @order_inputs to reduce calculate step in On-Chain
+    let sorted_user_inputs =
+      list.foldl(
+        input_indexes,
+        [],
+        fn(idx, ips) { list.push(ips, utils.list_at_index(user_inputs, idx)) },
+      )
+
+    // Order Outputs are Outputs which aren't Pool & Batcher UTxOs
+    // Their ordering must be the same with @sorted_order_inputs, so @order_outputs at index i is the output if @sorted_order_inputs at index i
+    let user_outputs =
+      list.filter(
+        all_outputs,
+        fn(output) {
+          let Output { address: addr, .. } = output
+          addr != pool_address && addr != batcher_address
+        },
+      )
+
+    expect and {
+        // User Inputs and Input Indexes must have the same length
+        utils.compare_list_length(input_indexes, user_inputs),
+        // User Inputs and Outputs must have the same length
+        utils.compare_list_length(sorted_user_inputs, user_outputs),
+      }
+    pool_state_out == order_validation.apply_orders(
       datum_map: all_datums,
-      require_total_liquidity_unchange: False,
+      asset_a: asset_a,
+      asset_b: asset_b,
+      lp_asset: lp_asset,
+      trading_fee_numerator: trading_fee_numerator,
+      trading_fee_denominator: trading_fee_denominator,
+      profit_sharing_opt: profit_sharing,
+      end_valid_time_range: end_valid_time_range,
+      order_inputs: sorted_user_inputs,
+      order_outputs: user_outputs,
+      orders_fee: orders_fee,
+      pool_state: pool_state_in,
     )
-  let user_inputs =
-    list.filter(
-      all_inputs,
-      fn(input) {
-        let Input { output: out, .. } = input
-        let Output { address: addr, .. } = out
-        addr != pool_address && addr != batcher_address
-      },
-    )
-  // Currently, transaction inputs will be sorted by TxId and TxIndex of UTxO.
-  // We have to calculate indexes of orders inputs sorting by the ASC created time
-  // on the off-chain and on-chain will sort the TxIns by the indexes
-  // Input Indexes in parameter will be reversed indexs of @order_inputs to reduce calculate step in On-Chain
-  let sorted_user_inputs =
-    list.foldl(
-      input_indexes,
-      [],
-      fn(idx, ips) { list.push(ips, utils.list_at_index(user_inputs, idx)) },
-    )
-
-  // Order Outputs are Outputs which aren't Pool & Batcher UTxOs
-  // Their ordering must be the same with @sorted_order_inputs, so @order_outputs at index i is the output if @sorted_order_inputs at index i
-  let user_outputs =
-    list.filter(
-      all_outputs,
-      fn(output) {
-        let Output { address: addr, .. } = output
-        addr != pool_address && addr != batcher_address
-      },
-    )
-
-  expect and {
-      // User Inputs and Input Indexes must have the same length
-      utils.compare_list_length(input_indexes, user_inputs),
-      // User Inputs and Outputs must have the same length
-      utils.compare_list_length(sorted_user_inputs, user_outputs),
-    }
-  pool_state_out == order_validation.apply_orders(
-    datum_map: all_datums,
-    asset_a: asset_a,
-    asset_b: asset_b,
-    lp_asset: lp_asset,
-    trading_fee_numerator: trading_fee_numerator,
-    trading_fee_denominator: trading_fee_denominator,
-    profit_sharing_opt: profit_sharing,
-    end_valid_time_range: end_valid_time_range,
-    order_inputs: sorted_user_inputs,
-    order_outputs: user_outputs,
-    orders_fee: orders_fee,
-    pool_state: pool_state_in,
-  )
+  }
+    |> get_batching_pool_function(
+         pool_input: pool_input,
+         pool_output: pool_output,
+         authen_policy_id: authen_policy_id,
+         pool_in_datum: pool_in_datum,
+         datum_map: all_datums,
+         require_total_liquidity_unchange: False,
+       )
 }
 
 pub fn validate_swap_multi_routing(
@@ -484,14 +516,37 @@ fn find_multi_routing_pools(
         utils.must_find_script_datum(datum_map, pool_in_datum_raw)
 
       expect pool_in_address == pool_out_address
-      get_batching_pool(
-        pool_input: pool_in_output,
-        pool_output: pool_out,
-        authen_policy_id: authen_policy_id,
-        pool_in_datum: pool_in_datum,
-        datum_map: datum_map,
-        require_total_liquidity_unchange: True,
-      )
+      fn(
+        asset_a: Asset,
+        asset_b: Asset,
+        lp_asset: Asset,
+        trading_fee_numerator: Int,
+        trading_fee_denominator: Int,
+        profit_sharing: Option<(Int, Int)>,
+        address: Address,
+        pool_state_in: PoolState,
+        pool_state_out: PoolState,
+      ) -> BatchingPool {
+        BatchingPool {
+          asset_a,
+          asset_b,
+          lp_asset,
+          trading_fee_numerator,
+          trading_fee_denominator,
+          profit_sharing,
+          address,
+          pool_state_in,
+          pool_state_out,
+        }
+      }
+        |> get_batching_pool_function(
+             pool_input: pool_in_output,
+             pool_output: pool_out,
+             authen_policy_id: authen_policy_id,
+             pool_in_datum: pool_in_datum,
+             datum_map: datum_map,
+             require_total_liquidity_unchange: True,
+           )
     },
   )
 }
