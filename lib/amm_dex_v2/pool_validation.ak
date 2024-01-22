@@ -7,7 +7,7 @@ use aiken/transaction/value.{
   AssetName, PolicyId, Value, ada_asset_name, ada_policy_id,
 }
 use amm_dex_v2/types.{
-  Asset, BatchingPool, DatumMap, PoolDatum, UpdatePoolFee,
+  Asset, BatchingPool, PoolDatum, UpdatePoolFee,
   UpdatePoolFeeOrStakeCredentialAction, UpdatePoolStakeCredential,
 }
 use amm_dex_v2/utils.{
@@ -50,7 +50,6 @@ pub fn get_batching_pool(
   pool_input: Output,
   pool_output: Output,
   authen_policy_id: PolicyId,
-  datum_map: DatumMap,
   require_total_liquidity_unchange: Bool,
 ) -> BatchingPool {
   let Output {
@@ -67,7 +66,7 @@ pub fn get_batching_pool(
   } = pool_output
 
   expect pool_in_datum: PoolDatum =
-    utils.must_find_script_datum(datum_map, pool_in_datum_raw)
+    utils.must_find_script_inline_datum(pool_in_datum_raw)
 
   let PoolDatum {
     stake_credential: pool_in_stake_credential,
@@ -81,7 +80,7 @@ pub fn get_batching_pool(
     profit_sharing_opt: pool_in_profit_sharing_opt,
   } = pool_in_datum
   expect pool_out_datum: PoolDatum =
-    utils.must_find_script_datum(datum_map, pool_out_datum_raw)
+    utils.must_find_script_inline_datum(pool_out_datum_raw)
   let PoolDatum {
     stake_credential: pool_out_stake_credential,
     asset_a: pool_out_asset_a,
@@ -198,7 +197,6 @@ pub fn validate_update_pool_datum_or_stake_credential(
   pool_in_datum: PoolDatum,
   all_inputs: List<Input>,
   all_outputs: List<Output>,
-  all_datums: DatumMap,
 ) -> Bool {
   let Input { output: pool_in_output, .. } = pool_input
   let Output { address: pool_in_address, value: pool_in_value, .. } =
@@ -229,7 +227,7 @@ pub fn validate_update_pool_datum_or_stake_credential(
       pool_in_value == pool_out_value,
     }
   expect pool_out_datum: PoolDatum =
-    utils.must_find_script_datum(all_datums, raw_pool_out_datum)
+    utils.must_find_script_inline_datum(raw_pool_out_datum)
   when action is {
     UpdatePoolFee -> {
       let PoolDatum {
@@ -332,7 +330,6 @@ pub fn validate_withdraw_liquidity_share(
   pool_in_datum: PoolDatum,
   all_inputs: List<Input>,
   all_outputs: List<Output>,
-  all_datums: DatumMap,
 ) -> Bool {
   let Input {
     output: Output { address: pool_in_address, value: pool_in_value, .. },
@@ -352,7 +349,7 @@ pub fn validate_withdraw_liquidity_share(
       pool_payment_credential: pool_in_payment_credential,
     )
   expect pool_out_datum: PoolDatum =
-    utils.must_find_script_datum(all_datums, raw_pool_out_datum)
+    utils.must_find_script_inline_datum(raw_pool_out_datum)
   let admin_input = utils.list_at_index(all_inputs, admin_index)
   let Input { output: Output { value: admin_value, .. }, .. } = admin_input
   expect and {

@@ -28,7 +28,7 @@ validator(
   ) {
     let ScriptContext { transaction, purpose } = context
     expect Spend(factory_ref) = purpose
-    let Transaction { inputs, mint, outputs, datums, .. } = transaction
+    let Transaction { inputs, mint, outputs, .. } = transaction
     let FactoryRedeemer { asset_a, asset_b } = redeemer
     let FactoryDatum { head: current_head, tail: current_tail } = datum
     let Asset { policy_id: asset_a_policy_id, asset_name: asset_a_asset_name } =
@@ -110,9 +110,9 @@ validator(
     let Output { datum: factory_output_1_raw_datum, .. } = factory_output_1
     let Output { datum: factory_output_2_raw_datum, .. } = factory_output_2
     expect factory_outout_datum_1: FactoryDatum =
-      utils.must_find_script_datum(datums, factory_output_1_raw_datum)
+      utils.must_find_script_inline_datum(factory_output_1_raw_datum)
     expect factory_outout_datum_2: FactoryDatum =
-      utils.must_find_script_datum(datums, factory_output_2_raw_datum)
+      utils.must_find_script_inline_datum(factory_output_2_raw_datum)
     let FactoryDatum { head: new_head_1, tail: new_tail_1 } =
       factory_outout_datum_1
     let FactoryDatum { head: new_head_2, tail: new_tail_2 } =
@@ -153,7 +153,7 @@ validator(
     let Output { value: pool_output_value, datum: pool_output_raw_datum, .. } =
       pool_output
     expect pool_out_datum: PoolDatum =
-      utils.must_find_script_datum(datums, pool_output_raw_datum)
+      utils.must_find_script_inline_datum(pool_output_raw_datum)
     let PoolDatum {
       stake_credential: pool_stake_credential,
       asset_a: pool_datum_asset_a,

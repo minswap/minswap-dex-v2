@@ -118,6 +118,13 @@ test test_bytearray_to_positive_int() {
   r1 == 123 && r2 == 111 && r3 == 9013
 }
 
+pub fn must_find_script_inline_datum(datum: Datum) -> Data {
+  when datum is {
+    InlineDatum(dat) -> dat
+    _ -> fail
+  }
+}
+
 pub fn must_find_script_datum(datums: DatumMap, datum: Datum) -> Data {
   when datum is {
     InlineDatum(dat) -> dat

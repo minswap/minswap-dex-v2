@@ -76,7 +76,7 @@ validator(
         )
       }
       MintFactoryAuthen -> {
-        let Transaction { inputs, mint, outputs, datums, .. } = transaction
+        let Transaction { inputs, mint, outputs, .. } = transaction
 
         // validate that `out_ref` must be presented in the Transaction Inputs
         expect [_] =
@@ -113,7 +113,7 @@ validator(
           )
         let Output { datum: factory_raw_datum, .. } = factory_output
         expect factory_datum: FactoryDatum =
-          utils.must_find_script_datum(datums, factory_raw_datum)
+          utils.must_find_script_inline_datum(factory_raw_datum)
         let FactoryDatum { head, tail } = factory_datum
         and {
           head == #"00",

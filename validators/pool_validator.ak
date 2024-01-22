@@ -33,8 +33,7 @@ validator(
         dict.has_key(withdrawals, stake_credential)
       }
       UpdatePoolFeeOrStakeCredential(action, admin_index) -> {
-        let Transaction { inputs, outputs, datums, redeemers, mint, .. } =
-          transaction
+        let Transaction { inputs, outputs, redeemers, mint, .. } = transaction
         expect Some(pool_input) = transaction.find_input(inputs, pool_input_ref)
         and {
           // Transaction contain only 1 Script (Pool Script). 
@@ -50,13 +49,11 @@ validator(
             pool_in_datum: datum,
             all_inputs: inputs,
             all_outputs: outputs,
-            all_datums: datums,
           ),
         }
       }
       WithdrawLiquidityShare(admin_index) -> {
-        let Transaction { inputs, outputs, datums, redeemers, mint, .. } =
-          transaction
+        let Transaction { inputs, outputs, redeemers, mint, .. } = transaction
         expect Some(pool_input) = transaction.find_input(inputs, pool_input_ref)
         and {
           // Transaction contain only 1 Script (Pool Script). 
@@ -71,7 +68,6 @@ validator(
             pool_in_datum: datum,
             all_inputs: inputs,
             all_outputs: outputs,
-            all_datums: datums,
           ),
         }
       }
@@ -197,7 +193,6 @@ validator(
             pool_input: pool_in_output,
             pool_output: pool_output,
             authen_policy_id: authen_policy_id,
-            datum_map: datums,
             require_total_liquidity_unchange: False,
           )
         pool_state_out == order_validation.apply_orders(
@@ -291,7 +286,6 @@ validator(
                 pool_input: pool_in_output,
                 pool_output: pool_out,
                 authen_policy_id: authen_policy_id,
-                datum_map: datums,
                 require_total_liquidity_unchange: True,
               )
             },
