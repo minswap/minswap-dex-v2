@@ -1,6 +1,8 @@
 use aiken/dict.{Dict}
 use aiken/hash.{Blake2b_224, Blake2b_256, Hash}
-use aiken/transaction/credential.{Address, Script, VerificationKey}
+use aiken/transaction/credential.{
+  Address, Script, StakeCredential, VerificationKey,
+}
 use aiken/transaction/value.{AssetName, PolicyId}
 
 pub type CustomDatumHash =
@@ -25,6 +27,7 @@ pub type ProfitSharing =
   (Int, Int)
 
 pub type PoolDatum {
+  stake_credential: StakeCredential,
   asset_a: Asset,
   asset_b: Asset,
   total_liquidity: Int,
@@ -41,22 +44,19 @@ pub type UpdatePoolFeeOrStakeCredentialAction {
 }
 
 pub type PoolRedeemer {
-  Batching {
-    input_indexes: List<Int>,
-    orders_fee: List<Int>,
-    license_index: Int,
-  }
-  MultiRouting {
-    license_index: Int,
-    routing_in_indexes: List<Int>,
-    routing_out_indexes: List<Int>,
-    order_fee: Int,
-  }
+  Batching
   UpdatePoolFeeOrStakeCredential {
     action: UpdatePoolFeeOrStakeCredentialAction,
     admin_index: Int,
   }
   WithdrawLiquidityShare { admin_index: Int }
+}
+
+pub type PoolSpendRedeemer {
+  license_index: Int,
+  orders_fee: List<Int>,
+  input_indexes: List<Int>,
+  pool_input_indexes_opt: Option<List<Int>>,
 }
 
 pub type SwapRouting {
@@ -86,8 +86,6 @@ pub type OrderStep {
     swap_amount: Int,
     // Maximum amount of Asset Out which users want to receive after exchanging
     stop_loss_receive: Int,
-    // Decide the Order behavior in case Order is not meet the slippage tolerance
-    killable: Bool,
   }
   // OCO is used for exchanging specific amount of single asset in the liquidity pool.
   // The order will be executed if the received amount is less than or equal to `stop_loss_receive` 
@@ -101,8 +99,6 @@ pub type OrderStep {
     minimum_receive: Int,
     // Maximum amount of Asset Out which users want to receive after exchanging
     stop_loss_receive: Int,
-    // Decide the Order behavior in case Order is not meet the slippage tolerance
-    killable: Bool,
   }
   // SwapExactOut is used for exchanging single asset in the liquidity pool and receiving the exact amout of other asset.
   // The order will be executed if the received amount is equal to `expected_receive`
@@ -236,11 +232,6 @@ pub type AuthenRedeemer {
   CreatePool
 }
 
-pub type OrderSpendingRedeemer {
-  // it's used for finding Pool Input faster
-  pool_input_index: Int,
-}
-
 pub type BatchingPool {
   asset_a: Asset,
   asset_b: Asset,
@@ -248,7 +239,6 @@ pub type BatchingPool {
   trading_fee_numerator: Int,
   trading_fee_denominator: Int,
   profit_sharing: Option<(Int, Int)>,
-  address: Address,
   pool_state_in: PoolState,
   pool_state_out: PoolState,
 }

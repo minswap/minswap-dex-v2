@@ -1,7 +1,7 @@
 use aiken/builtin
 use aiken/list
 use aiken/transaction.{Input, Output, ScriptContext, Spend, Transaction}
-use aiken/transaction/credential.{Address, ScriptCredential}
+use aiken/transaction/credential.{Address, ScriptCredential, StakeCredential}
 use aiken/transaction/value.{PolicyId, ada_asset_name, ada_policy_id}
 use amm_dex_v2/math
 use amm_dex_v2/pool_validation
@@ -18,6 +18,8 @@ validator(
   authen_policy_id: PolicyId,
   // ValidatorHash of Pool Contract
   pool_hash: ValidatorHash,
+  // Stake Credential of Pool Batching Contract
+  pool_batching_stake_credential: StakeCredential,
 ) {
   fn validate_factory(
     datum: FactoryDatum,
@@ -153,6 +155,7 @@ validator(
     expect pool_out_datum: PoolDatum =
       utils.must_find_script_datum(datums, pool_output_raw_datum)
     let PoolDatum {
+      stake_credential: pool_stake_credential,
       asset_a: pool_datum_asset_a,
       asset_b: pool_datum_asset_b,
       total_liquidity: pool_datum_total_liquidity,
@@ -214,6 +217,8 @@ validator(
         )
       }
     and {
+      // stake_credential must be the same with configured credential
+      pool_stake_credential == pool_batching_stake_credential,
       // asset_a and asset_b must be the same with Factory Redeemer
       pool_datum_asset_a == asset_a,
       pool_datum_asset_b == asset_b,
@@ -224,6 +229,7 @@ validator(
       pool_datum_reserve_b == amount_b,
       // trading_fee_percentage must be between **0.05%** and **10%**
       is_valid_trading_fee,
+      // Transaction must mint necessary assets
       value.from_minted_value(mint) == pool_validation.get_pool_creation_expected_mint(
         authen_policy_id: authen_policy_id,
         lp_asset_name: lp_asset_name,
