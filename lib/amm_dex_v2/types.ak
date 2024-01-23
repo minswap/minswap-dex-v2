@@ -35,6 +35,11 @@ pub type PoolDatum {
   reserve_b: Int,
   trading_fee_numerator: Int,
   trading_fee_denominator: Int,
+  last_price: Int,
+  last_price_sqr: Int,
+  last_block_time: Int,
+  decay: Int,
+  volatility: Int,
   profit_sharing_opt: Option<ProfitSharing>,
 }
 

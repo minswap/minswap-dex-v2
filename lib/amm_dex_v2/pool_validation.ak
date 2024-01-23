@@ -6,6 +6,8 @@ use aiken/transaction/credential.{Address, PaymentCredential, StakeCredential}
 use aiken/transaction/value.{
   AssetName, PolicyId, Value, ada_asset_name, ada_policy_id,
 }
+use amm_dex_v2/dynamic_fee_utils.{calculate_valatility}
+use amm_dex_v2/math
 use amm_dex_v2/types.{
   Asset, BatchingPool, PoolDatum, UpdatePoolFee,
   UpdatePoolFeeOrStakeCredentialAction, UpdatePoolStakeCredential,
@@ -18,7 +20,7 @@ use amm_dex_v2/utils.{
 pub fn validate_batcher_license_and_find_batcher_address(
   license_input: Input,
   validity_range: ValidityRange,
-) -> (Address, Int) {
+) -> (Address, Int, Int) {
   let Input {
     output: Output { address: batcher_address, value: license_value, .. },
     ..
@@ -42,7 +44,7 @@ pub fn validate_batcher_license_and_find_batcher_address(
       license_deadline >= end_valid_time_range,
       license_deadline <= start_valid_time_range + maximum_deadline_range,
     }
-  (batcher_address, end_valid_time_range)
+  (batcher_address, start_valid_time_range, end_valid_time_range)
 }
 
 pub fn get_batching_pool(
@@ -51,6 +53,7 @@ pub fn get_batching_pool(
   pool_output: Output,
   authen_policy_id: PolicyId,
   require_total_liquidity_unchange: Bool,
+  current_block_time: Int,
 ) -> BatchingPool {
   let Output {
     address: pool_in_address,
@@ -77,6 +80,9 @@ pub fn get_batching_pool(
     reserve_b: pool_in_datum_reserve_b,
     trading_fee_numerator: pool_in_trading_fee_numerator,
     trading_fee_denominator: pool_in_trading_fee_denominator,
+    volatility_param: pool_in_volatility_param,
+    decay: pool_in_decay,
+    volatility: pool_in_volatility,
     profit_sharing_opt: pool_in_profit_sharing_opt,
   } = pool_in_datum
   expect pool_out_datum: PoolDatum =
@@ -90,6 +96,9 @@ pub fn get_batching_pool(
     reserve_b: pool_out_datum_reserve_b,
     trading_fee_numerator: pool_out_trading_fee_numerator,
     trading_fee_denominator: pool_out_trading_fee_denominator,
+    volatility_param: pool_out_volatility_param,
+    decay: pool_out_decay,
+    volatility: pool_out_volatility,
     profit_sharing_opt: pool_out_profit_sharing_opt,
   } = pool_out_datum
 
@@ -107,6 +116,8 @@ pub fn get_batching_pool(
       pool_in_asset_b == pool_out_asset_b,
       pool_in_trading_fee_numerator == pool_out_trading_fee_numerator,
       pool_in_trading_fee_denominator == pool_out_trading_fee_denominator,
+      pool_in_decay == pool_out_decay,
+      pool_in_volatility == pool_out_volatility,
       pool_in_profit_sharing_opt == pool_out_profit_sharing_opt,
     }
   let Asset { policy_id: asset_a_policy_id, asset_name: asset_a_asset_name } =
@@ -165,11 +176,38 @@ pub fn get_batching_pool(
       estimate_pool_out_value == pool_out_value,
       remaining_liquidity_supply_out - remaining_liquidity_supply_in == pool_in_total_liquidity - pool_out_total_liquidity,
     }
+  let (pre_price_avg, pre_price_sqr_avg, _) = pool_in_volatility_param
+  let fee_numerator =
+    pool_in_trading_fee_numerator + math.max_int(
+      0,
+      pool_in_trading_fee_denominator * pool_in_volatility * (
+        math.calculate_sqrt(
+          100000000 * pre_price_sqr_avg / ( pre_price_avg * pre_price_avg ),
+        ) - 10000
+      ),
+    )
+  // calculate the next volatility_param
+  let (new_price_avg, new_price_sqr_avg) =
+    calculate_valatility(
+      pool_in_volatility_param,
+      pool_out_datum_reserve_a,
+      pool_out_datum_reserve_b,
+      current_block_time,
+      pool_in_decay,
+    )
+
+  expect
+    pool_out_volatility_param == (
+      new_price_avg,
+      new_price_sqr_avg,
+      current_block_time,
+    )
+
   BatchingPool {
     asset_a: pool_in_asset_a,
     asset_b: pool_in_asset_b,
     lp_asset,
-    trading_fee_numerator: pool_in_trading_fee_numerator,
+    trading_fee_numerator: fee_numerator,
     trading_fee_denominator: pool_in_trading_fee_denominator,
     profit_sharing: pool_in_profit_sharing_opt,
     pool_state_in: (
@@ -237,6 +275,9 @@ pub fn validate_update_pool_datum_or_stake_credential(
         total_liquidity: pool_in_total_liquidity,
         reserve_a: pool_in_reserve_a,
         reserve_b: pool_in_reserve_b,
+        volatility_param: pool_in_volatility_param,
+        decay: pool_in_decay,
+        volatility: pool_in_volatility,
         ..
       } = pool_in_datum
       let PoolDatum {
@@ -248,6 +289,9 @@ pub fn validate_update_pool_datum_or_stake_credential(
         reserve_b: pool_out_reserve_b,
         trading_fee_numerator: pool_out_trading_fee_numerator,
         trading_fee_denominator: pool_out_trading_fee_denominator,
+        volatility_param: pool_out_volatility_param,
+        decay: pool_out_decay,
+        volatility: pool_out_volatility,
         profit_sharing_opt: pool_out_profit_sharing_opt,
       } = pool_out_datum
       // Profit Sharing can be on/off by setting profit_sharing_opt is None or Some. 
@@ -274,6 +318,9 @@ pub fn validate_update_pool_datum_or_stake_credential(
         pool_in_total_liquidity == pool_out_total_liquidity,
         pool_in_reserve_a == pool_out_reserve_a,
         pool_in_reserve_b == pool_out_reserve_b,
+        pool_in_volatility_param == pool_out_volatility_param,
+        pool_in_decay == pool_out_decay,
+        pool_in_volatility == pool_out_volatility,
         // Pool Address must be unchanged (both Payment and Stake Credential)
         pool_in_address == pool_out_address,
         // Trading Fee must be between **0.05%** and **10%**

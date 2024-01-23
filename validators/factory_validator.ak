@@ -1,4 +1,5 @@
 use aiken/builtin
+use aiken/interval.{Finite, Interval, IntervalBound}
 use aiken/list
 use aiken/transaction.{Input, Output, ScriptContext, Spend, Transaction}
 use aiken/transaction/credential.{Address, ScriptCredential, StakeCredential}
@@ -28,7 +29,7 @@ validator(
   ) {
     let ScriptContext { transaction, purpose } = context
     expect Spend(factory_ref) = purpose
-    let Transaction { inputs, mint, outputs, .. } = transaction
+    let Transaction { inputs, mint, outputs, validity_range, .. } = transaction
     let FactoryRedeemer { asset_a, asset_b } = redeemer
     let FactoryDatum { head: current_head, tail: current_tail } = datum
     let Asset { policy_id: asset_a_policy_id, asset_name: asset_a_asset_name } =
@@ -163,7 +164,12 @@ validator(
       reserve_b: pool_datum_reserve_b,
       trading_fee_numerator: pool_datum_trading_fee_numerator,
       trading_fee_denominator: pool_datum_trading_fee_denominator,
+      last_price: pool_datum_last_price,
+      last_price_sqr: pool_datum_last_price_sqr,
+      last_block_time: pool_datum_last_block_time,
       profit_sharing_opt: pool_datum_profit_sharing_opt,
+      decay: pool_datum_decay,
+      ..
     } = pool_out_datum
     // profit_sharing must be empty
     expect None = pool_datum_profit_sharing_opt
@@ -216,6 +222,12 @@ validator(
           pool_datum_trading_fee_denominator,
         )
       }
+    let Interval {
+      lower_bound: IntervalBound { bound_type: lower_bound_type, .. },
+      ..
+    } = validity_range
+    expect Finite(start_valid_time_range) = lower_bound_type
+    let price = 1000000 * pool_datum_reserve_a / pool_datum_reserve_b
     and {
       // stake_credential must be the same with configured credential
       pool_stake_credential == pool_batching_stake_credential,
@@ -234,6 +246,13 @@ validator(
         authen_policy_id: authen_policy_id,
         lp_asset_name: lp_asset_name,
       ),
+      // dynamic fee data
+      pool_datum_last_price == price,
+      pool_datum_last_price_sqr == price * price,
+      pool_datum_last_block_time == start_valid_time_range,
+      pool_datum_decay > 0,
+      //  pool_datum_volatility??
+
       // Pool Value must only have necessary Token:
       // - Asset A 
       // - Asset B

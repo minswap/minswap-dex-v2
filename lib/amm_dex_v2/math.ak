@@ -542,3 +542,11 @@ test test_calculate_withdraw_imbalance() {
     profit_sharing_opt: profit_sharing_opt,
   ) == (0, 0, 1498, 500)
 }
+
+pub fn max_int(a: Int, b: Int) -> Int {
+  if a > b {
+    a
+  } else {
+    b
+  }
+}
