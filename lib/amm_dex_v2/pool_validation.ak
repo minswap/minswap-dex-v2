@@ -80,7 +80,9 @@ pub fn get_batching_pool(
     reserve_b: pool_in_datum_reserve_b,
     trading_fee_numerator: pool_in_trading_fee_numerator,
     trading_fee_denominator: pool_in_trading_fee_denominator,
-    volatility_param: pool_in_volatility_param,
+    last_price: pool_in_last_price,
+    last_price_sqr: pool_in_last_sqr_price,
+    last_block_time: pool_in_last_block_time,
     decay: pool_in_decay,
     volatility: pool_in_volatility,
     profit_sharing_opt: pool_in_profit_sharing_opt,
@@ -96,7 +98,9 @@ pub fn get_batching_pool(
     reserve_b: pool_out_datum_reserve_b,
     trading_fee_numerator: pool_out_trading_fee_numerator,
     trading_fee_denominator: pool_out_trading_fee_denominator,
-    volatility_param: pool_out_volatility_param,
+    last_price: pool_out_last_price,
+    last_price_sqr: pool_out_last_sqr_price,
+    last_block_time: pool_out_last_block_time,
     decay: pool_out_decay,
     volatility: pool_out_volatility,
     profit_sharing_opt: pool_out_profit_sharing_opt,
@@ -176,32 +180,34 @@ pub fn get_batching_pool(
       estimate_pool_out_value == pool_out_value,
       remaining_liquidity_supply_out - remaining_liquidity_supply_in == pool_in_total_liquidity - pool_out_total_liquidity,
     }
-  let (pre_price_avg, pre_price_sqr_avg, _) = pool_in_volatility_param
   let fee_numerator =
     pool_in_trading_fee_numerator + math.max_int(
       0,
       pool_in_trading_fee_denominator * pool_in_volatility * (
         math.calculate_sqrt(
-          100000000 * pre_price_sqr_avg / ( pre_price_avg * pre_price_avg ),
+          100000000 * pool_out_last_sqr_price / (
+            pool_out_last_price * pool_out_last_price
+          ),
         ) - 10000
       ),
     )
   // calculate the next volatility_param
   let (new_price_avg, new_price_sqr_avg) =
     calculate_valatility(
-      pool_in_volatility_param,
+      pool_in_last_price,
+      pool_in_last_sqr_price,
+      pool_in_last_block_time,
       pool_out_datum_reserve_a,
       pool_out_datum_reserve_b,
       current_block_time,
       pool_in_decay,
     )
 
-  expect
-    pool_out_volatility_param == (
-      new_price_avg,
-      new_price_sqr_avg,
-      current_block_time,
-    )
+  expect and {
+      new_price_avg == pool_out_last_price,
+      new_price_sqr_avg == pool_out_last_sqr_price,
+      current_block_time == pool_out_last_block_time,
+    }
 
   BatchingPool {
     asset_a: pool_in_asset_a,
@@ -275,7 +281,9 @@ pub fn validate_update_pool_datum_or_stake_credential(
         total_liquidity: pool_in_total_liquidity,
         reserve_a: pool_in_reserve_a,
         reserve_b: pool_in_reserve_b,
-        volatility_param: pool_in_volatility_param,
+        last_price: pool_in_last_price,
+        last_price_sqr: pool_in_last_sqr_price,
+        last_block_time: pool_in_last_block_time,
         decay: pool_in_decay,
         volatility: pool_in_volatility,
         ..
@@ -289,7 +297,9 @@ pub fn validate_update_pool_datum_or_stake_credential(
         reserve_b: pool_out_reserve_b,
         trading_fee_numerator: pool_out_trading_fee_numerator,
         trading_fee_denominator: pool_out_trading_fee_denominator,
-        volatility_param: pool_out_volatility_param,
+        last_price: pool_out_last_price,
+        last_price_sqr: pool_out_last_sqr_price,
+        last_block_time: pool_out_last_block_time,
         decay: pool_out_decay,
         volatility: pool_out_volatility,
         profit_sharing_opt: pool_out_profit_sharing_opt,
@@ -318,7 +328,9 @@ pub fn validate_update_pool_datum_or_stake_credential(
         pool_in_total_liquidity == pool_out_total_liquidity,
         pool_in_reserve_a == pool_out_reserve_a,
         pool_in_reserve_b == pool_out_reserve_b,
-        pool_in_volatility_param == pool_out_volatility_param,
+        pool_in_last_price == pool_out_last_price,
+        pool_in_last_sqr_price == pool_out_last_sqr_price,
+        pool_in_last_block_time == pool_out_last_block_time,
         pool_in_decay == pool_out_decay,
         pool_in_volatility == pool_out_volatility,
         // Pool Address must be unchanged (both Payment and Stake Credential)
