@@ -36,6 +36,7 @@ pub type PoolDatum {
   base_fee_numerator: Int,
   base_fee_denominator: Int,
   profit_sharing_opt: Option<ProfitSharing>,
+  allow_dynamic_fee: Bool,
 }
 
 pub type UpdatePoolFeeOrStakeCredentialAction {
@@ -57,6 +58,7 @@ pub type PoolBatchingRedeemer {
   orders_fee: List<Int>,
   input_indexes: List<Int>,
   pool_input_indexes_opt: Option<List<Int>>,
+  vol_fees: List<Option<(Int, Int)>>,
 }
 
 pub type SwapRouting {

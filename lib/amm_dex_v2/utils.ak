@@ -42,6 +42,28 @@ pub const min_base_fee_numerator = 5
 
 pub const min_base_fee_denominator = 10000
 
+// Vol Fee constraint
+// Max 2%
+pub const max_vol_fee_numerator = 2
+
+pub const max_vol_fee_denominator = 100
+
+// Min 0%
+pub const min_vol_fee_numerator = 0
+
+pub const min_vol_fee_denominator = 1
+
+// Trading Fee constraint
+// Max 10%
+pub const max_trading_fee_numerator = 1
+
+pub const max_trading_fee_denominator = 10
+
+// Min 0.05%
+pub const min_trading_fee_numerator = 5
+
+pub const min_trading_fee_denominator = 10000
+
 // Fee Sharing constraint
 // Max 50%
 pub const max_fee_sharing_numerator = 1
@@ -263,34 +285,21 @@ test test_list_at_index() {
 pub fn zip_with(
   arr1: List<a>,
   arr2: List<b>,
-  predicate: fn(a, b) -> result,
+  arr3: List<c>,
+  predicate: fn(a, b, c) -> result,
 ) -> List<result> {
   expect [x, ..xs] = arr1
   expect [y, ..ys] = arr2
+  expect [z, ..zs] = arr3
   if xs == [] {
-    expect [] = ys
-    [predicate(x, y)]
+    expect and {
+        [] == ys,
+        [] == zs,
+      }
+    [predicate(x, y, z)]
   } else {
-    [predicate(x, y), ..zip_with(xs, ys, predicate)]
+    [predicate(x, y, z), ..zip_with(xs, ys, zs, predicate)]
   }
-}
-
-test test_zip_with() {
-  let arr1 =
-    [1, 2, 3]
-  let arr2 =
-    [4, 5, 6]
-  let z1 = zip_with(arr1, arr2, fn(a1, a2) { a1 + a2 })
-  let z2 = zip_with(arr1, arr2, fn(a1, a2) { a1 * a2 })
-  z1 == [5, 7, 9] && z2 == [4, 10, 18]
-}
-
-test test_zip_with_throw_err() fail {
-  let arr1 =
-    [1, 2, 3]
-  let arr2 =
-    [4, 5, 6, 6]
-  zip_with(arr1, arr2, fn(a1, a2) { a1 + a2 }) == []
 }
 
 pub fn compare_list_length(arr1: List<a>, arr2: List<b>) -> Bool {

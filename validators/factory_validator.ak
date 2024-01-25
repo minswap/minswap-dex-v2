@@ -164,6 +164,7 @@ validator(
       base_fee_numerator: pool_datum_base_fee_numerator,
       base_fee_denominator: pool_datum_base_fee_denominator,
       profit_sharing_opt: pool_datum_profit_sharing_opt,
+      allow_dynamic_fee: pool_allow_dynamic_fee,
     } = pool_out_datum
     let estimated_amount_a =
       value.quantity_of(
@@ -231,6 +232,8 @@ validator(
       pool_datum_reserve_b == amount_b,
       // trading_fee_percentage must be between **0.05%** and **10%**
       is_valid_trading_fee,
+      // Dynamic Fee is not allowed in Pool Creation 
+      pool_allow_dynamic_fee == False,
       // profit_sharing must be empty
       pool_datum_profit_sharing_opt == None,
       // Transaction must mint necessary assets

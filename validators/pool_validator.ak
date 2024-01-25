@@ -95,6 +95,7 @@ validator(
       orders_fee,
       input_indexes,
       pool_input_indexes_opt,
+      vol_fees,
     } = redeemer
     // Batching Redeemer provides @license_index which help save calculation cost
     let license_input = utils.list_at_index(inputs, license_index)
@@ -180,6 +181,7 @@ validator(
       [pool_input] -> {
         // In case transaction only contains 1 Pool Input & Output, all order types are accepted except SwapMultiRouting
         expect [pool_output] = pool_outputs
+        expect [vol_fee] = vol_fees
         let Input { output: pool_in_output, .. } = pool_input
         let BatchingPool {
           asset_a,
@@ -197,6 +199,7 @@ validator(
             pool_output: pool_output,
             authen_policy_id: authen_policy_id,
             require_total_liquidity_unchange: False,
+            vol_fee: vol_fee,
           )
         pool_state_out == order_validation.apply_orders(
           datum_map: datums,
@@ -282,7 +285,8 @@ validator(
           utils.zip_with(
             sorted_pool_inputs,
             pool_outputs,
-            fn(pool_in, pool_out) {
+            vol_fees,
+            fn(pool_in, pool_out, vol_fee) {
               let Input { output: pool_in_output, .. } = pool_in
               pool_validation.get_batching_pool(
                 stake_credential: stake_credential,
@@ -290,6 +294,7 @@ validator(
                 pool_output: pool_out,
                 authen_policy_id: authen_policy_id,
                 require_total_liquidity_unchange: True,
+                vol_fee: vol_fee,
               )
             },
           )
