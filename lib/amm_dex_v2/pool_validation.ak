@@ -476,26 +476,31 @@ pub fn get_trading_fee(
 }
 
 test test_get_trading_fee() {
-  let (bfn1, bfd1) = (9, 100)
   and {
     get_trading_fee(
-      base_fee_num: bfn1,
-      base_fee_den: bfd1,
+      base_fee_num: 10,
+      base_fee_den: 100,
       vol_fee_opt: None,
       allow_dynamic_fee: False,
-    ) == (9, 100),
+    ) == (10, 100),
     get_trading_fee(
-      base_fee_num: bfn1,
-      base_fee_den: bfd1,
+      base_fee_num: 10,
+      base_fee_den: 100,
       vol_fee_opt: Some((2, 100)),
       allow_dynamic_fee: False,
-    ) == (9, 100),
+    ) == (10, 100),
     get_trading_fee(
-      base_fee_num: bfn1,
-      base_fee_den: bfd1,
+      base_fee_num: 8,
+      base_fee_den: 100,
+      vol_fee_opt: Some((2, 100)),
+      allow_dynamic_fee: True,
+    ) == (2 * 100 + 8 * 100, 10000),
+    get_trading_fee(
+      base_fee_num: 9,
+      base_fee_den: 100,
       vol_fee_opt: Some((1, 100)),
       allow_dynamic_fee: True,
-    ) == (2 * 100 + 9 * 100, 10000),
+    ) == (1 * 100 + 9 * 100, 10000),
   }
 }
 
@@ -517,4 +522,14 @@ test test_get_trading_fee_fail_2() fail {
     vol_fee_opt: Some((2, 100)),
     allow_dynamic_fee: True,
   ) == (3 * 100 + 11 * 100, 10000)
+}
+
+test test_get_trading_fee_fail_3() fail {
+  let (bfn1, bfd1) = (9, 100)
+  get_trading_fee(
+    base_fee_num: bfn1,
+    base_fee_den: bfd1,
+    vol_fee_opt: Some((2, 100)),
+    allow_dynamic_fee: True,
+  ) == (2 * 100 + 9 * 100, 10000)
 }
