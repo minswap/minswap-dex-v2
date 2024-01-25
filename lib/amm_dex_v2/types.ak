@@ -33,8 +33,8 @@ pub type PoolDatum {
   total_liquidity: Int,
   reserve_a: Int,
   reserve_b: Int,
-  trading_fee_numerator: Int,
-  trading_fee_denominator: Int,
+  base_fee_numerator: Int,
+  base_fee_denominator: Int,
   profit_sharing_opt: Option<ProfitSharing>,
 }
 
@@ -52,7 +52,7 @@ pub type PoolRedeemer {
   WithdrawLiquidityShare { admin_index: Int }
 }
 
-pub type PoolSpendRedeemer {
+pub type PoolBatchingRedeemer {
   license_index: Int,
   orders_fee: List<Int>,
   input_indexes: List<Int>,

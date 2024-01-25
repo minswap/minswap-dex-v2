@@ -31,6 +31,28 @@ pub const admin_asset_name = #"4d5341"
 // Maximum expiration time of Batcher license from now (to prevent minting infinity license)
 pub const maximum_deadline_range = 77760000000
 
+// Base Fee constraint
+// Max 10%
+pub const max_base_fee_numerator = 1
+
+pub const max_base_fee_denominator = 10
+
+// Min 0.05%
+pub const min_base_fee_numerator = 5
+
+pub const min_base_fee_denominator = 10000
+
+// Fee Sharing constraint
+// Max 50%
+pub const max_fee_sharing_numerator = 1
+
+pub const max_fee_sharing_denominator = 2
+
+// Min 16.66%
+pub const min_fee_sharing_numerator = 1
+
+pub const min_fee_sharing_denominator = 6
+
 pub fn sorted_asset(asset_a: Asset, asset_b: Asset) -> Bool {
   let Asset { policy_id: asset_a_policy_id, asset_name: asset_a_asset_name } =
     asset_a

@@ -161,12 +161,10 @@ validator(
       total_liquidity: pool_datum_total_liquidity,
       reserve_a: pool_datum_reserve_a,
       reserve_b: pool_datum_reserve_b,
-      trading_fee_numerator: pool_datum_trading_fee_numerator,
-      trading_fee_denominator: pool_datum_trading_fee_denominator,
+      base_fee_numerator: pool_datum_base_fee_numerator,
+      base_fee_denominator: pool_datum_base_fee_denominator,
       profit_sharing_opt: pool_datum_profit_sharing_opt,
     } = pool_out_datum
-    // profit_sharing must be empty
-    expect None = pool_datum_profit_sharing_opt
     let estimated_amount_a =
       value.quantity_of(
         pool_output_value,
@@ -198,7 +196,7 @@ validator(
       if
       list.has(
         [(5, 10000), (3, 1000), (1, 100)],
-        (pool_datum_trading_fee_numerator, pool_datum_trading_fee_denominator),
+        (pool_datum_base_fee_numerator, pool_datum_base_fee_denominator),
       ){
       
         True
@@ -211,9 +209,13 @@ validator(
               value.quantity_of(out_value, admin_policy_id, admin_asset_name) == 1
             },
           )
-        pool_validation.validate_trading_fee_percent(
-          pool_datum_trading_fee_numerator,
-          pool_datum_trading_fee_denominator,
+        pool_validation.validate_fee_percent(
+          fee_num: pool_datum_base_fee_numerator,
+          fee_den: pool_datum_base_fee_denominator,
+          max_fee_num: utils.max_base_fee_numerator,
+          max_fee_den: utils.max_base_fee_denominator,
+          min_fee_num: utils.min_base_fee_numerator,
+          min_fee_den: utils.min_base_fee_denominator,
         )
       }
     and {
@@ -229,6 +231,8 @@ validator(
       pool_datum_reserve_b == amount_b,
       // trading_fee_percentage must be between **0.05%** and **10%**
       is_valid_trading_fee,
+      // profit_sharing must be empty
+      pool_datum_profit_sharing_opt == None,
       // Transaction must mint necessary assets
       value.from_minted_value(mint) == pool_validation.get_pool_creation_expected_mint(
         authen_policy_id: authen_policy_id,

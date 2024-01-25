@@ -75,8 +75,8 @@ pub fn get_batching_pool(
     total_liquidity: pool_in_total_liquidity,
     reserve_a: pool_in_datum_reserve_a,
     reserve_b: pool_in_datum_reserve_b,
-    trading_fee_numerator: pool_in_trading_fee_numerator,
-    trading_fee_denominator: pool_in_trading_fee_denominator,
+    base_fee_numerator: pool_in_base_fee_numerator,
+    base_fee_denominator: pool_in_base_fee_denominator,
     profit_sharing_opt: pool_in_profit_sharing_opt,
   } = pool_in_datum
   expect pool_out_datum: PoolDatum =
@@ -88,8 +88,8 @@ pub fn get_batching_pool(
     total_liquidity: pool_out_total_liquidity,
     reserve_a: pool_out_datum_reserve_a,
     reserve_b: pool_out_datum_reserve_b,
-    trading_fee_numerator: pool_out_trading_fee_numerator,
-    trading_fee_denominator: pool_out_trading_fee_denominator,
+    base_fee_numerator: pool_out_base_fee_numerator,
+    base_fee_denominator: pool_out_base_fee_denominator,
     profit_sharing_opt: pool_out_profit_sharing_opt,
   } = pool_out_datum
 
@@ -105,8 +105,8 @@ pub fn get_batching_pool(
       pool_in_address == pool_out_address,
       pool_in_asset_a == pool_out_asset_a,
       pool_in_asset_b == pool_out_asset_b,
-      pool_in_trading_fee_numerator == pool_out_trading_fee_numerator,
-      pool_in_trading_fee_denominator == pool_out_trading_fee_denominator,
+      pool_in_base_fee_numerator == pool_out_base_fee_numerator,
+      pool_in_base_fee_denominator == pool_out_base_fee_denominator,
       pool_in_profit_sharing_opt == pool_out_profit_sharing_opt,
     }
   let Asset { policy_id: asset_a_policy_id, asset_name: asset_a_asset_name } =
@@ -165,12 +165,18 @@ pub fn get_batching_pool(
       estimate_pool_out_value == pool_out_value,
       remaining_liquidity_supply_out - remaining_liquidity_supply_in == pool_in_total_liquidity - pool_out_total_liquidity,
     }
+
+  let (trading_fee_numerator, trading_fee_denominator) =
+    get_trading_fee(
+      base_fee_num: pool_in_base_fee_numerator,
+      base_fee_den: pool_in_base_fee_denominator,
+    )
   BatchingPool {
     asset_a: pool_in_asset_a,
     asset_b: pool_in_asset_b,
     lp_asset,
-    trading_fee_numerator: pool_in_trading_fee_numerator,
-    trading_fee_denominator: pool_in_trading_fee_denominator,
+    trading_fee_numerator,
+    trading_fee_denominator,
     profit_sharing: pool_in_profit_sharing_opt,
     pool_state_in: (
       pool_in_datum_reserve_a,
@@ -246,8 +252,8 @@ pub fn validate_update_pool_datum_or_stake_credential(
         total_liquidity: pool_out_total_liquidity,
         reserve_a: pool_out_reserve_a,
         reserve_b: pool_out_reserve_b,
-        trading_fee_numerator: pool_out_trading_fee_numerator,
-        trading_fee_denominator: pool_out_trading_fee_denominator,
+        base_fee_numerator: pool_out_base_fee_numerator,
+        base_fee_denominator: pool_out_base_fee_denominator,
         profit_sharing_opt: pool_out_profit_sharing_opt,
       } = pool_out_datum
       // Profit Sharing can be on/off by setting profit_sharing_opt is None or Some. 
@@ -260,9 +266,13 @@ pub fn validate_update_pool_datum_or_stake_credential(
               pool_out_fee_sharing_numerator,
               pool_out_fee_sharing_denominator,
             ) = pool_out_profit_sharing
-            validate_fee_sharing_percent(
-              fee_sharing_numerator: pool_out_fee_sharing_numerator,
-              fee_sharing_denominator: pool_out_fee_sharing_denominator,
+            validate_fee_percent(
+              fee_num: pool_out_fee_sharing_numerator,
+              fee_den: pool_out_fee_sharing_denominator,
+              max_fee_num: utils.max_fee_sharing_numerator,
+              max_fee_den: utils.max_fee_sharing_denominator,
+              min_fee_num: utils.min_fee_sharing_numerator,
+              min_fee_den: utils.min_fee_sharing_denominator,
             )
           }
         }
@@ -277,9 +287,13 @@ pub fn validate_update_pool_datum_or_stake_credential(
         // Pool Address must be unchanged (both Payment and Stake Credential)
         pool_in_address == pool_out_address,
         // Trading Fee must be between **0.05%** and **10%**
-        validate_trading_fee_percent(
-          trading_fee_numerator: pool_out_trading_fee_numerator,
-          trading_fee_denominator: pool_out_trading_fee_denominator,
+        validate_fee_percent(
+          fee_num: pool_out_base_fee_numerator,
+          fee_den: pool_out_base_fee_denominator,
+          max_fee_num: utils.max_base_fee_numerator,
+          max_fee_den: utils.max_base_fee_denominator,
+          min_fee_num: utils.min_base_fee_numerator,
+          min_fee_den: utils.min_base_fee_denominator,
         ),
         is_valid_fee_sharing,
       }
@@ -289,38 +303,20 @@ pub fn validate_update_pool_datum_or_stake_credential(
   }
 }
 
-pub fn validate_trading_fee_percent(
-  trading_fee_numerator: Int,
-  trading_fee_denominator: Int,
+pub fn validate_fee_percent(
+  fee_num: Int,
+  fee_den: Int,
+  max_fee_num: Int,
+  max_fee_den: Int,
+  min_fee_num: Int,
+  min_fee_den: Int,
 ) -> Bool {
-  // Max 10%, Min 0.05%
-  let max_trading_fee_numerator = 1
-  let max_trading_fee_denominator = 10
-  let min_trading_fee_numerator = 5
-  let min_trading_fee_denominator = 10000
-
-  let less_than_max =
-    trading_fee_numerator * max_trading_fee_denominator <= trading_fee_denominator * max_trading_fee_numerator
-  let greater_than_min =
-    trading_fee_numerator * min_trading_fee_denominator >= trading_fee_denominator * min_trading_fee_numerator
-  less_than_max && greater_than_min
-}
-
-pub fn validate_fee_sharing_percent(
-  fee_sharing_numerator: Int,
-  fee_sharing_denominator: Int,
-) -> Bool {
-  // Max 50%, Min 16.66%
-  let max_fee_sharing_numerator = 1
-  let max_fee_sharing_denominator = 2
-  let min_fee_sharing_numerator = 1
-  let min_fee_sharing_denominator = 6
-
-  let less_than_max =
-    fee_sharing_numerator * max_fee_sharing_denominator <= fee_sharing_denominator * max_fee_sharing_numerator
-  let greater_than_min =
-    fee_sharing_numerator * min_fee_sharing_denominator >= fee_sharing_denominator * min_fee_sharing_numerator
-  less_than_max && greater_than_min
+  and {
+    // less than max
+    fee_num * max_fee_den <= fee_den * max_fee_num,
+    // greater than min
+    fee_num * min_fee_den >= fee_den * min_fee_num,
+  }
 }
 
 pub fn validate_withdraw_liquidity_share(
@@ -428,4 +424,18 @@ fn get_single_pool_output(
       },
     )
   pool_output
+}
+
+pub fn get_trading_fee(base_fee_num: Int, base_fee_den: Int) -> (Int, Int) {
+  // TODO: Handle Dynamic Fee
+  expect
+    validate_fee_percent(
+      fee_num: base_fee_num,
+      fee_den: base_fee_den,
+      max_fee_num: utils.max_base_fee_numerator,
+      max_fee_den: utils.max_base_fee_denominator,
+      min_fee_num: utils.min_base_fee_numerator,
+      min_fee_den: utils.min_base_fee_denominator,
+    )
+  (base_fee_num, base_fee_den)
 }

@@ -9,8 +9,8 @@ use aiken/transaction/value.{PolicyId}
 use amm_dex_v2/order_validation
 use amm_dex_v2/pool_validation
 use amm_dex_v2/types.{
-  Batching, BatchingPool, OrderDatum, PoolDatum, PoolRedeemer, PoolSpendRedeemer,
-  SwapMultiRouting, SwapRouting, UpdatePoolFeeOrStakeCredential,
+  Batching, BatchingPool, OrderDatum, PoolBatchingRedeemer, PoolDatum,
+  PoolRedeemer, SwapMultiRouting, SwapRouting, UpdatePoolFeeOrStakeCredential,
   WithdrawLiquidityShare,
 }
 use amm_dex_v2/utils
@@ -80,14 +80,17 @@ validator(
   authen_policy_id: PolicyId,
   pool_payment_cred: Credential,
 ) {
-  fn validate_pool_batching(redeemer: PoolSpendRedeemer, context: ScriptContext) {
+  fn validate_pool_batching(
+    redeemer: PoolBatchingRedeemer,
+    context: ScriptContext,
+  ) {
     expect ScriptContext {
       transaction,
       purpose: WithdrawFrom(stake_credential),
     } = context
     let Transaction { inputs, outputs, datums, validity_range, mint, .. } =
       transaction
-    let PoolSpendRedeemer {
+    let PoolBatchingRedeemer {
       license_index,
       orders_fee,
       input_indexes,
