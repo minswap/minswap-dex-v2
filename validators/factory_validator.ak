@@ -1,7 +1,7 @@
 use aiken/builtin
 use aiken/list
 use aiken/transaction.{Input, Output, ScriptContext, Spend, Transaction}
-use aiken/transaction/credential.{Address, ScriptCredential}
+use aiken/transaction/credential.{Address, ScriptCredential, StakeCredential}
 use aiken/transaction/value.{PolicyId, ada_asset_name, ada_policy_id}
 use amm_dex_v2/math
 use amm_dex_v2/pool_validation
@@ -18,6 +18,8 @@ validator(
   authen_policy_id: PolicyId,
   // ValidatorHash of Pool Contract
   pool_hash: ValidatorHash,
+  // Stake Credential of Pool Batching Contract
+  pool_batching_stake_credential: StakeCredential,
 ) {
   fn validate_factory(
     datum: FactoryDatum,
@@ -26,7 +28,7 @@ validator(
   ) {
     let ScriptContext { transaction, purpose } = context
     expect Spend(factory_ref) = purpose
-    let Transaction { inputs, mint, outputs, datums, .. } = transaction
+    let Transaction { inputs, mint, outputs, .. } = transaction
     let FactoryRedeemer { asset_a, asset_b } = redeemer
     let FactoryDatum { head: current_head, tail: current_tail } = datum
     let Asset { policy_id: asset_a_policy_id, asset_name: asset_a_asset_name } =
@@ -108,9 +110,9 @@ validator(
     let Output { datum: factory_output_1_raw_datum, .. } = factory_output_1
     let Output { datum: factory_output_2_raw_datum, .. } = factory_output_2
     expect factory_outout_datum_1: FactoryDatum =
-      utils.must_find_script_datum(datums, factory_output_1_raw_datum)
+      utils.must_find_script_inline_datum(factory_output_1_raw_datum)
     expect factory_outout_datum_2: FactoryDatum =
-      utils.must_find_script_datum(datums, factory_output_2_raw_datum)
+      utils.must_find_script_inline_datum(factory_output_2_raw_datum)
     let FactoryDatum { head: new_head_1, tail: new_tail_1 } =
       factory_outout_datum_1
     let FactoryDatum { head: new_head_2, tail: new_tail_2 } =
@@ -151,19 +153,19 @@ validator(
     let Output { value: pool_output_value, datum: pool_output_raw_datum, .. } =
       pool_output
     expect pool_out_datum: PoolDatum =
-      utils.must_find_script_datum(datums, pool_output_raw_datum)
+      utils.must_find_script_inline_datum(pool_output_raw_datum)
     let PoolDatum {
+      stake_credential: pool_stake_credential,
       asset_a: pool_datum_asset_a,
       asset_b: pool_datum_asset_b,
       total_liquidity: pool_datum_total_liquidity,
       reserve_a: pool_datum_reserve_a,
       reserve_b: pool_datum_reserve_b,
-      trading_fee_numerator: pool_datum_trading_fee_numerator,
-      trading_fee_denominator: pool_datum_trading_fee_denominator,
+      base_fee_numerator: pool_datum_base_fee_numerator,
+      base_fee_denominator: pool_datum_base_fee_denominator,
       profit_sharing_opt: pool_datum_profit_sharing_opt,
+      allow_dynamic_fee: pool_allow_dynamic_fee,
     } = pool_out_datum
-    // profit_sharing must be empty
-    expect None = pool_datum_profit_sharing_opt
     let estimated_amount_a =
       value.quantity_of(
         pool_output_value,
@@ -195,7 +197,7 @@ validator(
       if
       list.has(
         [(5, 10000), (3, 1000), (1, 100)],
-        (pool_datum_trading_fee_numerator, pool_datum_trading_fee_denominator),
+        (pool_datum_base_fee_numerator, pool_datum_base_fee_denominator),
       ){
       
         True
@@ -208,12 +210,18 @@ validator(
               value.quantity_of(out_value, admin_policy_id, admin_asset_name) == 1
             },
           )
-        pool_validation.validate_trading_fee_percent(
-          pool_datum_trading_fee_numerator,
-          pool_datum_trading_fee_denominator,
+        pool_validation.validate_fee_percent(
+          fee_num: pool_datum_base_fee_numerator,
+          fee_den: pool_datum_base_fee_denominator,
+          max_fee_num: utils.max_base_fee_numerator,
+          max_fee_den: utils.max_base_fee_denominator,
+          min_fee_num: utils.min_base_fee_numerator,
+          min_fee_den: utils.min_base_fee_denominator,
         )
       }
     and {
+      // stake_credential must be the same with configured credential
+      pool_stake_credential == pool_batching_stake_credential,
       // asset_a and asset_b must be the same with Factory Redeemer
       pool_datum_asset_a == asset_a,
       pool_datum_asset_b == asset_b,
@@ -224,6 +232,11 @@ validator(
       pool_datum_reserve_b == amount_b,
       // trading_fee_percentage must be between **0.05%** and **10%**
       is_valid_trading_fee,
+      // Dynamic Fee is not allowed in Pool Creation 
+      pool_allow_dynamic_fee == False,
+      // profit_sharing must be empty
+      pool_datum_profit_sharing_opt == None,
+      // Transaction must mint necessary assets
       value.from_minted_value(mint) == pool_validation.get_pool_creation_expected_mint(
         authen_policy_id: authen_policy_id,
         lp_asset_name: lp_asset_name,

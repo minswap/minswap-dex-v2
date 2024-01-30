@@ -928,6 +928,7 @@ pub fn apply_orders(
       used_batcher_fee <= max_batcher_fee,
       // lp_asset must be the same with processing Liquidity Pool
       lp_asset == order_lp_asset,
+      // In case expired setting is turned on, the execution time must not exceed the expired_time
       when expiry_setting_opt is {
         None -> True
         Some((expired_time, _)) -> end_valid_time_range <= expired_time
@@ -967,7 +968,7 @@ pub fn apply_orders(
           },
         )
       }
-      StopLoss(a_to_b_direction, swap_amount, stop_loss_receive, order_killable) -> {
+      StopLoss(a_to_b_direction, swap_amount, stop_loss_receive) -> {
         expect and {
             swap_amount > 0,
             stop_loss_receive > 0,
@@ -988,19 +989,13 @@ pub fn apply_orders(
           trading_fee_denominator: trading_fee_denominator,
           profit_sharing_opt: profit_sharing_opt,
           pool_state: pool_state,
-          kill_on_failed: order_killable,
+          kill_on_failed: False,
           is_slippage_sastified: fn(amount_out) {
             amount_out <= stop_loss_receive
           },
         )
       }
-      OCO(
-        a_to_b_direction,
-        swap_amount,
-        minimum_receive,
-        stop_loss_receive,
-        order_killable,
-      ) -> {
+      OCO(a_to_b_direction, swap_amount, minimum_receive, stop_loss_receive) -> {
         expect and {
             swap_amount > 0,
             minimum_receive > 0,
@@ -1022,7 +1017,7 @@ pub fn apply_orders(
           trading_fee_denominator: trading_fee_denominator,
           profit_sharing_opt: profit_sharing_opt,
           pool_state: pool_state,
-          kill_on_failed: order_killable,
+          kill_on_failed: False,
           is_slippage_sastified: fn(amount_out) {
             amount_out >= minimum_receive || amount_out <= stop_loss_receive
           },
