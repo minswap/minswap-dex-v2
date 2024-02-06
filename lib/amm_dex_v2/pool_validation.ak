@@ -76,8 +76,10 @@ pub fn get_batching_pool(
     total_liquidity: pool_in_total_liquidity,
     reserve_a: pool_in_datum_reserve_a,
     reserve_b: pool_in_datum_reserve_b,
-    base_fee_numerator: pool_in_base_fee_numerator,
-    base_fee_denominator: pool_in_base_fee_denominator,
+    base_fee_a_numerator: pool_in_base_fee_a_numerator,
+    base_fee_a_denominator: pool_in_base_fee_a_denominator,
+    base_fee_b_numerator: pool_in_base_fee_b_numerator,
+    base_fee_b_denominator: pool_in_base_fee_b_denominator,
     profit_sharing_opt: pool_in_profit_sharing_opt,
     allow_dynamic_fee: pool_in_allow_dynamic_fee,
   } = pool_in_datum
@@ -90,8 +92,10 @@ pub fn get_batching_pool(
     total_liquidity: pool_out_total_liquidity,
     reserve_a: pool_out_datum_reserve_a,
     reserve_b: pool_out_datum_reserve_b,
-    base_fee_numerator: pool_out_base_fee_numerator,
-    base_fee_denominator: pool_out_base_fee_denominator,
+    base_fee_a_numerator: pool_out_base_fee_a_numerator,
+    base_fee_a_denominator: pool_out_base_fee_a_denominator,
+    base_fee_b_numerator: pool_out_base_fee_b_numerator,
+    base_fee_b_denominator: pool_out_base_fee_b_denominator,
     profit_sharing_opt: pool_out_profit_sharing_opt,
     allow_dynamic_fee: pool_out_allow_dynamic_fee,
   } = pool_out_datum
@@ -108,8 +112,10 @@ pub fn get_batching_pool(
       pool_in_address == pool_out_address,
       pool_in_asset_a == pool_out_asset_a,
       pool_in_asset_b == pool_out_asset_b,
-      pool_in_base_fee_numerator == pool_out_base_fee_numerator,
-      pool_in_base_fee_denominator == pool_out_base_fee_denominator,
+      pool_in_base_fee_a_numerator == pool_out_base_fee_a_numerator,
+      pool_in_base_fee_a_denominator == pool_out_base_fee_a_denominator,
+      pool_in_base_fee_b_numerator == pool_out_base_fee_b_numerator,
+      pool_in_base_fee_b_denominator == pool_out_base_fee_b_denominator,
       pool_in_profit_sharing_opt == pool_out_profit_sharing_opt,
       pool_in_allow_dynamic_fee == pool_out_allow_dynamic_fee,
     }
@@ -170,10 +176,17 @@ pub fn get_batching_pool(
       remaining_liquidity_supply_out - remaining_liquidity_supply_in == pool_in_total_liquidity - pool_out_total_liquidity,
     }
 
-  let (trading_fee_numerator, trading_fee_denominator) =
+  let (trading_fee_a_numerator, trading_fee_a_denominator) =
     get_trading_fee(
-      base_fee_num: pool_in_base_fee_numerator,
-      base_fee_den: pool_in_base_fee_denominator,
+      base_fee_num: pool_in_base_fee_a_numerator,
+      base_fee_den: pool_in_base_fee_a_denominator,
+      vol_fee_opt: vol_fee,
+      allow_dynamic_fee: pool_in_allow_dynamic_fee,
+    )
+  let (trading_fee_b_numerator, trading_fee_b_denominator) =
+    get_trading_fee(
+      base_fee_num: pool_in_base_fee_b_numerator,
+      base_fee_den: pool_in_base_fee_b_denominator,
       vol_fee_opt: vol_fee,
       allow_dynamic_fee: pool_in_allow_dynamic_fee,
     )
@@ -181,8 +194,10 @@ pub fn get_batching_pool(
     asset_a: pool_in_asset_a,
     asset_b: pool_in_asset_b,
     lp_asset,
-    trading_fee_numerator,
-    trading_fee_denominator,
+    trading_fee_a_numerator,
+    trading_fee_a_denominator,
+    trading_fee_b_numerator,
+    trading_fee_b_denominator,
     profit_sharing: pool_in_profit_sharing_opt,
     pool_state_in: (
       pool_in_datum_reserve_a,
@@ -258,8 +273,10 @@ pub fn validate_update_pool_datum_or_stake_credential(
         total_liquidity: pool_out_total_liquidity,
         reserve_a: pool_out_reserve_a,
         reserve_b: pool_out_reserve_b,
-        base_fee_numerator: pool_out_base_fee_numerator,
-        base_fee_denominator: pool_out_base_fee_denominator,
+        base_fee_a_numerator: pool_out_base_fee_a_numerator,
+        base_fee_a_denominator: pool_out_base_fee_a_denominator,
+        base_fee_b_numerator: pool_out_base_fee_b_numerator,
+        base_fee_b_denominator: pool_out_base_fee_b_denominator,
         profit_sharing_opt: pool_out_profit_sharing_opt,
         ..
       } = pool_out_datum
@@ -295,8 +312,16 @@ pub fn validate_update_pool_datum_or_stake_credential(
         pool_in_address == pool_out_address,
         // Trading Fee must be between **0.05%** and **10%**
         validate_fee_percent(
-          fee_num: pool_out_base_fee_numerator,
-          fee_den: pool_out_base_fee_denominator,
+          fee_num: pool_out_base_fee_a_numerator,
+          fee_den: pool_out_base_fee_a_denominator,
+          max_fee_num: utils.max_base_fee_numerator,
+          max_fee_den: utils.max_base_fee_denominator,
+          min_fee_num: utils.min_base_fee_numerator,
+          min_fee_den: utils.min_base_fee_denominator,
+        ),
+        validate_fee_percent(
+          fee_num: pool_out_base_fee_b_numerator,
+          fee_den: pool_out_base_fee_b_denominator,
           max_fee_num: utils.max_base_fee_numerator,
           max_fee_den: utils.max_base_fee_denominator,
           min_fee_num: utils.min_base_fee_numerator,
