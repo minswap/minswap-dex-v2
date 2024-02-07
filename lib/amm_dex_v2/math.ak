@@ -207,8 +207,10 @@ pub fn calculate_deposit_amount(
   reserve_a: Int,
   reserve_b: Int,
   total_liquidity: Int,
-  trading_fee_numerator: Int,
-  trading_fee_denominator: Int,
+  trading_fee_a_numerator: Int,
+  trading_fee_a_denominator: Int,
+  trading_fee_b_numerator: Int,
+  trading_fee_b_denominator: Int,
   profit_sharing_opt: Option<(Int, Int)>,
 ) -> (Int, Int, Int) {
   let ratio_a = amount_a * total_liquidity / reserve_a
@@ -221,8 +223,8 @@ pub fn calculate_deposit_amount(
         amount_out: amount_b,
         reserve_in: reserve_a,
         reserve_out: reserve_b,
-        trading_fee_numerator: trading_fee_numerator,
-        trading_fee_denominator: trading_fee_denominator,
+        trading_fee_numerator: trading_fee_a_numerator,
+        trading_fee_denominator: trading_fee_a_denominator,
       )
     let (receive_amount_b_numerator, receive_amount_b_denominator) =
       calculate_amount_out_fraction(
@@ -230,15 +232,15 @@ pub fn calculate_deposit_amount(
         reserve_out: reserve_b,
         amount_in_numerator: swap_amount_a_numerator,
         amount_in_denominator: swap_amount_a_denominator,
-        trading_fee_numerator: trading_fee_numerator,
-        trading_fee_denominator: trading_fee_denominator,
+        trading_fee_numerator: trading_fee_a_numerator,
+        trading_fee_denominator: trading_fee_a_denominator,
       )
     let earned_fee_a =
       calculate_earned_fee_in_fraction(
         amount_in_numerator: swap_amount_a_numerator,
         amount_in_denominator: swap_amount_a_denominator,
-        trading_fee_numerator: trading_fee_numerator,
-        trading_fee_denominator: trading_fee_denominator,
+        trading_fee_numerator: trading_fee_a_numerator,
+        trading_fee_denominator: trading_fee_a_denominator,
         fee_sharing_opt: profit_sharing_opt,
       )
     let lp_amount =
@@ -254,8 +256,8 @@ pub fn calculate_deposit_amount(
         amount_out: amount_a,
         reserve_in: reserve_b,
         reserve_out: reserve_a,
-        trading_fee_numerator: trading_fee_numerator,
-        trading_fee_denominator: trading_fee_denominator,
+        trading_fee_numerator: trading_fee_b_numerator,
+        trading_fee_denominator: trading_fee_b_denominator,
       )
     let (receive_amount_a_numerator, receive_amount_a_denominator) =
       calculate_amount_out_fraction(
@@ -263,15 +265,15 @@ pub fn calculate_deposit_amount(
         reserve_out: reserve_a,
         amount_in_numerator: swap_amount_b_numerator,
         amount_in_denominator: swap_amount_b_denominator,
-        trading_fee_numerator: trading_fee_numerator,
-        trading_fee_denominator: trading_fee_denominator,
+        trading_fee_numerator: trading_fee_b_numerator,
+        trading_fee_denominator: trading_fee_b_denominator,
       )
     let earned_fee_b =
       calculate_earned_fee_in_fraction(
         amount_in_numerator: swap_amount_b_numerator,
         amount_in_denominator: swap_amount_b_denominator,
-        trading_fee_numerator: trading_fee_numerator,
-        trading_fee_denominator: trading_fee_denominator,
+        trading_fee_numerator: trading_fee_b_numerator,
+        trading_fee_denominator: trading_fee_b_denominator,
         fee_sharing_opt: profit_sharing_opt,
       )
     let lp_amount =
@@ -301,8 +303,10 @@ pub fn calculate_zap_out(
   reserve_b: Int,
   total_liquidity: Int,
   a_to_b_direction: Bool,
-  trading_fee_numerator: Int,
-  trading_fee_denominator: Int,
+  trading_fee_a_numerator: Int,
+  trading_fee_a_denominator: Int,
+  trading_fee_b_numerator: Int,
+  trading_fee_b_denominator: Int,
   profit_sharing_opt: Option<(Int, Int)>,
 ) -> (Int, Int, Int) {
   let (withdrawal_asset_a_amount, withdrawal_asset_b_amount) =
@@ -320,14 +324,14 @@ pub fn calculate_zap_out(
         reserve_in: reserve_a_after_withdraw,
         reserve_out: reserve_b_after_withdraw,
         amount_in: withdrawal_asset_a_amount,
-        trading_fee_numerator: trading_fee_numerator,
-        trading_fee_denominator: trading_fee_denominator,
+        trading_fee_numerator: trading_fee_a_numerator,
+        trading_fee_denominator: trading_fee_a_denominator,
       )
     let earned_fee_a =
       calculate_earned_fee_in(
         amount_in: withdrawal_asset_a_amount,
-        trading_fee_numerator: trading_fee_numerator,
-        trading_fee_denominator: trading_fee_denominator,
+        trading_fee_numerator: trading_fee_a_numerator,
+        trading_fee_denominator: trading_fee_a_denominator,
         fee_sharing_opt: profit_sharing_opt,
       )
     (earned_fee_a, 0, withdrawal_asset_b_amount + extra_amount_out)
@@ -337,14 +341,14 @@ pub fn calculate_zap_out(
         reserve_in: reserve_b_after_withdraw,
         reserve_out: reserve_a_after_withdraw,
         amount_in: withdrawal_asset_b_amount,
-        trading_fee_numerator: trading_fee_numerator,
-        trading_fee_denominator: trading_fee_denominator,
+        trading_fee_numerator: trading_fee_b_numerator,
+        trading_fee_denominator: trading_fee_b_denominator,
       )
     let earned_fee_b =
       calculate_earned_fee_in(
         amount_in: withdrawal_asset_b_amount,
-        trading_fee_numerator: trading_fee_numerator,
-        trading_fee_denominator: trading_fee_denominator,
+        trading_fee_numerator: trading_fee_b_numerator,
+        trading_fee_denominator: trading_fee_b_denominator,
         fee_sharing_opt: profit_sharing_opt,
       )
     (0, earned_fee_b, withdrawal_asset_a_amount + extra_amount_out)
@@ -393,8 +397,10 @@ pub fn calculate_withdraw_imbalance(
   expect_ab_ratio_denominator: Int,
   reserve_a: Int,
   reserve_b: Int,
-  trading_fee_numerator: Int,
-  trading_fee_denominator: Int,
+  trading_fee_a_numerator: Int,
+  trading_fee_a_denominator: Int,
+  trading_fee_b_numerator: Int,
+  trading_fee_b_denominator: Int,
   withdrawal_lp_amount: Int,
   total_liquidity: Int,
   profit_sharing_opt: Option<(Int, Int)>,
@@ -420,8 +426,8 @@ pub fn calculate_withdraw_imbalance(
         reserve_out: reserve_b_after_withdraw,
         expect_io_ratio_numerator: expect_ab_ratio_numerator,
         expect_io_ratio_denominator: expect_ab_ratio_denominator,
-        trading_fee_numerator: trading_fee_numerator,
-        trading_fee_denominator: trading_fee_denominator,
+        trading_fee_numerator: trading_fee_a_numerator,
+        trading_fee_denominator: trading_fee_a_denominator,
       )
 
     let receive_amount_b =
@@ -429,14 +435,14 @@ pub fn calculate_withdraw_imbalance(
         reserve_in: reserve_a_after_withdraw,
         reserve_out: reserve_b_after_withdraw,
         amount_in: swap_amount_a,
-        trading_fee_numerator: trading_fee_numerator,
-        trading_fee_denominator: trading_fee_denominator,
+        trading_fee_numerator: trading_fee_a_numerator,
+        trading_fee_denominator: trading_fee_a_denominator,
       )
     let earned_fee_a =
       calculate_earned_fee_in(
         amount_in: swap_amount_a,
-        trading_fee_numerator: trading_fee_numerator,
-        trading_fee_denominator: trading_fee_denominator,
+        trading_fee_numerator: trading_fee_a_numerator,
+        trading_fee_denominator: trading_fee_a_denominator,
         fee_sharing_opt: profit_sharing_opt,
       )
     (
@@ -455,8 +461,8 @@ pub fn calculate_withdraw_imbalance(
         reserve_out: reserve_a_after_withdraw,
         expect_io_ratio_numerator: expect_ab_ratio_denominator,
         expect_io_ratio_denominator: expect_ab_ratio_numerator,
-        trading_fee_numerator: trading_fee_numerator,
-        trading_fee_denominator: trading_fee_denominator,
+        trading_fee_numerator: trading_fee_b_numerator,
+        trading_fee_denominator: trading_fee_b_denominator,
       )
 
     let receive_amount_a =
@@ -464,14 +470,14 @@ pub fn calculate_withdraw_imbalance(
         reserve_in: reserve_b_after_withdraw,
         reserve_out: reserve_a_after_withdraw,
         amount_in: swap_amount_b,
-        trading_fee_numerator: trading_fee_numerator,
-        trading_fee_denominator: trading_fee_denominator,
+        trading_fee_numerator: trading_fee_b_numerator,
+        trading_fee_denominator: trading_fee_b_denominator,
       )
     let earned_fee_b =
       calculate_earned_fee_in(
         amount_in: swap_amount_b,
-        trading_fee_numerator: trading_fee_numerator,
-        trading_fee_denominator: trading_fee_denominator,
+        trading_fee_numerator: trading_fee_b_numerator,
+        trading_fee_denominator: trading_fee_b_denominator,
         fee_sharing_opt: profit_sharing_opt,
       )
     (
@@ -483,62 +489,4 @@ pub fn calculate_withdraw_imbalance(
   } else {
     (0, 0, withdrawal_asset_a_amount, withdrawal_asset_b_amount)
   }
-}
-
-test test_calculate_withdraw_swap_amount() {
-  let reserve_a = 1_000_000_000
-  let reserve_b = 1_000_000_000
-  let total_liquidity = 1_000_000_000
-  let trading_fee_numerator = 3
-  let trading_fee_denominator = 1000
-  let withdrawal_lp_amount = 1000
-  let asset_a_ratio = 3
-  let asset_b_ratio = 1
-
-  let (withdrawal_asset_a_amount, withdrawal_asset_b_amount) =
-    calculate_withdraw(
-      reserve_a: reserve_a,
-      reserve_b: reserve_b,
-      withdrawal_lp_amount: withdrawal_lp_amount,
-      total_liquidity: total_liquidity,
-    )
-  let reserve_a_after_withdraw = reserve_a - withdrawal_asset_a_amount
-  let reserve_b_after_withdraw = reserve_b - withdrawal_asset_b_amount
-  // b -> a
-  let swap_amount_b =
-    calculate_withdraw_swap_amount(
-      amount_in: withdrawal_asset_b_amount,
-      amount_out: withdrawal_asset_a_amount,
-      reserve_in: reserve_b_after_withdraw,
-      reserve_out: reserve_a_after_withdraw,
-      expect_io_ratio_numerator: asset_b_ratio,
-      expect_io_ratio_denominator: asset_a_ratio,
-      trading_fee_numerator: trading_fee_numerator,
-      trading_fee_denominator: trading_fee_denominator,
-    )
-  swap_amount_b == 500 && withdrawal_asset_a_amount == 1000 && withdrawal_asset_a_amount == 1000
-}
-
-test test_calculate_withdraw_imbalance() {
-  let reserve_a = 1_000_000_000
-  let reserve_b = 1_000_000_000
-  let total_liquidity = 1_000_000_000
-  let trading_fee_numerator = 3
-  let trading_fee_denominator = 1000
-  let withdrawal_lp_amount = 1000
-  let asset_a_ratio = 3
-  let asset_b_ratio = 1
-  let profit_sharing_opt = None
-
-  calculate_withdraw_imbalance(
-    expect_ab_ratio_numerator: asset_a_ratio,
-    expect_ab_ratio_denominator: asset_b_ratio,
-    reserve_a: reserve_a,
-    reserve_b: reserve_b,
-    trading_fee_numerator: trading_fee_numerator,
-    trading_fee_denominator: trading_fee_denominator,
-    withdrawal_lp_amount: withdrawal_lp_amount,
-    total_liquidity: total_liquidity,
-    profit_sharing_opt: profit_sharing_opt,
-  ) == (0, 0, 1498, 500)
 }

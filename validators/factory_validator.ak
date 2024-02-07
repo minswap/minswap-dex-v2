@@ -161,8 +161,10 @@ validator(
       total_liquidity: pool_datum_total_liquidity,
       reserve_a: pool_datum_reserve_a,
       reserve_b: pool_datum_reserve_b,
-      base_fee_numerator: pool_datum_base_fee_numerator,
-      base_fee_denominator: pool_datum_base_fee_denominator,
+      base_fee_a_numerator: pool_datum_base_fee_a_numerator,
+      base_fee_a_denominator: pool_datum_base_fee_a_denominator,
+      base_fee_b_numerator: pool_datum_base_fee_b_numerator,
+      base_fee_b_denominator: pool_datum_base_fee_b_denominator,
       profit_sharing_opt: pool_datum_profit_sharing_opt,
       allow_dynamic_fee: pool_allow_dynamic_fee,
     } = pool_out_datum
@@ -193,11 +195,17 @@ validator(
         |> value.add(asset_b_policy_id, asset_b_asset_name, amount_b)
         |> value.add(authen_policy_id, lp_asset_name, remaining_liquidity)
         |> value.add(authen_policy_id, pool_auth_asset_name, 1)
+    expect and {
+        pool_datum_base_fee_a_numerator == pool_datum_base_fee_b_numerator,
+        pool_datum_base_fee_a_denominator == pool_datum_base_fee_b_denominator,
+      }
+    let stardard_fees =
+      [(5, 10000), (3, 1000), (1, 100)]
     let is_valid_trading_fee =
       if
       list.has(
-        [(5, 10000), (3, 1000), (1, 100)],
-        (pool_datum_base_fee_numerator, pool_datum_base_fee_denominator),
+        stardard_fees,
+        (pool_datum_base_fee_a_numerator, pool_datum_base_fee_a_denominator),
       ){
       
         True
@@ -211,8 +219,8 @@ validator(
             },
           )
         pool_validation.validate_fee_percent(
-          fee_num: pool_datum_base_fee_numerator,
-          fee_den: pool_datum_base_fee_denominator,
+          fee_num: pool_datum_base_fee_a_numerator,
+          fee_den: pool_datum_base_fee_a_denominator,
           max_fee_num: utils.max_base_fee_numerator,
           max_fee_den: utils.max_base_fee_denominator,
           min_fee_num: utils.min_base_fee_numerator,
