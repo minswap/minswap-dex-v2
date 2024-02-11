@@ -598,6 +598,7 @@ pub fn validate_trading_fee_percent(
   trading_fee_numerator: Int,
   trading_fee_denominator: Int,
 ) -> Bool {
+  expect trading_fee_denominator > 0
   // Max 10%, Min 0.05%
   let max_trading_fee_numerator = 1
   let max_trading_fee_denominator = 10
@@ -615,6 +616,7 @@ pub fn validate_fee_sharing_percent(
   fee_sharing_numerator: Int,
   fee_sharing_denominator: Int,
 ) -> Bool {
+  expect fee_sharing_denominator > 0
   // Max 50%, Min 16.66%
   let max_fee_sharing_numerator = 1
   let max_fee_sharing_denominator = 2
