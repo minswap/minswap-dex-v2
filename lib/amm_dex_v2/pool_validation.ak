@@ -344,6 +344,7 @@ pub fn validate_fee_percent(
   min_fee_den: Int,
 ) -> Bool {
   and {
+    fee_den > 0,
     // less than max
     fee_num * max_fee_den <= fee_den * max_fee_num,
     // greater than min

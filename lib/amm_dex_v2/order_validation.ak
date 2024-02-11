@@ -1259,7 +1259,7 @@ pub fn apply_orders(
       ) -> {
         expect and {
             io_ratio_numerator > 0,
-            io_ratio_numerator > 0,
+            io_ratio_denominator > 0,
             hops > 0,
             minimum_swap_amount_required > 0,
             total_swap_amount >= minimum_swap_amount_required,
