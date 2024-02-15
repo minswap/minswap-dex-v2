@@ -412,7 +412,6 @@ pub fn validate_swap_multi_routing(
   }
 }
 
-// TODO: We need carefully verify these logic below 
 fn find_multi_routing_pools(
   authen_policy_id: PolicyId,
   pool_input_ref: OutputReference,
@@ -446,7 +445,7 @@ fn find_multi_routing_pools(
     },
     ..
   } = own_pool_input
-  // verify that there's only 2 pools the inputs
+  // verify that the number of pool's utxo in the inputs must be matched with @pool_len
   expect
     list.length(
       list.filter(
@@ -460,7 +459,7 @@ fn find_multi_routing_pools(
         },
       ),
     ) == pool_len
-  // verify that there's only 2 pools the outputs
+  // verify that the number of pool's utxo in the outputs must be matched with @pool_len
   expect
     list.length(
       list.filter(
