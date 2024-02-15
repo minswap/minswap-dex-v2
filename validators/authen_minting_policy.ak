@@ -20,7 +20,6 @@ validator(
     let ScriptContext { transaction, purpose } = context
     expect Mint(authen_policy_id) = purpose
     when redeemer is {
-      // The redeemer can be called once to initialize the whole AMM V2 system
       CreatePool -> {
         let Transaction { inputs, mint, redeemers, .. } = transaction
         // validate that there's a single Factory UTxO in the Transaction Inputs. 
@@ -61,7 +60,6 @@ validator(
           policy_id: asset_b_policy_id,
           asset_name: asset_b_asset_name,
         } = asset_b
-        // todo, consider whether we need this logic or not?
         expect utils.sorted_asset(asset_a, asset_b)
         let lp_asset_name =
           utils.compute_lp_asset_name(
@@ -75,6 +73,7 @@ validator(
           lp_asset_name: lp_asset_name,
         )
       }
+      // The redeemer can be called once to initialize the whole AMM V2 system
       MintFactoryAuthen -> {
         let Transaction { inputs, mint, outputs, .. } = transaction
 

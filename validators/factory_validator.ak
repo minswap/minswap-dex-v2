@@ -238,6 +238,10 @@ validator(
       // Pool Reserve must be the same between datum and value 
       pool_datum_reserve_a == amount_a,
       pool_datum_reserve_b == amount_b,
+      // Initial Pool Reserves and liquditiy must be positive
+      amount_a > 0,
+      amount_b > 0,
+      total_liquidity > 0,
       // trading_fee_percentage must be between **0.05%** and **10%**
       is_valid_trading_fee,
       // Dynamic Fee is not allowed in Pool Creation 
