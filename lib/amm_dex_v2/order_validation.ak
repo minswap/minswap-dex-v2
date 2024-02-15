@@ -40,7 +40,7 @@ fn validate_swap_exact_in(
   profit_sharing_opt: Option<(Int, Int)>,
   pool_state: PoolState,
   kill_on_failed: Bool,
-  is_slippage_sastified: fn(Int) -> Bool,
+  is_slippage_satisfied: fn(Int) -> Bool,
 ) -> PoolState {
   let (
     datum_reserve_a,
@@ -75,8 +75,8 @@ fn validate_swap_exact_in(
       trading_fee_denominator: trading_fee_denominator,
       fee_sharing_opt: profit_sharing_opt,
     )
-  let slippage_sastified = is_slippage_sastified(amount_out)
-  if slippage_sastified {
+  let slippage_satisfied = is_slippage_satisfied(amount_out)
+  if slippage_satisfied {
     let expect_order_value_out =
       order_in_value
         |> value.add(ada_policy_id, ada_asset_name, -used_batcher_fee)
@@ -174,8 +174,8 @@ fn validate_swap_exact_out(
       trading_fee_denominator: trading_fee_denominator,
       fee_sharing_opt: profit_sharing_opt,
     )
-  let slippage_sastified = necessary_amount_in <= maximum_swap_amount
-  if slippage_sastified {
+  let slippage_satisfied = necessary_amount_in <= maximum_swap_amount
+  if slippage_satisfied {
     let expect_order_value_out =
       order_in_value
         |> value.add(ada_policy_id, ada_asset_name, -used_batcher_fee)
@@ -267,8 +267,8 @@ fn validate_deposit(
       trading_fee_denominator: trading_fee_denominator,
       profit_sharing_opt: profit_sharing_opt,
     )
-  let slippage_sastified = lp_amount >= minimum_lp
-  if slippage_sastified {
+  let slippage_satisfied = lp_amount >= minimum_lp
+  if slippage_satisfied {
     let expect_order_value_out =
       order_in_value
         |> value.add(ada_policy_id, ada_asset_name, -used_batcher_fee)
@@ -342,11 +342,11 @@ fn validate_withdraw(
       withdrawal_lp_amount,
       total_liquidity,
     )
-  let slippage_sastified = and {
+  let slippage_satisfied = and {
       amount_a_out >= minimum_amount_a,
       amount_b_out >= minimum_amount_b,
     }
-  if slippage_sastified {
+  if slippage_satisfied {
     let expect_order_value_out =
       order_in_value
         |> value.add(ada_policy_id, ada_asset_name, -used_batcher_fee)
@@ -432,8 +432,8 @@ fn validate_zap_out(
       trading_fee_denominator: trading_fee_denominator,
       profit_sharing_opt: profit_sharing_opt,
     )
-  let slippage_sastified = amount_out >= minimum_receive
-  if slippage_sastified {
+  let slippage_satisfied = amount_out >= minimum_receive
+  if slippage_satisfied {
     let expect_order_value_out =
       order_in_value
         |> value.add(ada_policy_id, ada_asset_name, -used_batcher_fee)
@@ -625,8 +625,8 @@ fn validate_withdraw_imbalance(
       total_liquidity: total_liquidity,
       profit_sharing_opt: profit_sharing_opt,
     )
-  let slippage_sastified = amount_a_out >= minimum_amount_a
-  if slippage_sastified {
+  let slippage_satisfied = amount_a_out >= minimum_amount_a
+  if slippage_satisfied {
     let expect_order_value_out =
       order_in_value
         |> value.add(ada_policy_id, ada_asset_name, -used_batcher_fee)
@@ -962,7 +962,7 @@ pub fn apply_orders(
           profit_sharing_opt: profit_sharing_opt,
           pool_state: pool_state,
           kill_on_failed: order_killable,
-          is_slippage_sastified: fn(amount_out) {
+          is_slippage_satisfied: fn(amount_out) {
             amount_out >= minimum_receive
           },
         )
@@ -989,7 +989,7 @@ pub fn apply_orders(
           profit_sharing_opt: profit_sharing_opt,
           pool_state: pool_state,
           kill_on_failed: order_killable,
-          is_slippage_sastified: fn(amount_out) {
+          is_slippage_satisfied: fn(amount_out) {
             amount_out <= stop_loss_receive
           },
         )
@@ -1023,7 +1023,7 @@ pub fn apply_orders(
           profit_sharing_opt: profit_sharing_opt,
           pool_state: pool_state,
           kill_on_failed: order_killable,
-          is_slippage_sastified: fn(amount_out) {
+          is_slippage_satisfied: fn(amount_out) {
             amount_out >= minimum_receive || amount_out <= stop_loss_receive
           },
         )
