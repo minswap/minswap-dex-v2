@@ -72,7 +72,7 @@ $$Out = \Delta y + \frac{(f_{d} - f_{n}) * \Delta x * y_{0}}{x_{0} * f_{d} + (f_
 
 ### 6. Withdraw Imbalance
 
-A user wants to withdraw with a ratio $A/B$. 
+Users want to withdraw with a ratio $A/B$. 
 
 We have the basic withdrawal formulas:
 
@@ -82,18 +82,28 @@ $$\Delta y = \frac{\Delta L}{L} * y_{0}$$
 Suppose we need to swap some in $\Delta x$ to get $\frac{\Delta x'}{\Delta y'} = \frac{A}{B}$.
 
 So we have the formula:
-$$\frac{\Delta x - swapAmountIn}{\Delta y + swapAmoutOut} =\frac{A}{B} (1)$$
+$$\frac{\Delta x - swap_{x}}{\Delta y + receive_{y}} =\frac{A}{B} (1)$$
 
-We need `swapAmountIn` first, then we will have `swapAmountOut` by the formula of `SwapExactIn`. So, we need a formula for `swapAmountOut` that depends on `swapAmountIn` to change it to (1) and calculate `swapAmountIn`. We have the formula from `swapAmountIn`:
 
-$$ swapAmountOut = \frac{(f_{d} - f_{n}) * swapAmountIn * y_{0}}{x_{0} * f_{d} + (f_{d} - f_{n}) * swapAmountIn}(2)$$
+$$ receive_{y} = \frac{(f_{d} - f_{n}) * swap_{x} * y_{0}}{x_{0} * f_{d} + (f_{d} - f_{n}) * swap_{x}}(2)$$
 
-(With $x_{0}$ and $y_{0}$ being x and y after withdrawal, `swapAmountOut` is $\Delta y$ and `swapAmountIn` is $\Delta y$ in the `SwapExactIn` formula).
+(With $x_{0}$ and $y_{0}$ being $x$ and $y$ after withdrawal, $swap_{x}$ is the amount need to be swapped to adapt the ratio $A/B$ that users expect).
 
-Changing `swapAmountOut` from (2) to (1) and simplifying the expressions, we have:
+Combination of formula (1) and (2), we have:
 
-$$a * swapAmountIn ^ 2 + b * swapAmountIn + c = 0$$
+$$a * swap_{x} ^ 2 + b * swap_{x} + c = 0$$
 where 
 $$a = (f_{d} - f_{n}) * B$$
 $$b = A*(f_{d} - f_{n})*(y_{0}+\Delta y) + B *(f_{d} * x_{0} - (f_{d} - f_{n})*\Delta x)$$
 $$ c =f_{d} * x_{0} *(A * \Delta y - B * \Delta x) $$
+
+### 7. Partial Swap
+Allow users swap only if price is exactly matched.
+
+In case users want to swap with price $A/B$
+We have 2 formulas: 
+$$\frac{\Delta x}{\Delta y} = \frac{A}{B}  (1)$$
+$$ \Delta y = \frac{(f_{d} - f_{n}) * \Delta x * y_{0}}{x_{0} * f_{d} + (f_{d} - f_{n}) * \Delta x} (2)$$
+We can calculate $\Delta x$: 
+$$\Delta x = \frac{A * (f_{d} - f_{n}) * y_{0} - B * f_{d} * x_{0}}{(f_{d} - f_{n}) * B}$$
+where $\Delta x$ is the maximum amount can be swapped to adapt $A/B$ ratio
