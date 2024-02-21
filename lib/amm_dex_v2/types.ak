@@ -221,15 +221,21 @@ pub type OrderStep {
   }
 }
 
+pub type ExtraOrderDatum {
+  EODNoDatum
+  EODDatumHash { hash: CustomDatumHash }
+  EODInlineDatum { hash: CustomDatumHash }
+}
+
 pub type OrderDatum {
   // The address of order's creator, only sender can cancel the order immediately
   sender: Address,
   // The datum hash of the output after being killed by Batcher or cancelled by bots (order is expired)
-  sender_datum_hash_opt: Option<CustomDatumHash>,
+  sender_datum: ExtraOrderDatum,
   // The address which receives the funds after order is processed
   receiver: Address,
   // The datum hash of the output after order is processed.
-  receiver_datum_hash_opt: Option<CustomDatumHash>,
+  receiver_datum: ExtraOrderDatum,
   // The Liquidity Pool's LP Asset that the order will be applied to
   lp_asset: Asset,
   // The information about Order Type

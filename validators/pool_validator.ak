@@ -239,7 +239,7 @@ validator(
           utils.must_find_script_datum(datums, raw_order_in_datum)
         let OrderDatum {
           receiver,
-          receiver_datum_hash_opt,
+          receiver_datum,
           step: order_step,
           max_batcher_fee,
           lp_asset: order_lp_asset,
@@ -257,10 +257,10 @@ validator(
             // Used Batcher Fee must be positive and less than or equal batcher fee
             order_fee > 0,
             order_fee <= max_batcher_fee,
-            // Order Output must be returned to receiver and might have receiver_datum_hash_opt
+            // Order Output must be returned to receiver and might have receiver_datum
             order_validation.validate_order_receiver(
               receiver: receiver,
-              receiver_datum_hash_opt: receiver_datum_hash_opt,
+              receiver_datum: receiver_datum,
               output: order_output,
             ),
             // In case expired setting is turned on, the execution time must not exceed the expired_time

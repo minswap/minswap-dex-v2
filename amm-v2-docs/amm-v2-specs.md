@@ -153,9 +153,9 @@ An Order Datum keeps information about Order Type and some other informations:
 
 
 - _sender_: The address of order's creator, only sender can cancel the order
-- _sender_datum_hash_: (optional) the datum hash of the output after cancelling order by anyone or killing by batcher.
+- _sender_datum_: the datum of the output after cancelling order by anyone or killing by batcher.
 - _receiver_: The address which receives the funds after order is processed
-- _receiver_datum_hash_: (optional) the datum hash of the output after order is processed.
+- _receiver_datum_: the datum of the output after order is processed.
 - _lp_asset_: The Liquidity Pool's LP Asset that the order will be applied to
 - _step_: The information about Order Type which we mentioned above
 - _max_batcher_fee_: The maximum fee users have to pay to Batcher to execute batching transaction. The actual fee Batcher will take might be less than the maximum fee
@@ -400,7 +400,7 @@ Batching validation has 2 scenarios:
        - All amount fields in Order Step must be positive
        - _batcher_fee_ must be positive
        - _lp_asset_ in **OrderDatum** must be the same with processing Liquidity Pool
-       - Order Output must be returned to _receiver_ and might have _receiver_datum_hash_opt_
+       - Order Output must be returned to _receiver_ and has _receiver_datum_
        - TODO: Write a doc to explain Order Calculation formula
 
 - **Batching Multiple Pools**: It will process single **SwapMultiRouting** Order and multiple **Liquidity Pool**
@@ -421,7 +421,7 @@ Batching validation has 2 scenarios:
      - All amount fields in Order Step must be positive
      - _batcher_fee_ must be positive
      - _lp_asset_ in **OrderDatum** must be the same with LP Asset of first Liquidity Pool in routing list
-     - Order Output must be returned to _receiver_ and might having _receiver_datum_hash_opt_
+     - Order Output must be returned to _receiver_ and has _receiver_datum_
      - The number of Pool Inputs and Pool Outputs must be the same with _routings_ length
      - Calculated Asset Out must be returned to _receiver_
      - TODO: Write a doc to explain Order Calculation formula
@@ -537,8 +537,9 @@ Transaction structure:
      - Address: Order Address
      - Datum:
        - _sender_
+       - _sender_datum_
        - _receiver_
-       - _receiver_datum_hash_
+       - _receiver_datum_
        - _lp_asset_
        - _batcher_fee_
        - _expired_setting_opt_
@@ -694,7 +695,7 @@ Transaction structure:
        - _profit_sharing_opt_ (unchanged)
    - Order Outputs:
      - Address: _receiver_
-     - DatumHash: _receiver_datum_hash_opt_
+     - Datum: _receiver_datum_
      - Value:
        - _SwapExactIn_:
          - Value:
@@ -743,8 +744,9 @@ Transaction structure:
          - Create new _PartialSwap_ Order if _hops_ > 1 and remaining Swapping Token is greater than _minimum_swap_amount_required_
            - Datum:
              - _sender_ (unchanged)
+             - _sender_datum_ (unchanged)
              - _receiver_ (unchanged)
-             - _receiver_datum_hash_ (unchanged)
+             - _receiver_datum_ (unchanged)
              - _lp_asset_ (unchanged)
              - _batcher_fee_ (unchanged)
              - _step_: _PartialSwap_
@@ -820,7 +822,7 @@ Transaction structure:
        - _profit_sharing_opt_ (unchanged)
    - Order Output
      - Address: _receiver_
-     - DatumHash: _receiver_datum_hash_opt_
+     - Datum: _receiver_datum_
      - Value:
        - change in ADA
        - Received Token (must be greater than or equal to _minimum_receive_)
