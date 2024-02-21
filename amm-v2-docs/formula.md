@@ -13,7 +13,9 @@ Before we go to details, here are some definitions:
 ## AMM has 2 main formula:
 ### 1. When the price changes (Swap)
 When a Token is swapped, Swap Fee is deducted from the input amount ($\Delta x$) 
+
 $$ k = x_{0} * y_{0}$$
+
 $$ k = (x_{0} + (1 - f) * \Delta x) * (y_{0} - \Delta y)$$
 
 ### 2. When the price is not changes (Add or Remove Liquidity)
@@ -94,7 +96,9 @@ Combination of formula (1) and (2), we have:
 $$a * swap_{x} ^ 2 + b * swap_{x} + c = 0$$
 where 
 $$a = (f_{d} - f_{n}) * B$$
+
 $$b = A*(f_{d} - f_{n})*(y_{0}+\Delta y) + B *(f_{d} * x_{0} - (f_{d} - f_{n})*\Delta x)$$
+
 $$c =f_{d} * x_{0} *(A * \Delta y - B * \Delta x)$$
 
 ### 7. Partial Swap
@@ -104,6 +108,8 @@ In case users want to swap with price $A/B$
 We have 2 formulas: 
 $$\frac{\Delta x}{\Delta y} = \frac{A}{B}  (1)$$
 $$ \Delta y = \frac{(f_{d} - f_{n}) * \Delta x * y_{0}}{x_{0} * f_{d} + (f_{d} - f_{n}) * \Delta x} (2)$$
+
 We can calculate $\Delta x$: 
+
 $$\Delta x = \frac{A * (f_{d} - f_{n}) * y_{0} - B * f_{d} * x_{0}}{(f_{d} - f_{n}) * B}$$
 where $\Delta x$ is the maximum amount can be swapped to adapt $A/B$ ratio
