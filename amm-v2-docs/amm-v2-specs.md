@@ -363,7 +363,7 @@ Pool validator is the most important part in the system. It's responsible for gu
        - _batcher_fee_ must be positive
        - _lp_asset_ in **OrderDatum** must be the same with processing Liquidity Pool
        - Order Output must be returned to _receiver_ and might have _receiver_datum_hash_opt_
-       - Ordere Output value must be satisfy the condition of [description in Order Datum](#3322-datum)
+       - Order Output value must satisfy the condition of [description in Order Datum](#3322-datum)
 - **MultiRouting**: This redeemer will be called on MultiRouting Transaction. It will process single **SwapMultiRouting** Order and multiple **Liquidity Pool**
    - validate batcher with valid License Token must be presented in Transaction Inputs:
      - Batcher must sign a Batching transaction.
@@ -385,7 +385,7 @@ Pool validator is the most important part in the system. It's responsible for gu
      - Order Output must be returned to _receiver_ and might having _receiver_datum_hash_opt_
      - The number of Pool Inputs and Pool Outputs must be the same with _routings_ length
      - Calculated Asset Out must be returned to _receiver_
-     - Ordere Output value must be satisfy the condition of [description in Order Datum](#3322-datum)
+     - Order Output value must satisfy the condition of [description in Order Datum](#3322-datum)
 - **UpdatePoolFeeOrStakeCredential**: Allow Admin update Liquidity Pool's fee (Trading Fee and Profit Sharing) or update Pool's Stake Credential. It allows Minswap can delegate Liquidity Pool's ADA to different Stake Pools
    - validate Admin with valid Admin License Token must be presented in Transaction Inputs
    - validate there is a single Pool UTxO in Transaction Inputs and single Pool UTxO in Transaction Outputs and:
