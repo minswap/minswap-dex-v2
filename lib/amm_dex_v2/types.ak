@@ -27,7 +27,7 @@ pub type ProfitSharing =
   (Int, Int)
 
 pub type PoolDatum {
-  stake_credential: StakeCredential,
+  pool_batching_stake_credential: StakeCredential,
   asset_a: Asset,
   asset_b: Asset,
   total_liquidity: Int,
@@ -68,6 +68,36 @@ pub type SwapRouting {
   a_to_b_direction: Bool,
 }
 
+// Option when someone want to swap a token
+pub type SwapAmountOption {
+  // Swap a specific amount of token
+  SAOSpecificAmount { swap_amount: Int }
+  // Swap a all amount of the token that is available on the order's value
+  // @deducted_amount will be subtract from the amount
+  // This option is useful for integration where the creator doesn't know the exact amount that will be swapped
+  SAOAll { deducted_amount: Int }
+}
+
+// Option when someone want to deposit tokens
+pub type DepositAmountOption {
+  // Deposit specific amount of tokens
+  DAOSpecificAmount { deposit_amount_a: Int, deposit_amount_b: Int }
+  // Deposit all amount of the tokens that are available on the order's value
+  // @deducted_amount_a and @deducted_amount_b will be subtract from the amount
+  // This option is useful for integration where the creator doesn't know the exact amount that will be deposited
+  DAOAll { deducted_amount_a: Int, deducted_amount_b: Int }
+}
+
+// Option when someone want to withdraw tokens
+pub type WithdrawAmountOption {
+  // Withdraw specific amount of LP Token
+  WAOSpecificAmount { withdrawal_lp_amount: Int }
+  // Withdrawl all amount of the LP token that is available on the order's value
+  // @deducted_amount_lp will be subtract from the amount
+  // This option is useful for integration where the creator doesn't know the exact amount that will be withdrawn
+  WAOAll { deducted_amount_lp: Int }
+}
+
 pub type OrderStep {
   // SwapExactIn is used for exchanging specific amount of single asset in the liquidity pool. 
   // The order will be executed if the received amount is greater than or equal to `minimum_receive`.
@@ -75,7 +105,7 @@ pub type OrderStep {
     // The AToB direction of swap request. True for A -> B and False for B -> A
     a_to_b_direction: Bool,
     // Amount of Asset In which users want to exchange
-    swap_amount: Int,
+    swap_amount_option: SwapAmountOption,
     // Minimum amount of Asset Out which users want to receive after exchanging
     minimum_receive: Int,
     // Decide the Order behavior in case Order is not meet the slippage tolerance
@@ -87,7 +117,7 @@ pub type OrderStep {
     // The AToB direction of swap request. True for A -> B and False for B -> A
     a_to_b_direction: Bool,
     // Amount of Asset In which users want to exchange
-    swap_amount: Int,
+    swap_amount_option: SwapAmountOption,
     // Maximum amount of Asset Out which users want to receive after exchanging
     stop_loss_receive: Int,
   }
@@ -98,7 +128,7 @@ pub type OrderStep {
     // The AToB direction of swap request. True for A -> B and False for B -> A
     a_to_b_direction: Bool,
     // Amount of Asset In which users want to exchange
-    swap_amount: Int,
+    swap_amount_option: SwapAmountOption,
     // Minimum amount of Asset Out which users want to receive after exchanging
     minimum_receive: Int,
     // Maximum amount of Asset Out which users want to receive after exchanging
@@ -110,7 +140,7 @@ pub type OrderStep {
     // The AToB direction of swap request. True for A -> B and False for B -> A 
     a_to_b_direction: Bool,
     // Maximum amount of Asset In which users want to exchange
-    maximum_swap_amount: Int,
+    maximum_swap_amount_option: SwapAmountOption,
     // The exact amount of Asset Out which users want to receive after exchanging
     expected_receive: Int,
     // Decide the Order behavior in case Order is not meet the slippage tolerance
@@ -118,10 +148,8 @@ pub type OrderStep {
   }
   // Deposit is used for depositing pool's assets and receiving LP Token
   Deposit {
-    // Amount of Asset A which users want to deposit
-    deposit_amount_a: Int,
-    // Amount of Asset B which users want to deposit
-    deposit_amount_b: Int,
+    // Amount of Asset A and B which users want to deposit
+    deposit_amount_option: DepositAmountOption,
     // The minimum amount of LP Token which users want to receive after depositing
     minimum_lp: Int,
     // Decide the Order behavior in case Order is not meet the slippage tolerance
@@ -130,7 +158,7 @@ pub type OrderStep {
   // Withdraw is used for withdrawing pool's asset with the exact assets ratio of the liquidity pool at that time
   Withdraw {
     // Amount of LP Asset which users want to withdraw
-    withdrawal_lp_amount: Int,
+    withdrawal_amount_option: WithdrawAmountOption,
     // minimum received amounts of Asset A
     minimum_asset_a: Int,
     // minimum received amounts of Asset B
@@ -143,7 +171,7 @@ pub type OrderStep {
     // The AToB direction of ZapOut request. `True` in case Asset Out is B and vice versa
     a_to_b_direction: Bool,
     // Amount of LP Asset which users want to withdraw
-    withdrawal_lp_amount: Int,
+    withdrawal_amount_option: WithdrawAmountOption,
     // Minimum amount of Asset Out which users want to receive after withdrawing
     minimum_receive: Int,
     // Decide the Order behavior in case Order is not meet the slippage tolerance
@@ -170,7 +198,7 @@ pub type OrderStep {
   // WithdrawImbalance is used for withdrawing custom amount of assets.
   WithdrawImbalance {
     // Amount of LP Asset which users want to withdraw
-    withdrawal_lp_amount: Int,
+    withdrawal_amount_option: WithdrawAmountOption,
     //  The ratio of Asset A and Asset B users want to receive after withdrawing
     ratio_asset_a: Int,
     ratio_asset_b: Int,
@@ -187,7 +215,7 @@ pub type OrderStep {
     // which is defined Liquidity Pools the swap is routing through
     routings: List<SwapRouting>,
     // Amount of Asset In which users want to exchange
-    swap_amount: Int,
+    swap_amount_option: SwapAmountOption,
     // Minimum amount of Asset Out which users want to receive after exchanging
     minimum_receive: Int,
   }

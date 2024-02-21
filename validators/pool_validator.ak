@@ -29,8 +29,8 @@ validator(
     when redeemer is {
       Batching -> {
         let Transaction { withdrawals, .. } = transaction
-        let PoolDatum { stake_credential, .. } = datum
-        dict.has_key(withdrawals, stake_credential)
+        let PoolDatum { pool_batching_stake_credential, .. } = datum
+        dict.has_key(withdrawals, pool_batching_stake_credential)
       }
       UpdatePoolFeeOrStakeCredential(action, admin_index) -> {
         let Transaction { inputs, outputs, redeemers, mint, .. } = transaction
@@ -246,7 +246,7 @@ validator(
           expiry_setting_opt,
           ..
         } = order_in_datum
-        expect SwapMultiRouting(routings, swap_amount, minimum_receive) =
+        expect SwapMultiRouting(routings, swap_amount_option, minimum_receive) =
           order_step
         let SwapRouting { lp_asset: first_routing_lp_asset, .. } =
           routings |> builtin.head_list
@@ -270,8 +270,6 @@ validator(
             },
             // Order LP Asset must be the first LP Asset on the routing config
             order_lp_asset == first_routing_lp_asset,
-            // swap amount must be positive
-            swap_amount > 0,
             // minimum_receive must be positive
             minimum_receive > 0,
             // The number of Pool Inputs and Pool Outputs must be the same with _routings_ length
@@ -307,7 +305,7 @@ validator(
           routings: routings,
           order_in_value: order_in_value,
           order_out_value: order_out_value,
-          swap_amount: swap_amount,
+          swap_amount_option: swap_amount_option,
           minimum_receive: minimum_receive,
           used_batcher_fee: order_fee,
         )
