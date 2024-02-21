@@ -543,7 +543,7 @@ Transaction structure:
            - Step:
              - _a_to_b_direction_
              - _swap_amount_
-             - _minimum_receive_ (TODO: Link formula section here)
+             - _minimum_receive_ ([Formular](./formula.md#1.-Swap-Exact-In))
              - _killable_
            - Value:
              - _batcher_fee_ + additional ADA to cover output (if need)
