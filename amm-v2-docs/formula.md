@@ -95,7 +95,7 @@ $$a * swap_{x} ^ 2 + b * swap_{x} + c = 0$$
 where 
 $$a = (f_{d} - f_{n}) * B$$
 $$b = A*(f_{d} - f_{n})*(y_{0}+\Delta y) + B *(f_{d} * x_{0} - (f_{d} - f_{n})*\Delta x)$$
-$$ c =f_{d} * x_{0} *(A * \Delta y - B * \Delta x) $$
+$$c =f_{d} * x_{0} *(A * \Delta y - B * \Delta x)$$
 
 ### 7. Partial Swap
 Allow users swap only if price is exactly matched.
