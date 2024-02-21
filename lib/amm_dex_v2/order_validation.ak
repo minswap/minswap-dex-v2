@@ -8,9 +8,12 @@ use aiken/transaction/credential.{
 use aiken/transaction/value.{Value, ada_asset_name, ada_policy_id}
 use amm_dex_v2/math
 use amm_dex_v2/types.{
-  Asset, BatchingPool, CustomDatumHash, DatumMap, Deposit, OCO, OrderDatum,
-  PartialSwap, PoolState, StopLoss, SwapExactIn, SwapExactOut, SwapMultiRouting,
-  SwapRouting, Withdraw, WithdrawImbalance, ZapOut,
+  Asset, BatchingPool, DAOAll, DAOSpecificAmount, DatumMap, Deposit,
+  DepositAmountOption, EODDatumHash, EODInlineDatum, EODNoDatum, ExtraOrderDatum,
+  OCO, OrderDatum, PartialSwap, PoolState, SAOAll, SAOSpecificAmount, StopLoss,
+  SwapAmountOption, SwapExactIn, SwapExactOut, SwapMultiRouting, SwapRouting,
+  WAOAll, WAOSpecificAmount, Withdraw, WithdrawAmountOption, WithdrawImbalance,
+  ZapOut,
 }
 use amm_dex_v2/utils
 
@@ -27,11 +30,11 @@ fn validate_swap_exact_in(
   order_in_value: Value,
   order_output: Output,
   sender: Address,
-  sender_datum_hash_opt: Option<CustomDatumHash>,
+  sender_datum: ExtraOrderDatum,
   receiver: Address,
-  receiver_datum_hash_opt: Option<CustomDatumHash>,
+  receiver_datum: ExtraOrderDatum,
   a_to_b_direction: Bool,
-  swap_amount: Int,
+  swap_amount_option: SwapAmountOption,
   asset_a: Asset,
   asset_b: Asset,
   used_batcher_fee: Int,
@@ -83,6 +86,22 @@ fn validate_swap_exact_in(
   let Asset { policy_id: asset_out_policy_id, asset_name: asset_out_asset_name } =
     asset_out
 
+  let swap_amount =
+    when swap_amount_option is {
+      SAOSpecificAmount(am) -> am
+      SAOAll(deducted_amount) -> {
+        // deducted amount must be non-negative
+        expect deducted_amount >= 0
+        value.quantity_of(
+          order_in_value,
+          asset_in_policy_id,
+          asset_in_asset_name,
+        ) - deducted_amount
+      }
+    }
+
+  // swap amout must be positive
+  expect swap_amount > 0
   let amount_out =
     math.calculate_amount_out(
       reserve_in: reserve_in,
@@ -108,7 +127,7 @@ fn validate_swap_exact_in(
     expect
       validate_order_output(
         receiver: receiver,
-        receiver_datum_hash_opt: receiver_datum_hash_opt,
+        receiver_datum: receiver_datum,
         value: expect_order_value_out,
         output: order_output,
       )
@@ -134,7 +153,7 @@ fn validate_swap_exact_in(
         kill_on_failed,
         validate_order_output(
           receiver: sender,
-          receiver_datum_hash_opt: sender_datum_hash_opt,
+          receiver_datum: sender_datum,
           value: get_returnable_value(
             order_in_value: order_in_value,
             used_batcher_fee: used_batcher_fee,
@@ -150,11 +169,11 @@ fn validate_swap_exact_out(
   order_in_value: Value,
   order_output: Output,
   sender: Address,
-  sender_datum_hash_opt: Option<CustomDatumHash>,
+  sender_datum: ExtraOrderDatum,
   receiver: Address,
-  receiver_datum_hash_opt: Option<CustomDatumHash>,
+  receiver_datum: ExtraOrderDatum,
   a_to_b_direction: Bool,
-  maximum_swap_amount: Int,
+  maximum_swap_amount_option: SwapAmountOption,
   expected_receive: Int,
   asset_a: Asset,
   asset_b: Asset,
@@ -220,6 +239,21 @@ fn validate_swap_exact_out(
       trading_fee_denominator: trading_fee_denominator,
       fee_sharing_opt: profit_sharing_opt,
     )
+  let maximum_swap_amount =
+    when maximum_swap_amount_option is {
+      SAOSpecificAmount(am) -> am
+      SAOAll(deducted_amount) -> {
+        // deducted amount must be non-negative
+        expect deducted_amount >= 0
+        value.quantity_of(
+          order_in_value,
+          asset_in_policy_id,
+          asset_in_asset_name,
+        ) - deducted_amount
+      }
+    }
+  // maximum swap amount must be non-negative
+  expect maximum_swap_amount > 0
   let slippage_satisfied = necessary_amount_in <= maximum_swap_amount
   if slippage_satisfied {
     let expect_order_value_out =
@@ -230,7 +264,7 @@ fn validate_swap_exact_out(
     expect
       validate_order_output(
         receiver: receiver,
-        receiver_datum_hash_opt: receiver_datum_hash_opt,
+        receiver_datum: receiver_datum,
         value: expect_order_value_out,
         output: order_output,
       )
@@ -256,7 +290,7 @@ fn validate_swap_exact_out(
         kill_on_failed,
         validate_order_output(
           receiver: sender,
-          receiver_datum_hash_opt: sender_datum_hash_opt,
+          receiver_datum: sender_datum,
           value: get_returnable_value(
             order_in_value: order_in_value,
             used_batcher_fee: used_batcher_fee,
@@ -272,11 +306,10 @@ fn validate_deposit(
   order_in_value: Value,
   order_output: Output,
   sender: Address,
-  sender_datum_hash_opt: Option<CustomDatumHash>,
+  sender_datum: ExtraOrderDatum,
   receiver: Address,
-  receiver_datum_hash_opt: Option<CustomDatumHash>,
-  deposit_amount_a: Int,
-  deposit_amount_b: Int,
+  receiver_datum: ExtraOrderDatum,
+  deposit_amount_option: DepositAmountOption,
   minimum_lp: Int,
   asset_a: Asset,
   asset_b: Asset,
@@ -303,6 +336,38 @@ fn validate_deposit(
     asset_b
   let Asset { policy_id: lp_asset_policy_id, asset_name: lp_asset_asset_name } =
     lp_asset
+  let (deposit_amount_a, deposit_amount_b) =
+    when deposit_amount_option is {
+      DAOSpecificAmount(am_a, am_b) -> (am_a, am_b)
+      DAOAll(deducted_amount_a, deducted_amount_b) -> {
+        // deducted amount a & b must be non-negative
+        expect and {
+            deducted_amount_a >= 0,
+            deducted_amount_b >= 0,
+          }
+        let am_a =
+          value.quantity_of(
+            order_in_value,
+            asset_a_policy_id,
+            asset_a_asset_name,
+          ) - deducted_amount_a
+        let am_b =
+          value.quantity_of(
+            order_in_value,
+            asset_b_policy_id,
+            asset_b_asset_name,
+          ) - deducted_amount_b
+        (am_a, am_b)
+      }
+    }
+
+  // amount a and b must be non-negative and sum of them must be positive
+  // if amount a or amount b is zero, it's one side deposit case
+  expect and {
+      deposit_amount_a >= 0,
+      deposit_amount_b >= 0,
+      deposit_amount_a + deposit_amount_b > 0,
+    }
 
   let (earned_fee_a, earned_fee_b, lp_amount) =
     math.calculate_deposit_amount(
@@ -328,7 +393,7 @@ fn validate_deposit(
     expect
       validate_order_output(
         receiver: receiver,
-        receiver_datum_hash_opt: receiver_datum_hash_opt,
+        receiver_datum: receiver_datum,
         value: expect_order_value_out,
         output: order_output,
       )
@@ -344,7 +409,7 @@ fn validate_deposit(
         kill_on_failed,
         validate_order_output(
           receiver: sender,
-          receiver_datum_hash_opt: sender_datum_hash_opt,
+          receiver_datum: sender_datum,
           value: get_returnable_value(
             order_in_value: order_in_value,
             used_batcher_fee: used_batcher_fee,
@@ -360,10 +425,10 @@ fn validate_withdraw(
   order_in_value: Value,
   order_output: Output,
   sender: Address,
-  sender_datum_hash_opt: Option<CustomDatumHash>,
+  sender_datum: ExtraOrderDatum,
   receiver: Address,
-  receiver_datum_hash_opt: Option<CustomDatumHash>,
-  withdrawal_lp_amount: Int,
+  receiver_datum: ExtraOrderDatum,
+  withdrawal_amount_option: WithdrawAmountOption,
   minimum_amount_a: Int,
   minimum_amount_b: Int,
   asset_a: Asset,
@@ -385,6 +450,18 @@ fn validate_withdraw(
   let Asset { policy_id: asset_b_policy_id, asset_name: asset_b_asset_name } =
     asset_b
   let Asset { policy_id: lp_policy_id, asset_name: lp_asset_name } = lp_asset
+  let withdrawal_lp_amount =
+    when withdrawal_amount_option is {
+      WAOSpecificAmount(am) -> am
+      WAOAll(deducted_amount) -> {
+        // deducted amount must be non-negative
+        expect deducted_amount >= 0
+        value.quantity_of(order_in_value, lp_policy_id, lp_asset_name) - deducted_amount
+      }
+    }
+
+  // withdrawal amount must be positive
+  expect withdrawal_lp_amount > 0
   let (amount_a_out, amount_b_out) =
     math.calculate_withdraw(
       datum_reserve_a,
@@ -406,7 +483,7 @@ fn validate_withdraw(
     expect
       validate_order_output(
         receiver: receiver,
-        receiver_datum_hash_opt: receiver_datum_hash_opt,
+        receiver_datum: receiver_datum,
         value: expect_order_value_out,
         output: order_output,
       )
@@ -422,7 +499,7 @@ fn validate_withdraw(
         kill_on_failed,
         validate_order_output(
           receiver: sender,
-          receiver_datum_hash_opt: sender_datum_hash_opt,
+          receiver_datum: sender_datum,
           value: get_returnable_value(
             order_in_value: order_in_value,
             used_batcher_fee: used_batcher_fee,
@@ -438,12 +515,12 @@ fn validate_zap_out(
   order_in_value: Value,
   order_output: Output,
   sender: Address,
-  sender_datum_hash_opt: Option<CustomDatumHash>,
+  sender_datum: ExtraOrderDatum,
   receiver: Address,
-  receiver_datum_hash_opt: Option<CustomDatumHash>,
+  receiver_datum: ExtraOrderDatum,
   minimum_receive: Int,
   a_to_b_direction: Bool,
-  withdrawal_lp_amount: Int,
+  withdrawal_amount_option: WithdrawAmountOption,
   asset_a: Asset,
   asset_b: Asset,
   lp_asset: Asset,
@@ -472,7 +549,18 @@ fn validate_zap_out(
   let Asset { policy_id: asset_out_policy_id, asset_name: asset_out_asset_name } =
     asset_out
   let Asset { policy_id: lp_policy_id, asset_name: lp_asset_name } = lp_asset
+  let withdrawal_lp_amount =
+    when withdrawal_amount_option is {
+      WAOSpecificAmount(am) -> am
+      WAOAll(deducted_amount) -> {
+        // deducted amount must be non-negative
+        expect deducted_amount >= 0
+        value.quantity_of(order_in_value, lp_policy_id, lp_asset_name) - deducted_amount
+      }
+    }
 
+  // withdrawal amount must be positive
+  expect withdrawal_lp_amount > 0
   let (earned_fee_a, earned_fee_b, amount_out) =
     math.calculate_zap_out(
       withdrawal_lp_amount: withdrawal_lp_amount,
@@ -496,7 +584,7 @@ fn validate_zap_out(
     expect
       validate_order_output(
         receiver: receiver,
-        receiver_datum_hash_opt: receiver_datum_hash_opt,
+        receiver_datum: receiver_datum,
         value: expect_order_value_out,
         output: order_output,
       )
@@ -522,7 +610,7 @@ fn validate_zap_out(
         kill_on_failed,
         validate_order_output(
           receiver: sender,
-          receiver_datum_hash_opt: sender_datum_hash_opt,
+          receiver_datum: sender_datum,
           value: get_returnable_value(
             order_in_value: order_in_value,
             used_batcher_fee: used_batcher_fee,
@@ -661,10 +749,10 @@ fn validate_withdraw_imbalance(
   order_in_value: Value,
   order_output: Output,
   sender: Address,
-  sender_datum_hash_opt: Option<CustomDatumHash>,
+  sender_datum: ExtraOrderDatum,
   receiver: Address,
-  receiver_datum_hash_opt: Option<CustomDatumHash>,
-  withdrawal_lp_amount: Int,
+  receiver_datum: ExtraOrderDatum,
+  withdrawal_amount_option: WithdrawAmountOption,
   ratio_asset_a: Int,
   ratio_asset_b: Int,
   minimum_amount_a: Int,
@@ -692,6 +780,17 @@ fn validate_withdraw_imbalance(
   let Asset { policy_id: asset_b_policy_id, asset_name: asset_b_asset_name } =
     asset_b
   let Asset { policy_id: lp_policy_id, asset_name: lp_asset_name } = lp_asset
+  let withdrawal_lp_amount =
+    when withdrawal_amount_option is {
+      WAOSpecificAmount(am) -> am
+      WAOAll(deducted_amount) -> {
+        // deducted amount must be non-negative
+        expect deducted_amount >= 0
+        value.quantity_of(order_in_value, lp_policy_id, lp_asset_name) - deducted_amount
+      }
+    }
+  // withdrawal amount must be positive
+  expect withdrawal_lp_amount > 0
   let (earned_fee_a, earned_fee_b, amount_a_out, amount_b_out) =
     math.calculate_withdraw_imbalance(
       expect_ab_ratio_numerator: ratio_asset_a,
@@ -717,7 +816,7 @@ fn validate_withdraw_imbalance(
     expect
       validate_order_output(
         receiver: receiver,
-        receiver_datum_hash_opt: receiver_datum_hash_opt,
+        receiver_datum: receiver_datum,
         value: expect_order_value_out,
         output: order_output,
       )
@@ -733,7 +832,7 @@ fn validate_withdraw_imbalance(
         kill_on_failed,
         validate_order_output(
           receiver: sender,
-          receiver_datum_hash_opt: sender_datum_hash_opt,
+          receiver_datum: sender_datum,
           value: get_returnable_value(
             order_in_value: order_in_value,
             used_batcher_fee: used_batcher_fee,
@@ -854,7 +953,7 @@ pub fn validate_swap_multi_routing_order(
   routings: List<SwapRouting>,
   order_in_value: Value,
   order_out_value: Value,
-  swap_amount: Int,
+  swap_amount_option: SwapAmountOption,
   minimum_receive: Int,
   used_batcher_fee: Int,
 ) -> Bool {
@@ -893,6 +992,21 @@ pub fn validate_swap_multi_routing_order(
     asset_in
   let Asset { policy_id: asset_out_policy_id, asset_name: asset_out_asset_name } =
     asset_out
+  let swap_amount =
+    when swap_amount_option is {
+      SAOSpecificAmount(am) -> am
+      SAOAll(deducted_amount) -> {
+        // deducted amount must be non-negative
+        expect deducted_amount >= 0
+        value.quantity_of(
+          order_in_value,
+          asset_in_policy_id,
+          asset_in_asset_name,
+        ) - deducted_amount
+      }
+    }
+  // swap amount must be positive
+  expect swap_amount > 0
   let amount_out =
     get_swap_multi_amount_out(
       amount_in: swap_amount,
@@ -910,20 +1024,20 @@ pub fn validate_swap_multi_routing_order(
   }
 }
 
-fn is_valid_datum(
-  raw_datum: Datum,
-  datum_hash_opt: Option<CustomDatumHash>,
-) -> Bool {
-  when raw_datum is {
-    NoDatum -> None
-    DatumHash(dh) -> Some(dh)
-    InlineDatum(dat) -> Some(hash.blake2b_256(builtin.serialise_data(dat)))
-  } == datum_hash_opt
+fn is_valid_datum(raw_datum: Datum, extra_order_datum: ExtraOrderDatum) -> Bool {
+  let expect_extra_order_datum =
+    when raw_datum is {
+      NoDatum -> EODNoDatum
+      DatumHash(dh) -> EODDatumHash(dh)
+      InlineDatum(dat) ->
+        EODInlineDatum(hash.blake2b_256(builtin.serialise_data(dat)))
+    }
+  extra_order_datum == expect_extra_order_datum
 }
 
 pub fn validate_order_receiver(
   receiver: Address,
-  receiver_datum_hash_opt: Option<CustomDatumHash>,
+  receiver_datum: ExtraOrderDatum,
   output: Output,
 ) -> Bool {
   let Output { address: output_address, datum: raw_order_output_datum, .. } =
@@ -936,7 +1050,7 @@ pub fn validate_order_receiver(
         is_correct_address,
         is_valid_datum(
           raw_datum: raw_order_output_datum,
-          datum_hash_opt: receiver_datum_hash_opt,
+          extra_order_datum: receiver_datum,
         ),
       }
   }
@@ -944,7 +1058,7 @@ pub fn validate_order_receiver(
 
 fn validate_order_output(
   receiver: Address,
-  receiver_datum_hash_opt: Option<CustomDatumHash>,
+  receiver_datum: ExtraOrderDatum,
   value: Value,
   output: Output,
 ) -> Bool {
@@ -966,7 +1080,7 @@ fn validate_order_output(
         is_correct_address_and_value,
         is_valid_datum(
           raw_datum: raw_order_output_datum,
-          datum_hash_opt: receiver_datum_hash_opt,
+          extra_order_datum: receiver_datum,
         ),
       }
   }
@@ -1007,9 +1121,9 @@ pub fn apply_orders(
 
   let OrderDatum {
     sender,
-    sender_datum_hash_opt,
+    sender_datum,
     receiver,
-    receiver_datum_hash_opt,
+    receiver_datum,
     step: order_step,
     max_batcher_fee,
     lp_asset: order_lp_asset,
@@ -1033,23 +1147,20 @@ pub fn apply_orders(
     when order_step is {
       SwapExactIn(
         a_to_b_direction,
-        swap_amount,
+        swap_amount_option,
         minimum_receive,
         order_killable,
       ) -> {
-        expect and {
-            swap_amount > 0,
-            minimum_receive > 0,
-          }
+        expect minimum_receive > 0
         validate_swap_exact_in(
           order_in_value: order_in_value,
           order_output: output,
           sender: sender,
-          sender_datum_hash_opt: sender_datum_hash_opt,
+          sender_datum: sender_datum,
           receiver: receiver,
-          receiver_datum_hash_opt: receiver_datum_hash_opt,
+          receiver_datum: receiver_datum,
           a_to_b_direction: a_to_b_direction,
-          swap_amount: swap_amount,
+          swap_amount_option: swap_amount_option,
           asset_a: asset_a,
           asset_b: asset_b,
           used_batcher_fee: used_batcher_fee,
@@ -1065,20 +1176,17 @@ pub fn apply_orders(
           },
         )
       }
-      StopLoss(a_to_b_direction, swap_amount, stop_loss_receive) -> {
-        expect and {
-            swap_amount > 0,
-            stop_loss_receive > 0,
-          }
+      StopLoss(a_to_b_direction, swap_amount_option, stop_loss_receive) -> {
+        expect stop_loss_receive > 0
         validate_swap_exact_in(
           order_in_value: order_in_value,
           order_output: output,
           sender: sender,
-          sender_datum_hash_opt: sender_datum_hash_opt,
+          sender_datum: sender_datum,
           receiver: receiver,
-          receiver_datum_hash_opt: receiver_datum_hash_opt,
+          receiver_datum: receiver_datum,
           a_to_b_direction: a_to_b_direction,
-          swap_amount: swap_amount,
+          swap_amount_option: swap_amount_option,
           asset_a: asset_a,
           asset_b: asset_b,
           used_batcher_fee: used_batcher_fee,
@@ -1094,21 +1202,25 @@ pub fn apply_orders(
           },
         )
       }
-      OCO(a_to_b_direction, swap_amount, minimum_receive, stop_loss_receive) -> {
+      OCO(
+        a_to_b_direction,
+        swap_amount_option,
+        minimum_receive,
+        stop_loss_receive,
+      ) -> {
         expect and {
-            swap_amount > 0,
             minimum_receive > 0,
             stop_loss_receive > 0,
           }
         validate_swap_exact_in(
           order_in_value: order_in_value,
           order_output: output,
-          sender_datum_hash_opt: sender_datum_hash_opt,
+          sender_datum: sender_datum,
           sender: sender,
           receiver: receiver,
-          receiver_datum_hash_opt: receiver_datum_hash_opt,
+          receiver_datum: receiver_datum,
           a_to_b_direction: a_to_b_direction,
-          swap_amount: swap_amount,
+          swap_amount_option: swap_amount_option,
           asset_a: asset_a,
           asset_b: asset_b,
           used_batcher_fee: used_batcher_fee,
@@ -1126,23 +1238,20 @@ pub fn apply_orders(
       }
       SwapExactOut(
         a_to_b_direction,
-        maximum_swap_amount,
+        maximum_swap_amount_option,
         expected_receive,
         order_killable,
       ) -> {
-        expect and {
-            maximum_swap_amount > 0,
-            expected_receive > 0,
-          }
+        expect expected_receive > 0
         validate_swap_exact_out(
           order_in_value: order_in_value,
           order_output: output,
           sender: sender,
-          sender_datum_hash_opt: sender_datum_hash_opt,
+          sender_datum: sender_datum,
           receiver: receiver,
-          receiver_datum_hash_opt: receiver_datum_hash_opt,
+          receiver_datum: receiver_datum,
           a_to_b_direction: a_to_b_direction,
-          maximum_swap_amount: maximum_swap_amount,
+          maximum_swap_amount_option: maximum_swap_amount_option,
           expected_receive: expected_receive,
           asset_a: asset_a,
           asset_b: asset_b,
@@ -1156,22 +1265,16 @@ pub fn apply_orders(
           pool_state: pool_state,
         )
       }
-      Deposit(deposit_amount_a, deposit_amount_b, minimum_lp, order_killable) -> {
-        expect and {
-            deposit_amount_a >= 0,
-            deposit_amount_b >= 0,
-            deposit_amount_a + deposit_amount_b > 0,
-            minimum_lp > 0,
-          }
+      Deposit(deposit_amount_option, minimum_lp, order_killable) -> {
+        expect minimum_lp > 0
         validate_deposit(
           order_in_value: order_in_value,
           order_output: output,
           sender: sender,
-          sender_datum_hash_opt: sender_datum_hash_opt,
+          sender_datum: sender_datum,
           receiver: receiver,
-          receiver_datum_hash_opt: receiver_datum_hash_opt,
-          deposit_amount_a: deposit_amount_a,
-          deposit_amount_b: deposit_amount_b,
+          receiver_datum: receiver_datum,
+          deposit_amount_option: deposit_amount_option,
           minimum_lp: minimum_lp,
           asset_a: asset_a,
           asset_b: asset_b,
@@ -1187,13 +1290,12 @@ pub fn apply_orders(
         )
       }
       Withdraw(
-        withdrawal_lp_amount,
+        withdrawal_amount_option,
         minimum_asset_a,
         minimum_asset_b,
         order_killable,
       ) -> {
         expect and {
-            withdrawal_lp_amount > 0,
             minimum_asset_a > 0,
             minimum_asset_b > 0,
           }
@@ -1201,10 +1303,10 @@ pub fn apply_orders(
           order_in_value: order_in_value,
           order_output: output,
           sender: sender,
-          sender_datum_hash_opt: sender_datum_hash_opt,
+          sender_datum: sender_datum,
           receiver: receiver,
-          receiver_datum_hash_opt: receiver_datum_hash_opt,
-          withdrawal_lp_amount: withdrawal_lp_amount,
+          receiver_datum: receiver_datum,
+          withdrawal_amount_option: withdrawal_amount_option,
           minimum_amount_a: minimum_asset_a,
           minimum_amount_b: minimum_asset_b,
           asset_a: asset_a,
@@ -1217,24 +1319,21 @@ pub fn apply_orders(
       }
       ZapOut(
         a_to_b_direction,
-        withdrawal_lp_amount,
+        withdrawal_amount_option,
         minimum_receive,
         order_killable,
       ) -> {
-        expect and {
-            withdrawal_lp_amount > 0,
-            minimum_receive > 0,
-          }
+        expect minimum_receive > 0
         validate_zap_out(
           order_in_value: order_in_value,
           order_output: output,
           sender: sender,
-          sender_datum_hash_opt: sender_datum_hash_opt,
+          sender_datum: sender_datum,
           receiver: receiver,
-          receiver_datum_hash_opt: receiver_datum_hash_opt,
+          receiver_datum: receiver_datum,
           minimum_receive: minimum_receive,
           a_to_b_direction: a_to_b_direction,
-          withdrawal_lp_amount: withdrawal_lp_amount,
+          withdrawal_amount_option: withdrawal_amount_option,
           asset_a: asset_a,
           asset_b: asset_b,
           lp_asset: lp_asset,
@@ -1305,9 +1404,9 @@ pub fn apply_orders(
             let expected_order_out_datum =
               OrderDatum {
                 sender,
-                sender_datum_hash_opt,
+                sender_datum,
                 receiver,
-                receiver_datum_hash_opt,
+                receiver_datum,
                 lp_asset: order_lp_asset,
                 step: PartialSwap {
                   a_to_b_direction,
@@ -1326,10 +1425,10 @@ pub fn apply_orders(
               order_in_address == order_out_address,
             }
           } else {
-            // Order Output must be returned to receiver and might have receiver_datum_hash_opt
+            // Order Output must be returned to receiver and might have receiver_datum
             validate_order_receiver(
               receiver: receiver,
-              receiver_datum_hash_opt: receiver_datum_hash_opt,
+              receiver_datum: receiver_datum,
               output: output,
             )
           }
@@ -1342,14 +1441,13 @@ pub fn apply_orders(
         )
       }
       WithdrawImbalance(
-        withdrawal_lp_amount,
+        withdrawal_amount_option,
         ratio_asset_a,
         ratio_asset_b,
         minimum_asset_a,
         order_killable,
       ) -> {
         expect and {
-            withdrawal_lp_amount > 0,
             ratio_asset_a > 0,
             ratio_asset_b > 0,
             minimum_asset_a > 0,
@@ -1358,10 +1456,10 @@ pub fn apply_orders(
           order_in_value: order_in_value,
           order_output: output,
           sender: sender,
-          sender_datum_hash_opt: sender_datum_hash_opt,
+          sender_datum: sender_datum,
           receiver: receiver,
-          receiver_datum_hash_opt: receiver_datum_hash_opt,
-          withdrawal_lp_amount: withdrawal_lp_amount,
+          receiver_datum: receiver_datum,
+          withdrawal_amount_option: withdrawal_amount_option,
           ratio_asset_a: ratio_asset_a,
           ratio_asset_b: ratio_asset_b,
           minimum_amount_a: minimum_asset_a,
@@ -1425,7 +1523,7 @@ pub fn validate_cancel_expired_orders(
   expect order_in_datum: OrderDatum =
     utils.must_find_script_datum(datum_map, order_in_datum_raw)
 
-  let OrderDatum { sender, sender_datum_hash_opt, expiry_setting_opt, .. } =
+  let OrderDatum { sender, sender_datum, expiry_setting_opt, .. } =
     order_in_datum
 
   expect Some((expired_time, max_tip)) = expiry_setting_opt
@@ -1444,7 +1542,7 @@ pub fn validate_cancel_expired_orders(
       // If sender is script address, the output have to attach the defined datum
       is_valid_datum(
         raw_datum: raw_order_output_datum,
-        datum_hash_opt: sender_datum_hash_opt,
+        extra_order_datum: sender_datum,
       ),
     }
   if rest_order_inputs == [] {

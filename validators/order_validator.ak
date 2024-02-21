@@ -16,6 +16,7 @@ use amm_dex_v2/types.{
 validator(
   // the Stake Credential of Pool Batching Validator
   pool_batching_credential: StakeCredential,
+  // the Stake Credential of Expired Order Cancellation Validator
   expired_order_cancel_credential: StakeCredential,
 ) {
   fn validate_order(raw_datum: Data, raw_redeemer: Data, context: ScriptContext) {
@@ -72,7 +73,6 @@ validator {
     context: ScriptContext,
   ) -> Bool {
     expect ScriptContext { transaction, purpose: WithdrawFrom(_) } = context
-    // Otherwise it have to validating expired orders are cancelled in the correct way by anyone.
     let Transaction { inputs, outputs, validity_range, datums, .. } =
       transaction
     // Assume all script inputs are order scripts.

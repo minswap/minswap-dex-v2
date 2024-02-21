@@ -70,7 +70,7 @@ pub fn get_batching_pool(
     utils.must_find_script_inline_datum(pool_in_datum_raw)
 
   let PoolDatum {
-    stake_credential: pool_in_stake_credential,
+    pool_batching_stake_credential: pool_in_stake_credential,
     asset_a: pool_in_asset_a,
     asset_b: pool_in_asset_b,
     total_liquidity: pool_in_total_liquidity,
@@ -86,7 +86,7 @@ pub fn get_batching_pool(
   expect pool_out_datum: PoolDatum =
     utils.must_find_script_inline_datum(pool_out_datum_raw)
   let PoolDatum {
-    stake_credential: pool_out_stake_credential,
+    pool_batching_stake_credential: pool_out_stake_credential,
     asset_a: pool_out_asset_a,
     asset_b: pool_out_asset_b,
     total_liquidity: pool_out_total_liquidity,
@@ -258,7 +258,7 @@ pub fn validate_update_pool_datum_or_stake_credential(
   when action is {
     UpdatePoolFee -> {
       let PoolDatum {
-        stake_credential: pool_in_stake_credential,
+        pool_batching_stake_credential: pool_in_stake_credential,
         asset_a: pool_in_asset_a,
         asset_b: pool_in_asset_b,
         total_liquidity: pool_in_total_liquidity,
@@ -267,7 +267,7 @@ pub fn validate_update_pool_datum_or_stake_credential(
         ..
       } = pool_in_datum
       let PoolDatum {
-        stake_credential: pool_out_stake_credential,
+        pool_batching_stake_credential: pool_out_stake_credential,
         asset_a: pool_out_asset_a,
         asset_b: pool_out_asset_b,
         total_liquidity: pool_out_total_liquidity,

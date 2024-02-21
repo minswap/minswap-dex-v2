@@ -155,7 +155,7 @@ validator(
     expect pool_out_datum: PoolDatum =
       utils.must_find_script_inline_datum(pool_output_raw_datum)
     let PoolDatum {
-      stake_credential: pool_stake_credential,
+      pool_batching_stake_credential: pool_stake_credential,
       asset_a: pool_datum_asset_a,
       asset_b: pool_datum_asset_b,
       total_liquidity: pool_datum_total_liquidity,
