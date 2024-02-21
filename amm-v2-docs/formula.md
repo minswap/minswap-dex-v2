@@ -34,7 +34,7 @@ $$\Delta x = \frac{x_{0} * \Delta y * f_{d}}{(f_{d} - f_{n}) * (y_{0} - \Delta y
 ### 3. Deposit
 On the V2, we allow users to deposit with any amount A & B, so there are two cases can happen:
 - $\frac{\Delta x}{x_{0}} = \frac{\Delta y}{y_{0}} \Rightarrow \Delta L = \frac{\Delta x}{x_{0}} * L$
-- $\frac{\Delta x}{x_{0}} \#  \frac{\Delta y}{y_{0}}$:
+- $\frac{\Delta x}{x_{0}} ≠ \frac{\Delta y}{y_{0}}$:
   - $\frac{\Delta x}{x_{0}} >  \frac{\Delta y}{y_{0}}$: We need to Swap a part of X to Y
   - $\frac{\Delta x}{x_{0}} <  \frac{\Delta y}{y_{0}}$: We need to Swap a part of Y to X
 
