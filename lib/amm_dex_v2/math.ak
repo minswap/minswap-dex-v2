@@ -353,13 +353,13 @@ pub fn calculate_zap_out(
 
 // Base formula:
 // ( amount_in - swap_amount_in) / (amount_out + receive_amount_out) = expect_io_ratio_numerator / expect_io_ratio_denominator (1)
-// receive_amount_out = fee_diff * swap_amount_in * reserve_out / (fee_denominator) * reserve_in + fee_diff * swap_amount_in (2)
+// receive_amount_out = fee_diff * swap_amount_in * reserve_out / (fee_denominator * reserve_in + fee_diff * swap_amount_in) (2)
 // (1) & (2) =>>>>>
 // a * swap_amount_in ^ 2 + b * swap_amount_in + c = 0
 // Where:
 // - a = fee_diff * expect_io_ratio_denominator
 // - b = expect_io_ratio_numerator * fee_diff ( reserve_out + amount_out ) + expect_io_ratio_denominator * (fee_denominator * reserve_in - fee_diff * amount_in)
-// - c = fee_denominator * reserve_in* (expect_io_ratio_numerator * amount_out - expect_io_ratio_denominator * amount_in) 
+// - c = fee_denominator * reserve_in * (expect_io_ratio_numerator * amount_out - expect_io_ratio_denominator * amount_in) 
 fn calculate_withdraw_swap_amount(
   amount_in: Int,
   amount_out: Int,

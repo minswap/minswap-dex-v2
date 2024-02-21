@@ -543,7 +543,7 @@ Transaction structure:
            - Step:
              - _a_to_b_direction_
              - _swap_amount_
-             - _minimum_receive_ (TODO: Link formula section here)
+             - _minimum_receive_([Formula](./formula.md#1-swap-exact-in))
              - _killable_
            - Value:
              - _batcher_fee_ + additional ADA to cover output (if need)
@@ -552,7 +552,7 @@ Transaction structure:
            - Step:
              - _a_to_b_direction_
              - _swap_amount_
-             - _stop_loss_receive_ (TODO: Link formula section here)
+             - _stop_loss_receive_([Formula](./formula.md#1-swap-exact-in))
              - _killable_
            - Value:
              - _batcher_fee_ + additional ADA to cover output (if need)
@@ -561,8 +561,8 @@ Transaction structure:
            - Step:
              - _a_to_b_direction_
              - _swap_amount_
-             - _minimum_receive_ (TODO: Link formula section here)
-             - _stop_loss_receive_ (TODO: Link formula section here)
+             - _minimum_receive_([Formula](./formula.md#1-swap-exact-in))
+             - _stop_loss_receive_([Formula](./formula.md#1-swap-exact-in))
              - _killable_
            - Value:
              - _batcher_fee_ + additional ADA to cover output (if need)
@@ -570,8 +570,8 @@ Transaction structure:
          - _SwapExactOut_:
            - Step:
              - _a_to_b_direction_
-             - _maximum_swap_amount_
-             - _expected_receive_ (TODO: Link formula section here)
+             - _maximum_swap_amount_([Formula](./formula.md#2-swap-exact-out))
+             - _expected_receive_
              - _killable_
            - Value:
              - _batcher_fee_ + additional ADA to cover output (if need)
@@ -580,15 +580,15 @@ Transaction structure:
            - Step:
              - _deposit_amount_a_
              - _deposit_amount_b_
-             - _minimum_lp_ (TODO: Link formula section here)
+             - _minimum_lp_([Formula](./formula.md#3-deposit))
            - Value:
              - _batcher_fee_ + additional ADA to cover output (if need)
              - Token A and Token B (amount of token A or B can be zero)
          - _Withdraw_:
            - Step:
              - _withdrawal_lp_amount_
-             - _minimum_asset_a_ (TODO: Link formula section here)
-             - _minimum_asset_b_ (TODO: Link formula section here)
+             - _minimum_asset_a_([Formula](./formula.md#4-withdraw))
+             - _minimum_asset_b_([Formula](./formula.md#4-withdraw))
              - _killable_
            - Value:
              - _batcher_fee_ + additional ADA to cover output (if need)
@@ -597,7 +597,7 @@ Transaction structure:
            - Step:
              - _a_to_b_direction_
              - _withdrawal_lp_amount_
-             - _minimum_receive_ (TODO: Link formula section here)
+             - _minimum_receive_([Formula](./formula.md#5-zap-out))
              - _killable_
            - Value:
              - _batcher_fee_ + additional ADA to cover output (if need)
@@ -605,30 +605,30 @@ Transaction structure:
          - _WithdrawImbalance_:
            - Step:
              - _withdrawal_lp_amount_
-             - _ratio_asset_a_ (TODO: Link formula section here)
-             - _ratio_asset_b_ (TODO: Link formula section here)
-             - _minimum_asset_a_ (TODO: Link formula section here)
+             - _ratio_asset_a_
+             - _ratio_asset_b_
+             - _minimum_asset_a_([Formula](./formula.md#6-withdraw-imbalance))
              - _killable_
            - Value:
              - _batcher_fee_ + additional ADA to cover output (if need)
              - LP Asset
          - _PartialSwap_:
            - Step:
-             - _a_to_b_direction_ (TODO: Link formula section here)
+             - _a_to_b_direction_([Formula](./formula.md#7-partial-swap))
              - _total_swap_amount_
-             - _io_ratio_numerator_ (TODO: Link formula section here)
-             - _io_ratio_denominator_ (TODO: Link formula section here)
-             - _hops_ (TODO: Link formula section here)
-             - _minimum_swap_amount_required_ (TODO: Link formula section here)
+             - _io_ratio_numerator_([Formula](./formula.md#7-partial-swap))
+             - _io_ratio_denominator_([Formula](./formula.md#7-partial-swap))
+             - _hops_([Formula](./formula.md#7-partial-swap))
+             - _minimum_swap_amount_required_([Formula](./formula.md#7-partial-swap))
              - _max_batcher_fee_each_time_
            - Value:
              - _batcher_fee_ * _hops_ + additional ADA to cover output (if need)
              - Token is swapping and received Token of previous swap (if you are order's creator, you no need to care about _received Token_)
          - _SwapMultiRouting_:
            - Step:
-             - _routings_ (TODO: Link formula section here)
+             - _routings_([Formula](./formula.md#1-swap-exact-in))
              - _swap_amount_
-             - _minimum_receive_ (TODO: Link formula section here)
+             - _minimum_receive_([Formula](./formula.md#1-swap-exact-in))
            - Value:
              - _batcher_fee_ + additional ADA to cover output (if need)
              - Token is swapping
