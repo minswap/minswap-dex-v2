@@ -1,9 +1,15 @@
 use aiken/builtin
-use aiken/dict
+use aiken/dict.{Dict}
+use aiken/hash.{Blake2b_224, Hash}
 use aiken/interval.{Finite, Interval, IntervalBound}
 use aiken/list
-use aiken/transaction.{Input, Output, OutputReference, ValidityRange}
-use aiken/transaction/credential.{Address, PaymentCredential}
+use aiken/transaction.{
+  Input, Output, OutputReference, Redeemer, ScriptPurpose, ValidityRange,
+}
+use aiken/transaction/credential.{
+  Address, Inline, PaymentCredential, ScriptCredential, StakeCredential,
+  VerificationKey, VerificationKeyCredential,
+}
 use aiken/transaction/value.{
   AssetName, PolicyId, Value, ada_asset_name, ada_policy_id,
 }
@@ -498,10 +504,10 @@ fn find_multi_routing_pools(
 pub fn validate_update_pool_datum_or_stake_credential(
   action: UpdatePoolFeeOrStakeCredentialAction,
   authen_policy_id: PolicyId,
-  admin_index: Int,
+  // admin_index: Int,
   pool_input: Input,
   pool_in_datum: PoolDatum,
-  all_inputs: List<Input>,
+  // all_inputs: List<Input>,
   all_outputs: List<Output>,
   all_datums: DatumMap,
 ) -> Bool {
@@ -511,8 +517,8 @@ pub fn validate_update_pool_datum_or_stake_credential(
   let Address { payment_credential: pool_in_address_payment_credential, .. } =
     pool_in_address
 
-  let admin_input = utils.list_at_index(all_inputs, admin_index)
-  let Input { output: Output { value: admin_value, .. }, .. } = admin_input
+  // let admin_input = utils.list_at_index(all_inputs, admin_index)
+  // let Input { output: Output { value: admin_value, .. }, .. } = admin_input
   // validate there is a single Pool UTxO in Transaction Outputs
   let Output {
     address: pool_out_address,
@@ -529,7 +535,7 @@ pub fn validate_update_pool_datum_or_stake_credential(
       // Pool Input contains 1 valid Pool NFT Token
       value.quantity_of(pool_in_value, authen_policy_id, pool_auth_asset_name) == 1,
       // validate Admin with valid Admin License Token must be presented in Transaction Inputs
-      value.quantity_of(admin_value, admin_policy_id, admin_asset_name) == 1,
+      // value.quantity_of(admin_value, admin_policy_id, admin_asset_name) == 1,
       // Pool Value must be unchanged
       pool_in_value == pool_out_value,
     }
@@ -629,12 +635,48 @@ pub fn validate_fee_sharing_percent(
   less_than_max && greater_than_min
 }
 
+pub fn validate_admin(
+  references_inputs: List<Input>,
+  withdrawals: Dict<StakeCredential, Int>,
+  signatories: List<Hash<Blake2b_224, VerificationKey>>,
+  redeemers: Dict<ScriptPurpose, Redeemer>,
+) -> Bool {
+  let admin_input_opt =
+    list.find(
+      references_inputs,
+      fn(input) {
+        let Input { output: Output { value: val, .. }, .. } = input
+        value.quantity_of(val, admin_policy_id, admin_asset_name) == 1
+      },
+    )
+  when admin_input_opt is {
+    Some(admin_input) -> {
+      let Input {
+        output: Output {
+          address: Address { payment_credential: payment_cred, .. },
+          ..
+        },
+        ..
+      } = admin_input
+      when payment_cred is {
+        VerificationKeyCredential(pub_key_hash) ->
+          list.has(signatories, pub_key_hash) && dict.size(redeemers) == 1
+        ScriptCredential(_) ->
+          dict.has_key(withdrawals, Inline(payment_cred)) && dict.size(
+            redeemers,
+          ) == 2
+      }
+    }
+    _ -> False
+  }
+}
+
 pub fn validate_withdraw_liquidity_share(
   authen_policy_id: PolicyId,
-  admin_index: Int,
+  // admin_index: Int,
   pool_input: Input,
   pool_in_datum: PoolDatum,
-  all_inputs: List<Input>,
+  // all_inputs: List<Input>,
   all_outputs: List<Output>,
   all_datums: DatumMap,
 ) -> Bool {
@@ -657,17 +699,17 @@ pub fn validate_withdraw_liquidity_share(
     )
   expect pool_out_datum: PoolDatum =
     utils.must_find_script_datum(all_datums, raw_pool_out_datum)
-  let admin_input = utils.list_at_index(all_inputs, admin_index)
-  let Input { output: Output { value: admin_value, .. }, .. } = admin_input
+  // let admin_input = utils.list_at_index(all_inputs, admin_index)
+  // let Input { output: Output { value: admin_value, .. }, .. } = admin_input
   expect and {
       // Pool Input and Output Address must be unchanged (both Payment and Stake Credential)
       pool_in_address == pool_out_address,
       // Pool Datum must be unchanged
       pool_in_datum == pool_out_datum,
       value.quantity_of(pool_in_value, authen_policy_id, pool_auth_asset_name) == 1,
-      // validate Admin with valid Admin License Token must be presented in Transaction Inputs.
-      value.quantity_of(admin_value, admin_policy_id, admin_asset_name) == 1,
     }
+  // validate Admin with valid Admin License Token must be presented in Transaction Inputs.
+  // value.quantity_of(admin_value, admin_policy_id, admin_asset_name) == 1,
   let PoolDatum {
     asset_a,
     asset_b,

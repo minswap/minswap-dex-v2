@@ -1,5 +1,4 @@
 use aiken/builtin
-use aiken/dict
 use aiken/list
 use aiken/transaction.{ScriptContext, Spend, Transaction}
 use aiken/transaction/value.{PolicyId}
@@ -99,46 +98,74 @@ validator(
           ),
         }
       }
-      UpdatePoolFeeOrStakeCredential(action, admin_index) -> {
+      UpdatePoolFeeOrStakeCredential(action) -> {
         expect datum: PoolDatum = raw_datum
-        let Transaction { inputs, outputs, datums, redeemers, mint, .. } =
-          transaction
+        let Transaction {
+          inputs,
+          reference_inputs,
+          outputs,
+          datums,
+          redeemers,
+          mint,
+          withdrawals,
+          extra_signatories,
+          ..
+        } = transaction
         expect Some(pool_input) = transaction.find_input(inputs, pool_input_ref)
         and {
+          pool_validation.validate_admin(
+            reference_inputs,
+            withdrawals,
+            extra_signatories,
+            redeemers,
+          ),
           // Transaction contain only 1 Script (Pool Script). 
           // It will avoid bad Admin can steal money from Order Contract.
-          dict.size(redeemers) == 1,
+          // dict.size(redeemers) == 1,
           // This Redeemer won't mint anything 
           value.is_zero(value.from_minted_value(mint)),
           pool_validation.validate_update_pool_datum_or_stake_credential(
             action: action,
             authen_policy_id: authen_policy_id,
-            admin_index: admin_index,
             pool_input: pool_input,
             pool_in_datum: datum,
-            all_inputs: inputs,
             all_outputs: outputs,
             all_datums: datums,
           ),
         }
       }
-      WithdrawLiquidityShare(admin_index) -> {
+      WithdrawLiquidityShare -> {
         expect datum: PoolDatum = raw_datum
-        let Transaction { inputs, outputs, datums, redeemers, mint, .. } =
-          transaction
+        let Transaction {
+          inputs,
+          reference_inputs,
+          outputs,
+          datums,
+          redeemers,
+          mint,
+          withdrawals,
+          extra_signatories,
+          ..
+        } = transaction
         expect Some(pool_input) = transaction.find_input(inputs, pool_input_ref)
         and {
+          pool_validation.validate_admin(
+            reference_inputs,
+            withdrawals,
+            extra_signatories,
+            redeemers,
+          ),
           // Transaction contain only 1 Script (Pool Script). 
           // It will avoid bad Admin can steal money from Order Contract.
-          dict.size(redeemers) == 1,
+          // dict.size(redeemers) == 1,
           // This Redeemer won't mint anything 
           value.is_zero(value.from_minted_value(mint)),
           pool_validation.validate_withdraw_liquidity_share(
             authen_policy_id: authen_policy_id,
-            admin_index: admin_index,
+            // admin_index: admin_index,
             pool_input: pool_input,
             pool_in_datum: datum,
-            all_inputs: inputs,
+            // all_inputs: inputs,
             all_outputs: outputs,
             all_datums: datums,
           ),
