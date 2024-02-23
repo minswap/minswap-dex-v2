@@ -113,15 +113,17 @@ validator(
         } = transaction
         expect Some(pool_input) = transaction.find_input(inputs, pool_input_ref)
         and {
-          pool_validation.validate_admin(
+          // Transaction requires admin token to execute
+          pool_validation.is_admin_existence(
+            utils.admin_policy_id,
+            utils.admin_asset_name,
             reference_inputs,
             withdrawals,
             extra_signatories,
-            redeemers,
           ),
-          // Transaction contain only 1 Script (Pool Script). 
+          // Transaction contain only 1 Spending Script (Pool Script). 
           // It will avoid bad Admin can steal money from Order Contract.
-          // dict.size(redeemers) == 1,
+          pool_validation.has_single_spending(redeemers),
           // This Redeemer won't mint anything 
           value.is_zero(value.from_minted_value(mint)),
           pool_validation.validate_update_pool_datum_or_stake_credential(
@@ -149,23 +151,23 @@ validator(
         } = transaction
         expect Some(pool_input) = transaction.find_input(inputs, pool_input_ref)
         and {
-          pool_validation.validate_admin(
+          // Transaction requires admin token to execute
+          pool_validation.is_admin_existence(
+            utils.admin_policy_id,
+            utils.admin_asset_name,
             reference_inputs,
             withdrawals,
             extra_signatories,
-            redeemers,
           ),
-          // Transaction contain only 1 Script (Pool Script). 
+          // Transaction contain only 1 Spending Script (Pool Script). 
           // It will avoid bad Admin can steal money from Order Contract.
-          // dict.size(redeemers) == 1,
+          pool_validation.has_single_spending(redeemers),
           // This Redeemer won't mint anything 
           value.is_zero(value.from_minted_value(mint)),
           pool_validation.validate_withdraw_liquidity_share(
             authen_policy_id: authen_policy_id,
-            // admin_index: admin_index,
             pool_input: pool_input,
             pool_in_datum: datum,
-            // all_inputs: inputs,
             all_outputs: outputs,
             all_datums: datums,
           ),
