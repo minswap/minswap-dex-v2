@@ -1,5 +1,4 @@
 use aiken/builtin
-use aiken/dict
 use aiken/list
 use aiken/transaction.{ScriptContext, Spend, Transaction}
 use aiken/transaction/value.{PolicyId}
@@ -30,7 +29,8 @@ validator(
         let license_input = utils.list_at_index(inputs, license_index)
         // A valid license token is the token having expired timestamp as TokenName and must be within current time and current time + _maximum_deadline_range_
         let (batcher_address, end_valid_time_range) =
-          pool_validation.validate_batcher_license_and_find_batcher_address(
+          pool_validation.validate_license_expiration_and_find_license_holder(
+            license_pid: utils.batcher_license_policy_id,
             license_input: license_input,
             validity_range: validity_range,
           )
@@ -78,7 +78,8 @@ validator(
         // Batching Redeemer provides @license_index which help save calculation cost
         let license_input = utils.list_at_index(inputs, license_index)
         let (batcher_address, end_valid_time_range) =
-          pool_validation.validate_batcher_license_and_find_batcher_address(
+          pool_validation.validate_license_expiration_and_find_license_holder(
+            license_pid: utils.batcher_license_policy_id,
             license_input: license_input,
             validity_range: validity_range,
           )
@@ -99,46 +100,78 @@ validator(
           ),
         }
       }
-      UpdatePoolFeeOrStakeCredential(action, admin_index) -> {
+      UpdatePoolFeeOrStakeCredential(action) -> {
         expect datum: PoolDatum = raw_datum
-        let Transaction { inputs, outputs, datums, redeemers, mint, .. } =
-          transaction
+        let Transaction {
+          inputs,
+          reference_inputs,
+          outputs,
+          datums,
+          redeemers,
+          mint,
+          withdrawals,
+          extra_signatories,
+          validity_range,
+          ..
+        } = transaction
         expect Some(pool_input) = transaction.find_input(inputs, pool_input_ref)
         and {
-          // Transaction contain only 1 Script (Pool Script). 
+          // Transaction requires admin token to execute
+          pool_validation.is_admin_existence(
+            admin_policy_id: utils.admin_policy_id,
+            reference_inputs: reference_inputs,
+            withdrawals: withdrawals,
+            signatories: extra_signatories,
+            validity_range: validity_range,
+          ),
+          // Transaction contain only 1 Spending Script (Pool Script). 
           // It will avoid bad Admin can steal money from Order Contract.
-          dict.size(redeemers) == 1,
+          pool_validation.has_single_spending(redeemers),
           // This Redeemer won't mint anything 
           value.is_zero(value.from_minted_value(mint)),
           pool_validation.validate_update_pool_datum_or_stake_credential(
             action: action,
             authen_policy_id: authen_policy_id,
-            admin_index: admin_index,
             pool_input: pool_input,
             pool_in_datum: datum,
-            all_inputs: inputs,
             all_outputs: outputs,
             all_datums: datums,
           ),
         }
       }
-      WithdrawLiquidityShare(admin_index) -> {
+      WithdrawLiquidityShare -> {
         expect datum: PoolDatum = raw_datum
-        let Transaction { inputs, outputs, datums, redeemers, mint, .. } =
-          transaction
+        let Transaction {
+          inputs,
+          reference_inputs,
+          outputs,
+          datums,
+          redeemers,
+          mint,
+          withdrawals,
+          extra_signatories,
+          validity_range,
+          ..
+        } = transaction
         expect Some(pool_input) = transaction.find_input(inputs, pool_input_ref)
         and {
-          // Transaction contain only 1 Script (Pool Script). 
+          // Transaction requires admin token to execute
+          pool_validation.is_admin_existence(
+            admin_policy_id: utils.admin_policy_id,
+            reference_inputs: reference_inputs,
+            withdrawals: withdrawals,
+            signatories: extra_signatories,
+            validity_range: validity_range,
+          ),
+          // Transaction contain only 1 Spending Script (Pool Script). 
           // It will avoid bad Admin can steal money from Order Contract.
-          dict.size(redeemers) == 1,
+          pool_validation.has_single_spending(redeemers),
           // This Redeemer won't mint anything 
           value.is_zero(value.from_minted_value(mint)),
           pool_validation.validate_withdraw_liquidity_share(
             authen_policy_id: authen_policy_id,
-            admin_index: admin_index,
             pool_input: pool_input,
             pool_in_datum: datum,
-            all_inputs: inputs,
             all_outputs: outputs,
             all_datums: datums,
           ),
