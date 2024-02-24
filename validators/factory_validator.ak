@@ -31,6 +31,7 @@ validator(
       datums,
       withdrawals,
       extra_signatories,
+      validity_range,
       ..
     } = transaction
     let FactoryRedeemer { asset_a, asset_b } = redeemer
@@ -208,11 +209,11 @@ validator(
       } else {
         and {
           pool_validation.is_admin_existence(
-            utils.admin_policy_id,
-            utils.admin_asset_name,
-            reference_inputs,
-            withdrawals,
-            extra_signatories,
+            admin_policy_id: utils.admin_policy_id,
+            reference_inputs: reference_inputs,
+            withdrawals: withdrawals,
+            signatories: extra_signatories,
+            validity_range: validity_range,
           ),
           pool_validation.validate_trading_fee_percent(
             pool_datum_trading_fee_numerator,

@@ -29,7 +29,8 @@ validator(
         let license_input = utils.list_at_index(inputs, license_index)
         // A valid license token is the token having expired timestamp as TokenName and must be within current time and current time + _maximum_deadline_range_
         let (batcher_address, end_valid_time_range) =
-          pool_validation.validate_batcher_license_and_find_batcher_address(
+          pool_validation.validate_license_expiration_and_find_license_holder(
+            license_pid: utils.batcher_license_policy_id,
             license_input: license_input,
             validity_range: validity_range,
           )
@@ -77,7 +78,8 @@ validator(
         // Batching Redeemer provides @license_index which help save calculation cost
         let license_input = utils.list_at_index(inputs, license_index)
         let (batcher_address, end_valid_time_range) =
-          pool_validation.validate_batcher_license_and_find_batcher_address(
+          pool_validation.validate_license_expiration_and_find_license_holder(
+            license_pid: utils.batcher_license_policy_id,
             license_input: license_input,
             validity_range: validity_range,
           )
@@ -109,17 +111,18 @@ validator(
           mint,
           withdrawals,
           extra_signatories,
+          validity_range,
           ..
         } = transaction
         expect Some(pool_input) = transaction.find_input(inputs, pool_input_ref)
         and {
           // Transaction requires admin token to execute
           pool_validation.is_admin_existence(
-            utils.admin_policy_id,
-            utils.admin_asset_name,
-            reference_inputs,
-            withdrawals,
-            extra_signatories,
+            admin_policy_id: utils.admin_policy_id,
+            reference_inputs: reference_inputs,
+            withdrawals: withdrawals,
+            signatories: extra_signatories,
+            validity_range: validity_range,
           ),
           // Transaction contain only 1 Spending Script (Pool Script). 
           // It will avoid bad Admin can steal money from Order Contract.
@@ -147,17 +150,18 @@ validator(
           mint,
           withdrawals,
           extra_signatories,
+          validity_range,
           ..
         } = transaction
         expect Some(pool_input) = transaction.find_input(inputs, pool_input_ref)
         and {
           // Transaction requires admin token to execute
           pool_validation.is_admin_existence(
-            utils.admin_policy_id,
-            utils.admin_asset_name,
-            reference_inputs,
-            withdrawals,
-            extra_signatories,
+            admin_policy_id: utils.admin_policy_id,
+            reference_inputs: reference_inputs,
+            withdrawals: withdrawals,
+            signatories: extra_signatories,
+            validity_range: validity_range,
           ),
           // Transaction contain only 1 Spending Script (Pool Script). 
           // It will avoid bad Admin can steal money from Order Contract.

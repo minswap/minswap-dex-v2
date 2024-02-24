@@ -20,17 +20,18 @@ use amm_dex_v2/types.{
 }
 use amm_dex_v2/utils
 
-pub fn validate_batcher_license_and_find_batcher_address(
+pub fn validate_license_expiration_and_find_license_holder(
+  license_pid: PolicyId,
   license_input: Input,
   validity_range: ValidityRange,
 ) -> (Address, Int) {
   let Input {
-    output: Output { address: batcher_address, value: license_value, .. },
+    output: Output { address: license_holder_addr, value: license_value, .. },
     ..
   } = license_input
   expect [(license_asset_name, license_amount)] =
     license_value
-      |> value.tokens(utils.license_policy_id)
+      |> value.tokens(license_pid)
       |> dict.to_list()
   let license_deadline = utils.bytearray_to_positive_int(license_asset_name)
   let Interval {
@@ -47,7 +48,7 @@ pub fn validate_batcher_license_and_find_batcher_address(
       license_deadline >= end_valid_time_range,
       license_deadline <= start_valid_time_range + utils.maximum_deadline_range,
     }
-  (batcher_address, end_valid_time_range)
+  (license_holder_addr, end_valid_time_range)
 }
 
 fn find_pool_input_and_output_in_batching(
@@ -753,21 +754,27 @@ pub fn has_single_spending(redeemers: Dict<ScriptPurpose, Redeemer>) -> Bool {
 
 pub fn is_admin_existence(
   admin_policy_id: PolicyId,
-  admin_asset_name: AssetName,
-  references_inputs: List<Input>,
+  reference_inputs: List<Input>,
   withdrawals: Dict<StakeCredential, Int>,
   signatories: List<Hash<Blake2b_224, VerificationKey>>,
+  validity_range: ValidityRange,
 ) -> Bool {
   let admin_input_opt =
     list.find(
-      references_inputs,
+      reference_inputs,
       fn(input) {
         let Input { output: Output { value: val, .. }, .. } = input
-        value.quantity_of(val, admin_policy_id, admin_asset_name) == 1
+        ( val |> value.tokens(admin_policy_id) |> dict.size() ) > 0
       },
     )
   when admin_input_opt is {
     Some(admin_input) -> {
+      let (_, _) =
+        validate_license_expiration_and_find_license_holder(
+          license_pid: admin_policy_id,
+          license_input: admin_input,
+          validity_range: validity_range,
+        )
       let Input {
         output: Output {
           address: Address { payment_credential: payment_cred, .. },
