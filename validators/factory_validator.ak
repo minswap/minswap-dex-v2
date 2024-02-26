@@ -8,10 +8,7 @@ use amm_dex_v2/pool_validation
 use amm_dex_v2/types.{
   Asset, FactoryDatum, FactoryRedeemer, PoolDatum, ValidatorHash,
 }
-use amm_dex_v2/utils.{
-  admin_asset_name, admin_policy_id, factory_auth_asset_name,
-  pool_auth_asset_name,
-}
+use amm_dex_v2/utils
 
 validator(
   // The PolicyID of Authen Minting Policy
@@ -28,7 +25,16 @@ validator(
   ) {
     let ScriptContext { transaction, purpose } = context
     expect Spend(factory_ref) = purpose
-    let Transaction { inputs, mint, outputs, .. } = transaction
+    let Transaction {
+      inputs,
+      reference_inputs,
+      mint,
+      outputs,
+      withdrawals,
+      extra_signatories,
+      validity_range,
+      ..
+    } = transaction
     let FactoryRedeemer { asset_a, asset_b } = redeemer
     let FactoryDatum { head: current_head, tail: current_tail } = datum
     let Asset { policy_id: asset_a_policy_id, asset_name: asset_a_asset_name } =
@@ -84,7 +90,7 @@ validator(
       value.quantity_of(
         factory_input_value,
         authen_policy_id,
-        factory_auth_asset_name,
+        utils.factory_auth_asset_name,
       ) == 1
     // validate that there are only 2 Factory UTxOs in Transaction Outputs, 
     // they must contain single legitimate Factory NFT Token. 
@@ -102,7 +108,7 @@ validator(
             value.quantity_of(
               out_value,
               authen_policy_id,
-              factory_auth_asset_name,
+              utils.factory_auth_asset_name,
             ) == 1,
           }
         },
@@ -143,7 +149,7 @@ validator(
                 value.quantity_of(
                   out_value,
                   authen_policy_id,
-                  pool_auth_asset_name,
+                  utils.pool_auth_asset_name,
                 ) == 1,
               }
             _ -> False
@@ -194,7 +200,7 @@ validator(
         |> value.add(asset_a_policy_id, asset_a_asset_name, amount_a)
         |> value.add(asset_b_policy_id, asset_b_asset_name, amount_b)
         |> value.add(authen_policy_id, lp_asset_name, remaining_liquidity)
-        |> value.add(authen_policy_id, pool_auth_asset_name, 1)
+        |> value.add(authen_policy_id, utils.pool_auth_asset_name, 1)
     expect and {
         pool_datum_base_fee_a_numerator == pool_datum_base_fee_b_numerator,
         pool_datum_base_fee_a_denominator == pool_datum_base_fee_b_denominator,
@@ -210,22 +216,23 @@ validator(
       
         True
       } else {
-        expect [_] =
-          list.filter(
-            outputs,
-            fn(output) {
-              let Output { value: out_value, .. } = output
-              value.quantity_of(out_value, admin_policy_id, admin_asset_name) == 1
-            },
-          )
-        pool_validation.validate_fee_percent(
-          fee_num: pool_datum_base_fee_a_numerator,
-          fee_den: pool_datum_base_fee_a_denominator,
-          max_fee_num: utils.max_base_fee_numerator,
-          max_fee_den: utils.max_base_fee_denominator,
-          min_fee_num: utils.min_base_fee_numerator,
-          min_fee_den: utils.min_base_fee_denominator,
-        )
+        and {
+          pool_validation.is_admin_existence(
+            admin_policy_id: utils.admin_policy_id,
+            reference_inputs: reference_inputs,
+            withdrawals: withdrawals,
+            signatories: extra_signatories,
+            validity_range: validity_range,
+          ),
+          pool_validation.validate_fee_percent(
+            fee_num: pool_datum_base_fee_a_numerator,
+            fee_den: pool_datum_base_fee_a_denominator,
+            max_fee_num: utils.max_base_fee_numerator,
+            max_fee_den: utils.max_base_fee_denominator,
+            min_fee_num: utils.min_base_fee_numerator,
+            min_fee_den: utils.min_base_fee_denominator,
+          ),
+        }
       }
     and {
       // stake_credential must be the same with configured credential

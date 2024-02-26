@@ -50,9 +50,8 @@ pub type PoolRedeemer {
   Batching
   UpdatePoolFeeOrStakeCredential {
     action: UpdatePoolFeeOrStakeCredentialAction,
-    admin_index: Int,
   }
-  WithdrawLiquidityShare { admin_index: Int }
+  WithdrawLiquidityShare
 }
 
 pub type PoolBatchingRedeemer {

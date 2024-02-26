@@ -1,8 +1,14 @@
-use aiken/dict
+use aiken/dict.{Dict}
+use aiken/hash.{Blake2b_224, Hash}
 use aiken/interval.{Finite, Interval, IntervalBound}
 use aiken/list
-use aiken/transaction.{Input, Output, ValidityRange}
-use aiken/transaction/credential.{Address, PaymentCredential, StakeCredential}
+use aiken/transaction.{
+  Input, Output, Redeemer, ScriptPurpose, Spend, ValidityRange,
+}
+use aiken/transaction/credential.{
+  Address, Inline, PaymentCredential, ScriptCredential, StakeCredential,
+  VerificationKey, VerificationKeyCredential,
+}
 use aiken/transaction/value.{
   AssetName, PolicyId, Value, ada_asset_name, ada_policy_id,
 }
@@ -10,22 +16,20 @@ use amm_dex_v2/types.{
   Asset, BatchingPool, PoolDatum, UpdatePoolFee,
   UpdatePoolFeeOrStakeCredentialAction, UpdatePoolStakeCredential,
 }
-use amm_dex_v2/utils.{
-  admin_asset_name, admin_policy_id, factory_auth_asset_name, license_policy_id,
-  maximum_deadline_range, pool_auth_asset_name,
-}
+use amm_dex_v2/utils
 
-pub fn validate_batcher_license_and_find_batcher_address(
+pub fn validate_license_expiration_and_find_license_holder(
+  license_pid: PolicyId,
   license_input: Input,
   validity_range: ValidityRange,
 ) -> (Address, Int) {
   let Input {
-    output: Output { address: batcher_address, value: license_value, .. },
+    output: Output { address: license_holder_addr, value: license_value, .. },
     ..
   } = license_input
   expect [(license_asset_name, license_amount)] =
     license_value
-      |> value.tokens(license_policy_id)
+      |> value.tokens(license_pid)
       |> dict.to_list()
   let license_deadline = utils.bytearray_to_positive_int(license_asset_name)
   let Interval {
@@ -40,9 +44,9 @@ pub fn validate_batcher_license_and_find_batcher_address(
   expect and {
       license_amount == 1,
       license_deadline >= end_valid_time_range,
-      license_deadline <= start_valid_time_range + maximum_deadline_range,
+      license_deadline <= start_valid_time_range + utils.maximum_deadline_range,
     }
-  (batcher_address, end_valid_time_range)
+  (license_holder_addr, end_valid_time_range)
 }
 
 pub fn get_batching_pool(
@@ -159,14 +163,14 @@ pub fn get_batching_pool(
   let estimate_pool_in_value =
     value.zero()
       |> value.add(ada_policy_id, ada_asset_name, 3000000)
-      |> value.add(authen_policy_id, pool_auth_asset_name, 1)
+      |> value.add(authen_policy_id, utils.pool_auth_asset_name, 1)
       |> value.add(asset_a_policy_id, asset_a_asset_name, value_reserve_a_in)
       |> value.add(asset_b_policy_id, asset_b_asset_name, value_reserve_b_in)
       |> value.add(authen_policy_id, lp_asset_name, remaining_liquidity_supply_in)
   let estimate_pool_out_value =
     value.zero()
       |> value.add(ada_policy_id, ada_asset_name, 3000000)
-      |> value.add(authen_policy_id, pool_auth_asset_name, 1)
+      |> value.add(authen_policy_id, utils.pool_auth_asset_name, 1)
       |> value.add(asset_a_policy_id, asset_a_asset_name, value_reserve_a_out)
       |> value.add(asset_b_policy_id, asset_b_asset_name, value_reserve_b_out)
       |> value.add(authen_policy_id, lp_asset_name, remaining_liquidity_supply_out)
@@ -219,10 +223,8 @@ pub fn get_batching_pool(
 pub fn validate_update_pool_datum_or_stake_credential(
   action: UpdatePoolFeeOrStakeCredentialAction,
   authen_policy_id: PolicyId,
-  admin_index: Int,
   pool_input: Input,
   pool_in_datum: PoolDatum,
-  all_inputs: List<Input>,
   all_outputs: List<Output>,
 ) -> Bool {
   let Input { output: pool_in_output, .. } = pool_input
@@ -231,8 +233,6 @@ pub fn validate_update_pool_datum_or_stake_credential(
   let Address { payment_credential: pool_in_address_payment_credential, .. } =
     pool_in_address
 
-  let admin_input = utils.list_at_index(all_inputs, admin_index)
-  let Input { output: Output { value: admin_value, .. }, .. } = admin_input
   // validate there is a single Pool UTxO in Transaction Outputs
   let Output {
     address: pool_out_address,
@@ -244,12 +244,13 @@ pub fn validate_update_pool_datum_or_stake_credential(
       all_outputs: all_outputs,
       pool_payment_credential: pool_in_address_payment_credential,
     )
-
   expect and {
       // Pool Input contains 1 valid Pool NFT Token
-      value.quantity_of(pool_in_value, authen_policy_id, pool_auth_asset_name) == 1,
-      // validate Admin with valid Admin License Token must be presented in Transaction Inputs
-      value.quantity_of(admin_value, admin_policy_id, admin_asset_name) == 1,
+      value.quantity_of(
+        pool_in_value,
+        authen_policy_id,
+        utils.pool_auth_asset_name,
+      ) == 1,
       // Pool Value must be unchanged
       pool_in_value == pool_out_value,
     }
@@ -354,10 +355,8 @@ pub fn validate_fee_percent(
 
 pub fn validate_withdraw_liquidity_share(
   authen_policy_id: PolicyId,
-  admin_index: Int,
   pool_input: Input,
   pool_in_datum: PoolDatum,
-  all_inputs: List<Input>,
   all_outputs: List<Output>,
 ) -> Bool {
   let Input {
@@ -379,16 +378,16 @@ pub fn validate_withdraw_liquidity_share(
     )
   expect pool_out_datum: PoolDatum =
     utils.must_find_script_inline_datum(raw_pool_out_datum)
-  let admin_input = utils.list_at_index(all_inputs, admin_index)
-  let Input { output: Output { value: admin_value, .. }, .. } = admin_input
   expect and {
       // Pool Input and Output Address must be unchanged (both Payment and Stake Credential)
       pool_in_address == pool_out_address,
       // Pool Datum must be unchanged
       pool_in_datum == pool_out_datum,
-      value.quantity_of(pool_in_value, authen_policy_id, pool_auth_asset_name) == 1,
-      // validate Admin with valid Admin License Token must be presented in Transaction Inputs.
-      value.quantity_of(admin_value, admin_policy_id, admin_asset_name) == 1,
+      value.quantity_of(
+        pool_in_value,
+        authen_policy_id,
+        utils.pool_auth_asset_name,
+      ) == 1,
     }
   let PoolDatum {
     asset_a,
@@ -437,8 +436,8 @@ pub fn get_pool_creation_expected_mint(
   lp_asset_name: AssetName,
 ) -> Value {
   value.zero()
-    |> value.add(authen_policy_id, factory_auth_asset_name, 1)
-    |> value.add(authen_policy_id, pool_auth_asset_name, 1)
+    |> value.add(authen_policy_id, utils.factory_auth_asset_name, 1)
+    |> value.add(authen_policy_id, utils.pool_auth_asset_name, 1)
     |> value.add(authen_policy_id, lp_asset_name, 9223372036854775807)
 }
 
@@ -558,4 +557,60 @@ test test_get_trading_fee_fail_3() fail {
     vol_fee_opt: Some((2, 100)),
     allow_dynamic_fee: True,
   ) == (2 * 100 + 9 * 100, 10000)
+}
+
+pub fn has_single_spending(redeemers: Dict<ScriptPurpose, Redeemer>) -> Bool {
+  expect [_] =
+    redeemers
+      |> dict.to_list
+      |> list.filter(
+           fn(r) {
+             let (p, _) = r
+             when p is {
+               Spend(_) -> True
+               _ -> False
+             }
+           },
+         )
+  True
+}
+
+pub fn is_admin_existence(
+  admin_policy_id: PolicyId,
+  reference_inputs: List<Input>,
+  withdrawals: Dict<StakeCredential, Int>,
+  signatories: List<Hash<Blake2b_224, VerificationKey>>,
+  validity_range: ValidityRange,
+) -> Bool {
+  let admin_input_opt =
+    list.find(
+      reference_inputs,
+      fn(input) {
+        let Input { output: Output { value: val, .. }, .. } = input
+        ( val |> value.tokens(admin_policy_id) |> dict.size() ) > 0
+      },
+    )
+  when admin_input_opt is {
+    Some(admin_input) -> {
+      let (_, _) =
+        validate_license_expiration_and_find_license_holder(
+          license_pid: admin_policy_id,
+          license_input: admin_input,
+          validity_range: validity_range,
+        )
+      let Input {
+        output: Output {
+          address: Address { payment_credential: payment_cred, .. },
+          ..
+        },
+        ..
+      } = admin_input
+      when payment_cred is {
+        VerificationKeyCredential(pub_key_hash) ->
+          list.has(signatories, pub_key_hash)
+        ScriptCredential(_) -> dict.has_key(withdrawals, Inline(payment_cred))
+      }
+    }
+    _ -> False
+  }
 }
