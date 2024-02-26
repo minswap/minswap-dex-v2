@@ -190,7 +190,8 @@ validator(
         asset_b_asset_name,
       )
     let total_liquidity = math.calculate_initial_liquidity(amount_a, amount_b)
-    let remaining_liquidity = 9223372036854775807 - total_liquidity
+    let remaining_liquidity =
+      9223372036854775807 - ( total_liquidity - utils.default_burn_liquidity )
     let expected_pool_out_value =
       value.zero()
         |> value.add(ada_policy_id, ada_asset_name, 3000000)
