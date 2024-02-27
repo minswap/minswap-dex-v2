@@ -23,7 +23,7 @@ pub const factory_auth_asset_name = #"4d53"
 
 // Policy ID managed by the Minswap team, used for minting Admin License assets
 pub const admin_policy_id =
-  #"229013ad3a22d2d051a28e7f9214a32444ecf19998f7bdf0c2849862"
+  #"f8c20eb8b2e773e21cf41ab6354cf09bd255ebed0bd8847c655e67b4"
 
 // Maximum expiration time of Batcher license from now (to prevent minting infinity license)
 pub const maximum_deadline_range = 77760000000
