@@ -270,7 +270,7 @@ pub fn validate_update_pool_datum_or_stake_credential(
         ..
       } = pool_out_datum
       // Profit Sharing can be on/off by setting fee_sharing_numerator_opt is None or Some. 
-      // Profit Sharing must be between **16.66%** and **50%**
+      // Profit Sharing numerator must be between **1666** and **5000**
       let is_valid_fee_sharing =
         when pool_out_fee_sharing_numerator_opt is {
           None -> True

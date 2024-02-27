@@ -237,7 +237,7 @@ validator(
       amount_a > 0,
       amount_b > 0,
       total_liquidity > 0,
-      // trading_fee_percentage must be between **0.05%** and **10%**
+      // base_fee_a_numerator and base_fee_b_numerator must be between **5** and **1000**
       is_valid_trading_fee,
       // Dynamic Fee is not allowed in Pool Creation 
       pool_allow_dynamic_fee == False,

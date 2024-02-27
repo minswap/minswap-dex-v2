@@ -22,10 +22,6 @@ pub type Asset {
 pub type DatumMap =
   Dict<Hash<Blake2b_256, Data>, Data>
 
-// Profit Sharing Numerator & Denominator
-pub type ProfitSharing =
-  (Int, Int)
-
 pub type PoolDatum {
   pool_batching_stake_credential: StakeCredential,
   asset_a: Asset,
