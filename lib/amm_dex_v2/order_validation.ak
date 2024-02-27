@@ -9,11 +9,11 @@ use aiken/transaction/value.{Value, ada_asset_name, ada_policy_id}
 use amm_dex_v2/math
 use amm_dex_v2/types.{
   Asset, BatchingPool, DAOAll, DAOSpecificAmount, DatumMap, Deposit,
-  DepositAmountOption, EODDatumHash, EODInlineDatum, EODNoDatum, ExtraOrderDatum,
-  OCO, OrderDatum, PartialSwap, PoolState, SAOAll, SAOSpecificAmount, StopLoss,
-  SwapAmountOption, SwapExactIn, SwapExactOut, SwapMultiRouting, SwapRouting,
-  WAOAll, WAOSpecificAmount, Withdraw, WithdrawAmountOption, WithdrawImbalance,
-  ZapOut,
+  DepositAmountOption, Donation, EODDatumHash, EODInlineDatum, EODNoDatum,
+  ExtraOrderDatum, OCO, OrderDatum, PartialSwap, PoolState, SAOAll,
+  SAOSpecificAmount, StopLoss, SwapAmountOption, SwapExactIn, SwapExactOut,
+  SwapMultiRouting, SwapRouting, WAOAll, WAOSpecificAmount, Withdraw,
+  WithdrawAmountOption, WithdrawImbalance, ZapOut,
 }
 use amm_dex_v2/utils
 
@@ -844,6 +844,49 @@ fn validate_withdraw_imbalance(
   }
 }
 
+fn validate_donation(
+  order_in_value: Value,
+  asset_a: Asset,
+  asset_b: Asset,
+  used_batcher_fee: Int,
+  pool_state: PoolState,
+) -> PoolState {
+  let (
+    datum_reserve_a,
+    datum_reserve_b,
+    value_reserve_a,
+    value_reserve_b,
+    total_liquidity,
+  ) = pool_state
+  let Asset { policy_id: asset_a_policy_id, asset_name: asset_a_asset_name } =
+    asset_a
+  let Asset { policy_id: asset_b_policy_id, asset_name: asset_b_asset_name } =
+    asset_b
+  let temp_amount_a =
+    order_in_value |> value.quantity_of(asset_a_policy_id, asset_a_asset_name)
+  let amount_a =
+    if utils.is_ada_asset(asset_a_policy_id, asset_a_asset_name) {
+      temp_amount_a - used_batcher_fee
+    } else {
+      temp_amount_a
+    }
+  let amount_b =
+    order_in_value |> value.quantity_of(asset_b_policy_id, asset_b_asset_name)
+
+  expect and {
+      amount_a >= 0,
+      amount_b >= 0,
+      amount_a + amount_b > 0,
+    }
+  (
+    datum_reserve_a + amount_a,
+    datum_reserve_b + amount_b,
+    value_reserve_a + amount_a,
+    value_reserve_b + amount_b,
+    total_liquidity,
+  )
+}
+
 fn get_multi_routing_swap_amount_out(
   amount_in: Int,
   pool: BatchingPool,
@@ -1103,7 +1146,6 @@ pub fn apply_orders(
   pool_state: PoolState,
 ) -> PoolState {
   expect [input, ..rest_inputs] = order_inputs
-  expect [output, ..rest_outputs] = order_outputs
   expect [used_batcher_fee, ..rest_batcher_fees] = orders_fee
 
   let Input {
@@ -1115,7 +1157,6 @@ pub fn apply_orders(
     },
     ..
   } = input
-  let Output { value: order_out_value, .. } = output
   expect order_in_datum: OrderDatum =
     utils.must_find_script_datum(datum_map, raw_order_in_datum)
 
@@ -1143,7 +1184,8 @@ pub fn apply_orders(
         Some((expired_time, _)) -> end_valid_time_range <= expired_time
       },
     }
-  let new_state =
+
+  let (new_state, rest_outs) =
     when order_step is {
       SwapExactIn(
         a_to_b_direction,
@@ -1151,55 +1193,63 @@ pub fn apply_orders(
         minimum_receive,
         order_killable,
       ) -> {
+        expect [output, ..rest_outputs] = order_outputs
         expect minimum_receive > 0
-        validate_swap_exact_in(
-          order_in_value: order_in_value,
-          order_output: output,
-          sender: sender,
-          sender_datum: sender_datum,
-          receiver: receiver,
-          receiver_datum: receiver_datum,
-          a_to_b_direction: a_to_b_direction,
-          swap_amount_option: swap_amount_option,
-          asset_a: asset_a,
-          asset_b: asset_b,
-          used_batcher_fee: used_batcher_fee,
-          trading_fee_a_numerator: trading_fee_a_numerator,
-          trading_fee_a_denominator: trading_fee_a_denominator,
-          trading_fee_b_numerator: trading_fee_b_numerator,
-          trading_fee_b_denominator: trading_fee_b_denominator,
-          profit_sharing_opt: profit_sharing_opt,
-          pool_state: pool_state,
-          kill_on_failed: order_killable,
-          is_slippage_satisfied: fn(amount_out) {
-            amount_out >= minimum_receive
-          },
+        (
+          validate_swap_exact_in(
+            order_in_value: order_in_value,
+            order_output: output,
+            sender: sender,
+            sender_datum: sender_datum,
+            receiver: receiver,
+            receiver_datum: receiver_datum,
+            a_to_b_direction: a_to_b_direction,
+            swap_amount_option: swap_amount_option,
+            asset_a: asset_a,
+            asset_b: asset_b,
+            used_batcher_fee: used_batcher_fee,
+            trading_fee_a_numerator: trading_fee_a_numerator,
+            trading_fee_a_denominator: trading_fee_a_denominator,
+            trading_fee_b_numerator: trading_fee_b_numerator,
+            trading_fee_b_denominator: trading_fee_b_denominator,
+            profit_sharing_opt: profit_sharing_opt,
+            pool_state: pool_state,
+            kill_on_failed: order_killable,
+            is_slippage_satisfied: fn(amount_out) {
+              amount_out >= minimum_receive
+            },
+          ),
+          rest_outputs,
         )
       }
       StopLoss(a_to_b_direction, swap_amount_option, stop_loss_receive) -> {
+        expect [output, ..rest_outputs] = order_outputs
         expect stop_loss_receive > 0
-        validate_swap_exact_in(
-          order_in_value: order_in_value,
-          order_output: output,
-          sender: sender,
-          sender_datum: sender_datum,
-          receiver: receiver,
-          receiver_datum: receiver_datum,
-          a_to_b_direction: a_to_b_direction,
-          swap_amount_option: swap_amount_option,
-          asset_a: asset_a,
-          asset_b: asset_b,
-          used_batcher_fee: used_batcher_fee,
-          trading_fee_a_numerator: trading_fee_a_numerator,
-          trading_fee_a_denominator: trading_fee_a_denominator,
-          trading_fee_b_numerator: trading_fee_b_numerator,
-          trading_fee_b_denominator: trading_fee_b_denominator,
-          profit_sharing_opt: profit_sharing_opt,
-          pool_state: pool_state,
-          kill_on_failed: False,
-          is_slippage_satisfied: fn(amount_out) {
-            amount_out <= stop_loss_receive
-          },
+        (
+          validate_swap_exact_in(
+            order_in_value: order_in_value,
+            order_output: output,
+            sender: sender,
+            sender_datum: sender_datum,
+            receiver: receiver,
+            receiver_datum: receiver_datum,
+            a_to_b_direction: a_to_b_direction,
+            swap_amount_option: swap_amount_option,
+            asset_a: asset_a,
+            asset_b: asset_b,
+            used_batcher_fee: used_batcher_fee,
+            trading_fee_a_numerator: trading_fee_a_numerator,
+            trading_fee_a_denominator: trading_fee_a_denominator,
+            trading_fee_b_numerator: trading_fee_b_numerator,
+            trading_fee_b_denominator: trading_fee_b_denominator,
+            profit_sharing_opt: profit_sharing_opt,
+            pool_state: pool_state,
+            kill_on_failed: False,
+            is_slippage_satisfied: fn(amount_out) {
+              amount_out <= stop_loss_receive
+            },
+          ),
+          rest_outputs,
         )
       }
       OCO(
@@ -1208,32 +1258,36 @@ pub fn apply_orders(
         minimum_receive,
         stop_loss_receive,
       ) -> {
+        expect [output, ..rest_outputs] = order_outputs
         expect and {
             minimum_receive > 0,
             stop_loss_receive > 0,
           }
-        validate_swap_exact_in(
-          order_in_value: order_in_value,
-          order_output: output,
-          sender_datum: sender_datum,
-          sender: sender,
-          receiver: receiver,
-          receiver_datum: receiver_datum,
-          a_to_b_direction: a_to_b_direction,
-          swap_amount_option: swap_amount_option,
-          asset_a: asset_a,
-          asset_b: asset_b,
-          used_batcher_fee: used_batcher_fee,
-          trading_fee_a_numerator: trading_fee_a_numerator,
-          trading_fee_a_denominator: trading_fee_a_denominator,
-          trading_fee_b_numerator: trading_fee_b_numerator,
-          trading_fee_b_denominator: trading_fee_b_denominator,
-          profit_sharing_opt: profit_sharing_opt,
-          pool_state: pool_state,
-          kill_on_failed: False,
-          is_slippage_satisfied: fn(amount_out) {
-            amount_out >= minimum_receive || amount_out <= stop_loss_receive
-          },
+        (
+          validate_swap_exact_in(
+            order_in_value: order_in_value,
+            order_output: output,
+            sender_datum: sender_datum,
+            sender: sender,
+            receiver: receiver,
+            receiver_datum: receiver_datum,
+            a_to_b_direction: a_to_b_direction,
+            swap_amount_option: swap_amount_option,
+            asset_a: asset_a,
+            asset_b: asset_b,
+            used_batcher_fee: used_batcher_fee,
+            trading_fee_a_numerator: trading_fee_a_numerator,
+            trading_fee_a_denominator: trading_fee_a_denominator,
+            trading_fee_b_numerator: trading_fee_b_numerator,
+            trading_fee_b_denominator: trading_fee_b_denominator,
+            profit_sharing_opt: profit_sharing_opt,
+            pool_state: pool_state,
+            kill_on_failed: False,
+            is_slippage_satisfied: fn(amount_out) {
+              amount_out >= minimum_receive || amount_out <= stop_loss_receive
+            },
+          ),
+          rest_outputs,
         )
       }
       SwapExactOut(
@@ -1242,51 +1296,59 @@ pub fn apply_orders(
         expected_receive,
         order_killable,
       ) -> {
+        expect [output, ..rest_outputs] = order_outputs
         expect expected_receive > 0
-        validate_swap_exact_out(
-          order_in_value: order_in_value,
-          order_output: output,
-          sender: sender,
-          sender_datum: sender_datum,
-          receiver: receiver,
-          receiver_datum: receiver_datum,
-          a_to_b_direction: a_to_b_direction,
-          maximum_swap_amount_option: maximum_swap_amount_option,
-          expected_receive: expected_receive,
-          asset_a: asset_a,
-          asset_b: asset_b,
-          used_batcher_fee: used_batcher_fee,
-          trading_fee_a_numerator: trading_fee_a_numerator,
-          trading_fee_a_denominator: trading_fee_a_denominator,
-          trading_fee_b_numerator: trading_fee_b_numerator,
-          trading_fee_b_denominator: trading_fee_b_denominator,
-          profit_sharing_opt: profit_sharing_opt,
-          kill_on_failed: order_killable,
-          pool_state: pool_state,
+        (
+          validate_swap_exact_out(
+            order_in_value: order_in_value,
+            order_output: output,
+            sender: sender,
+            sender_datum: sender_datum,
+            receiver: receiver,
+            receiver_datum: receiver_datum,
+            a_to_b_direction: a_to_b_direction,
+            maximum_swap_amount_option: maximum_swap_amount_option,
+            expected_receive: expected_receive,
+            asset_a: asset_a,
+            asset_b: asset_b,
+            used_batcher_fee: used_batcher_fee,
+            trading_fee_a_numerator: trading_fee_a_numerator,
+            trading_fee_a_denominator: trading_fee_a_denominator,
+            trading_fee_b_numerator: trading_fee_b_numerator,
+            trading_fee_b_denominator: trading_fee_b_denominator,
+            profit_sharing_opt: profit_sharing_opt,
+            kill_on_failed: order_killable,
+            pool_state: pool_state,
+          ),
+          rest_outputs,
         )
       }
       Deposit(deposit_amount_option, minimum_lp, order_killable) -> {
+        expect [output, ..rest_outputs] = order_outputs
         expect minimum_lp > 0
-        validate_deposit(
-          order_in_value: order_in_value,
-          order_output: output,
-          sender: sender,
-          sender_datum: sender_datum,
-          receiver: receiver,
-          receiver_datum: receiver_datum,
-          deposit_amount_option: deposit_amount_option,
-          minimum_lp: minimum_lp,
-          asset_a: asset_a,
-          asset_b: asset_b,
-          lp_asset: lp_asset,
-          used_batcher_fee: used_batcher_fee,
-          profit_sharing_opt: profit_sharing_opt,
-          trading_fee_a_numerator: trading_fee_a_numerator,
-          trading_fee_a_denominator: trading_fee_a_denominator,
-          trading_fee_b_numerator: trading_fee_b_numerator,
-          trading_fee_b_denominator: trading_fee_b_denominator,
-          kill_on_failed: order_killable,
-          pool_state: pool_state,
+        (
+          validate_deposit(
+            order_in_value: order_in_value,
+            order_output: output,
+            sender: sender,
+            sender_datum: sender_datum,
+            receiver: receiver,
+            receiver_datum: receiver_datum,
+            deposit_amount_option: deposit_amount_option,
+            minimum_lp: minimum_lp,
+            asset_a: asset_a,
+            asset_b: asset_b,
+            lp_asset: lp_asset,
+            used_batcher_fee: used_batcher_fee,
+            profit_sharing_opt: profit_sharing_opt,
+            trading_fee_a_numerator: trading_fee_a_numerator,
+            trading_fee_a_denominator: trading_fee_a_denominator,
+            trading_fee_b_numerator: trading_fee_b_numerator,
+            trading_fee_b_denominator: trading_fee_b_denominator,
+            kill_on_failed: order_killable,
+            pool_state: pool_state,
+          ),
+          rest_outputs,
         )
       }
       Withdraw(
@@ -1295,26 +1357,30 @@ pub fn apply_orders(
         minimum_asset_b,
         order_killable,
       ) -> {
+        expect [output, ..rest_outputs] = order_outputs
         expect and {
             minimum_asset_a > 0,
             minimum_asset_b > 0,
           }
-        validate_withdraw(
-          order_in_value: order_in_value,
-          order_output: output,
-          sender: sender,
-          sender_datum: sender_datum,
-          receiver: receiver,
-          receiver_datum: receiver_datum,
-          withdrawal_amount_option: withdrawal_amount_option,
-          minimum_amount_a: minimum_asset_a,
-          minimum_amount_b: minimum_asset_b,
-          asset_a: asset_a,
-          asset_b: asset_b,
-          lp_asset: lp_asset,
-          used_batcher_fee: used_batcher_fee,
-          kill_on_failed: order_killable,
-          pool_state: pool_state,
+        (
+          validate_withdraw(
+            order_in_value: order_in_value,
+            order_output: output,
+            sender: sender,
+            sender_datum: sender_datum,
+            receiver: receiver,
+            receiver_datum: receiver_datum,
+            withdrawal_amount_option: withdrawal_amount_option,
+            minimum_amount_a: minimum_asset_a,
+            minimum_amount_b: minimum_asset_b,
+            asset_a: asset_a,
+            asset_b: asset_b,
+            lp_asset: lp_asset,
+            used_batcher_fee: used_batcher_fee,
+            kill_on_failed: order_killable,
+            pool_state: pool_state,
+          ),
+          rest_outputs,
         )
       }
       ZapOut(
@@ -1323,28 +1389,32 @@ pub fn apply_orders(
         minimum_receive,
         order_killable,
       ) -> {
+        expect [output, ..rest_outputs] = order_outputs
         expect minimum_receive > 0
-        validate_zap_out(
-          order_in_value: order_in_value,
-          order_output: output,
-          sender: sender,
-          sender_datum: sender_datum,
-          receiver: receiver,
-          receiver_datum: receiver_datum,
-          minimum_receive: minimum_receive,
-          a_to_b_direction: a_to_b_direction,
-          withdrawal_amount_option: withdrawal_amount_option,
-          asset_a: asset_a,
-          asset_b: asset_b,
-          lp_asset: lp_asset,
-          used_batcher_fee: used_batcher_fee,
-          profit_sharing_opt: profit_sharing_opt,
-          trading_fee_a_numerator: trading_fee_a_numerator,
-          trading_fee_a_denominator: trading_fee_a_denominator,
-          trading_fee_b_numerator: trading_fee_b_numerator,
-          trading_fee_b_denominator: trading_fee_b_denominator,
-          kill_on_failed: order_killable,
-          pool_state: pool_state,
+        (
+          validate_zap_out(
+            order_in_value: order_in_value,
+            order_output: output,
+            sender: sender,
+            sender_datum: sender_datum,
+            receiver: receiver,
+            receiver_datum: receiver_datum,
+            minimum_receive: minimum_receive,
+            a_to_b_direction: a_to_b_direction,
+            withdrawal_amount_option: withdrawal_amount_option,
+            asset_a: asset_a,
+            asset_b: asset_b,
+            lp_asset: lp_asset,
+            used_batcher_fee: used_batcher_fee,
+            profit_sharing_opt: profit_sharing_opt,
+            trading_fee_a_numerator: trading_fee_a_numerator,
+            trading_fee_a_denominator: trading_fee_a_denominator,
+            trading_fee_b_numerator: trading_fee_b_numerator,
+            trading_fee_b_denominator: trading_fee_b_denominator,
+            kill_on_failed: order_killable,
+            pool_state: pool_state,
+          ),
+          rest_outputs,
         )
       }
       PartialSwap(
@@ -1356,6 +1426,8 @@ pub fn apply_orders(
         minimum_swap_amount_required,
         max_batcher_fee_each_time,
       ) -> {
+        expect [output, ..rest_outputs] = order_outputs
+        let Output { value: order_out_value, .. } = output
         expect and {
             io_ratio_numerator > 0,
             io_ratio_denominator > 0,
@@ -1433,11 +1505,14 @@ pub fn apply_orders(
             )
           }
         (
-          new_reserve_a,
-          new_reserve_b,
-          new_total_liquidity,
-          new_liquidity_share,
-          new_root_k_last,
+          (
+            new_reserve_a,
+            new_reserve_b,
+            new_total_liquidity,
+            new_liquidity_share,
+            new_root_k_last,
+          ),
+          rest_outputs,
         )
       }
       WithdrawImbalance(
@@ -1447,40 +1522,61 @@ pub fn apply_orders(
         minimum_asset_a,
         order_killable,
       ) -> {
+        expect [output, ..rest_outputs] = order_outputs
         expect and {
             ratio_asset_a > 0,
             ratio_asset_b > 0,
             minimum_asset_a > 0,
           }
-        validate_withdraw_imbalance(
-          order_in_value: order_in_value,
-          order_output: output,
-          sender: sender,
-          sender_datum: sender_datum,
-          receiver: receiver,
-          receiver_datum: receiver_datum,
-          withdrawal_amount_option: withdrawal_amount_option,
-          ratio_asset_a: ratio_asset_a,
-          ratio_asset_b: ratio_asset_b,
-          minimum_amount_a: minimum_asset_a,
-          asset_a: asset_a,
-          asset_b: asset_b,
-          lp_asset: lp_asset,
-          used_batcher_fee: used_batcher_fee,
-          trading_fee_a_numerator: trading_fee_a_numerator,
-          trading_fee_a_denominator: trading_fee_a_denominator,
-          trading_fee_b_numerator: trading_fee_b_numerator,
-          trading_fee_b_denominator: trading_fee_b_denominator,
-          profit_sharing_opt: profit_sharing_opt,
-          kill_on_failed: order_killable,
-          pool_state: pool_state,
+        (
+          validate_withdraw_imbalance(
+            order_in_value: order_in_value,
+            order_output: output,
+            sender: sender,
+            sender_datum: sender_datum,
+            receiver: receiver,
+            receiver_datum: receiver_datum,
+            withdrawal_amount_option: withdrawal_amount_option,
+            ratio_asset_a: ratio_asset_a,
+            ratio_asset_b: ratio_asset_b,
+            minimum_amount_a: minimum_asset_a,
+            asset_a: asset_a,
+            asset_b: asset_b,
+            lp_asset: lp_asset,
+            used_batcher_fee: used_batcher_fee,
+            trading_fee_a_numerator: trading_fee_a_numerator,
+            trading_fee_a_denominator: trading_fee_a_denominator,
+            trading_fee_b_numerator: trading_fee_b_numerator,
+            trading_fee_b_denominator: trading_fee_b_denominator,
+            profit_sharing_opt: profit_sharing_opt,
+            kill_on_failed: order_killable,
+            pool_state: pool_state,
+          ),
+          rest_outputs,
         )
       }
+      Donation ->
+        (
+          validate_donation(
+            order_in_value: order_in_value,
+            asset_a: asset_a,
+            asset_b: asset_b,
+            used_batcher_fee: used_batcher_fee,
+            pool_state: pool_state,
+          ),
+          order_outputs,
+        )
       SwapMultiRouting(_, _, _) -> fail
     }
 
   when rest_inputs is {
-    [] -> new_state
+    [] -> {
+      expect and {
+          rest_outs == [],
+          rest_batcher_fees == [],
+        }
+      new_state
+    }
     _ ->
       apply_orders(
         datum_map: datum_map,
@@ -1494,7 +1590,7 @@ pub fn apply_orders(
         profit_sharing_opt: profit_sharing_opt,
         end_valid_time_range: end_valid_time_range,
         order_inputs: rest_inputs,
-        order_outputs: rest_outputs,
+        order_outputs: rest_outs,
         orders_fee: rest_batcher_fees,
         pool_state: new_state,
       )

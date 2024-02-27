@@ -218,6 +218,7 @@ pub type OrderStep {
     // Minimum amount of Asset Out which users want to receive after exchanging
     minimum_receive: Int,
   }
+  Donation
 }
 
 pub type ExtraOrderDatum {

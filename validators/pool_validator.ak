@@ -143,8 +143,6 @@ validator(
         !builtin.null_list(input_indexes),
         // Input indexes must be unique
         utils.is_list_unique(input_indexes),
-        // Batcher need to provide all Batcher fee for each order
-        utils.compare_list_length(input_indexes, orders_fee),
         // validate Transaction won't mint any assets
         value.is_zero(value.from_minted_value(mint)),
       }
@@ -204,8 +202,6 @@ validator(
     expect and {
         // User Inputs and Input Indexes must have the same length
         utils.compare_list_length(input_indexes, user_inputs),
-        // User Inputs and Outputs must have the same length
-        utils.compare_list_length(sorted_user_inputs, user_outputs),
         // Pool Inputs & Outputs must have the same length
         utils.compare_list_length(pool_inputs, pool_outputs),
       }
