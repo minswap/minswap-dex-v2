@@ -55,7 +55,7 @@ pub fn get_batching_pool(
   pool_output: Output,
   authen_policy_id: PolicyId,
   require_total_liquidity_unchange: Bool,
-  vol_fee: Option<(Int, Int)>,
+  vol_fee: Option<Int>,
 ) -> BatchingPool {
   let Output {
     address: pool_in_address,
@@ -81,10 +81,8 @@ pub fn get_batching_pool(
     reserve_a: pool_in_datum_reserve_a,
     reserve_b: pool_in_datum_reserve_b,
     base_fee_a_numerator: pool_in_base_fee_a_numerator,
-    base_fee_a_denominator: pool_in_base_fee_a_denominator,
     base_fee_b_numerator: pool_in_base_fee_b_numerator,
-    base_fee_b_denominator: pool_in_base_fee_b_denominator,
-    profit_sharing_opt: pool_in_profit_sharing_opt,
+    fee_sharing_numerator_opt: pool_in_fee_sharing_numerator_opt,
     allow_dynamic_fee: pool_in_allow_dynamic_fee,
   } = pool_in_datum
   expect pool_out_datum: PoolDatum =
@@ -97,10 +95,8 @@ pub fn get_batching_pool(
     reserve_a: pool_out_datum_reserve_a,
     reserve_b: pool_out_datum_reserve_b,
     base_fee_a_numerator: pool_out_base_fee_a_numerator,
-    base_fee_a_denominator: pool_out_base_fee_a_denominator,
     base_fee_b_numerator: pool_out_base_fee_b_numerator,
-    base_fee_b_denominator: pool_out_base_fee_b_denominator,
-    profit_sharing_opt: pool_out_profit_sharing_opt,
+    fee_sharing_numerator_opt: pool_out_fee_sharing_numerator_opt,
     allow_dynamic_fee: pool_out_allow_dynamic_fee,
   } = pool_out_datum
 
@@ -117,10 +113,8 @@ pub fn get_batching_pool(
       pool_in_asset_a == pool_out_asset_a,
       pool_in_asset_b == pool_out_asset_b,
       pool_in_base_fee_a_numerator == pool_out_base_fee_a_numerator,
-      pool_in_base_fee_a_denominator == pool_out_base_fee_a_denominator,
       pool_in_base_fee_b_numerator == pool_out_base_fee_b_numerator,
-      pool_in_base_fee_b_denominator == pool_out_base_fee_b_denominator,
-      pool_in_profit_sharing_opt == pool_out_profit_sharing_opt,
+      pool_in_fee_sharing_numerator_opt == pool_out_fee_sharing_numerator_opt,
       pool_in_allow_dynamic_fee == pool_out_allow_dynamic_fee,
     }
   let Asset { policy_id: asset_a_policy_id, asset_name: asset_a_asset_name } =
@@ -180,17 +174,15 @@ pub fn get_batching_pool(
       remaining_liquidity_supply_out - remaining_liquidity_supply_in == pool_in_total_liquidity - pool_out_total_liquidity,
     }
 
-  let (trading_fee_a_numerator, trading_fee_a_denominator) =
-    get_trading_fee(
+  let trading_fee_a_numerator =
+    get_trading_fee_numerator(
       base_fee_num: pool_in_base_fee_a_numerator,
-      base_fee_den: pool_in_base_fee_a_denominator,
       vol_fee_opt: vol_fee,
       allow_dynamic_fee: pool_in_allow_dynamic_fee,
     )
-  let (trading_fee_b_numerator, trading_fee_b_denominator) =
-    get_trading_fee(
+  let trading_fee_b_numerator =
+    get_trading_fee_numerator(
       base_fee_num: pool_in_base_fee_b_numerator,
-      base_fee_den: pool_in_base_fee_b_denominator,
       vol_fee_opt: vol_fee,
       allow_dynamic_fee: pool_in_allow_dynamic_fee,
     )
@@ -199,10 +191,8 @@ pub fn get_batching_pool(
     asset_b: pool_in_asset_b,
     lp_asset,
     trading_fee_a_numerator,
-    trading_fee_a_denominator,
     trading_fee_b_numerator,
-    trading_fee_b_denominator,
-    profit_sharing: pool_in_profit_sharing_opt,
+    fee_sharing_numerator_opt: pool_in_fee_sharing_numerator_opt,
     pool_state_in: (
       pool_in_datum_reserve_a,
       pool_in_datum_reserve_b,
@@ -275,31 +265,21 @@ pub fn validate_update_pool_datum_or_stake_credential(
         reserve_a: pool_out_reserve_a,
         reserve_b: pool_out_reserve_b,
         base_fee_a_numerator: pool_out_base_fee_a_numerator,
-        base_fee_a_denominator: pool_out_base_fee_a_denominator,
         base_fee_b_numerator: pool_out_base_fee_b_numerator,
-        base_fee_b_denominator: pool_out_base_fee_b_denominator,
-        profit_sharing_opt: pool_out_profit_sharing_opt,
+        fee_sharing_numerator_opt: pool_out_fee_sharing_numerator_opt,
         ..
       } = pool_out_datum
-      // Profit Sharing can be on/off by setting profit_sharing_opt is None or Some. 
+      // Profit Sharing can be on/off by setting fee_sharing_numerator_opt is None or Some. 
       // Profit Sharing must be between **16.66%** and **50%**
       let is_valid_fee_sharing =
-        when pool_out_profit_sharing_opt is {
+        when pool_out_fee_sharing_numerator_opt is {
           None -> True
-          Some(pool_out_profit_sharing) -> {
-            let (
-              pool_out_fee_sharing_numerator,
-              pool_out_fee_sharing_denominator,
-            ) = pool_out_profit_sharing
+          Some(pool_out_fee_sharing_numerator) ->
             validate_fee_percent(
               fee_num: pool_out_fee_sharing_numerator,
-              fee_den: pool_out_fee_sharing_denominator,
               max_fee_num: utils.max_fee_sharing_numerator,
-              max_fee_den: utils.max_fee_sharing_denominator,
               min_fee_num: utils.min_fee_sharing_numerator,
-              min_fee_den: utils.min_fee_sharing_denominator,
             )
-          }
         }
       and {
         // Irrelevant fields on Pool Datum must be unchanged
@@ -314,19 +294,13 @@ pub fn validate_update_pool_datum_or_stake_credential(
         // Trading Fee must be between **0.05%** and **10%**
         validate_fee_percent(
           fee_num: pool_out_base_fee_a_numerator,
-          fee_den: pool_out_base_fee_a_denominator,
           max_fee_num: utils.max_base_fee_numerator,
-          max_fee_den: utils.max_base_fee_denominator,
           min_fee_num: utils.min_base_fee_numerator,
-          min_fee_den: utils.min_base_fee_denominator,
         ),
         validate_fee_percent(
           fee_num: pool_out_base_fee_b_numerator,
-          fee_den: pool_out_base_fee_b_denominator,
           max_fee_num: utils.max_base_fee_numerator,
-          max_fee_den: utils.max_base_fee_denominator,
           min_fee_num: utils.min_base_fee_numerator,
-          min_fee_den: utils.min_base_fee_denominator,
         ),
         is_valid_fee_sharing,
       }
@@ -338,18 +312,14 @@ pub fn validate_update_pool_datum_or_stake_credential(
 
 pub fn validate_fee_percent(
   fee_num: Int,
-  fee_den: Int,
   max_fee_num: Int,
-  max_fee_den: Int,
   min_fee_num: Int,
-  min_fee_den: Int,
 ) -> Bool {
   and {
-    fee_den > 0,
     // less than max
-    fee_num * max_fee_den <= fee_den * max_fee_num,
+    fee_num <= max_fee_num,
     // greater than min
-    fee_num * min_fee_den >= fee_den * min_fee_num,
+    fee_num >= min_fee_num,
   }
 }
 
@@ -458,105 +428,85 @@ fn get_single_pool_output(
   pool_output
 }
 
-pub fn get_trading_fee(
+pub fn get_trading_fee_numerator(
   base_fee_num: Int,
-  base_fee_den: Int,
-  vol_fee_opt: Option<(Int, Int)>,
+  vol_fee_opt: Option<Int>,
   allow_dynamic_fee: Bool,
-) -> (Int, Int) {
-  let (trading_fee_num, trading_fee_den) =
+) -> Int {
+  let trading_fee_num =
     if allow_dynamic_fee {
       when vol_fee_opt is {
-        None -> (base_fee_num, base_fee_den)
-        Some((vol_fee_num, vol_fee_den)) -> {
+        None -> base_fee_num
+        Some(vol_fee_num) -> {
           expect
             validate_fee_percent(
               fee_num: vol_fee_num,
-              fee_den: vol_fee_den,
               max_fee_num: utils.max_vol_fee_numerator,
-              max_fee_den: utils.max_vol_fee_denominator,
               min_fee_num: utils.min_vol_fee_numerator,
-              min_fee_den: utils.min_vol_fee_denominator,
             )
-          (
-            base_fee_num * vol_fee_den + base_fee_den * vol_fee_num,
-            base_fee_den * vol_fee_den,
-          )
+          vol_fee_num + base_fee_num
         }
       }
     } else {
-      (base_fee_num, base_fee_den)
+      base_fee_num
     }
 
   expect
     validate_fee_percent(
       fee_num: trading_fee_num,
-      fee_den: trading_fee_den,
       max_fee_num: utils.max_trading_fee_numerator,
-      max_fee_den: utils.max_trading_fee_denominator,
       min_fee_num: utils.min_trading_fee_numerator,
-      min_fee_den: utils.min_trading_fee_denominator,
     )
-  (trading_fee_num, trading_fee_den)
+  trading_fee_num
 }
 
-test test_get_trading_fee() {
+test test_get_trading_fee_numerator() {
   and {
-    get_trading_fee(
-      base_fee_num: 10,
-      base_fee_den: 100,
+    get_trading_fee_numerator(
+      base_fee_num: 1000,
       vol_fee_opt: None,
       allow_dynamic_fee: False,
-    ) == (10, 100),
-    get_trading_fee(
-      base_fee_num: 10,
-      base_fee_den: 100,
-      vol_fee_opt: Some((2, 100)),
+    ) == 1000,
+    get_trading_fee_numerator(
+      base_fee_num: 1000,
+      vol_fee_opt: Some(200),
       allow_dynamic_fee: False,
-    ) == (10, 100),
-    get_trading_fee(
-      base_fee_num: 8,
-      base_fee_den: 100,
-      vol_fee_opt: Some((2, 100)),
+    ) == 1000,
+    get_trading_fee_numerator(
+      base_fee_num: 800,
+      vol_fee_opt: Some(200),
       allow_dynamic_fee: True,
-    ) == (2 * 100 + 8 * 100, 10000),
-    get_trading_fee(
-      base_fee_num: 9,
-      base_fee_den: 100,
-      vol_fee_opt: Some((1, 100)),
+    ) == 1000,
+    get_trading_fee_numerator(
+      base_fee_num: 900,
+      vol_fee_opt: Some(100),
       allow_dynamic_fee: True,
-    ) == (1 * 100 + 9 * 100, 10000),
+    ) == 1000,
   }
 }
 
-test test_get_trading_fee_fail_1() fail {
-  let (bfn1, bfd1) = (9, 100)
-  get_trading_fee(
-    base_fee_num: bfn1,
-    base_fee_den: bfd1,
-    vol_fee_opt: Some((3, 100)),
+test test_get_trading_fee_numerator_fail_1() fail {
+  get_trading_fee_numerator(
+    base_fee_num: 900,
+    vol_fee_opt: Some(300),
     allow_dynamic_fee: True,
-  ) == (3 * 100 + 9 * 100, 10000)
+  ) == 1200
 }
 
-test test_get_trading_fee_fail_2() fail {
-  let (bfn1, bfd1) = (11, 100)
-  get_trading_fee(
-    base_fee_num: bfn1,
-    base_fee_den: bfd1,
-    vol_fee_opt: Some((2, 100)),
+test test_get_trading_fee_numerator_fail_2() fail {
+  get_trading_fee_numerator(
+    base_fee_num: 1100,
+    vol_fee_opt: Some(200),
     allow_dynamic_fee: True,
-  ) == (3 * 100 + 11 * 100, 10000)
+  ) == 1300
 }
 
-test test_get_trading_fee_fail_3() fail {
-  let (bfn1, bfd1) = (9, 100)
-  get_trading_fee(
-    base_fee_num: bfn1,
-    base_fee_den: bfd1,
-    vol_fee_opt: Some((2, 100)),
+test test_get_trading_fee_numerator_fail_3() fail {
+  get_trading_fee_numerator(
+    base_fee_num: 900,
+    vol_fee_opt: Some(200),
     allow_dynamic_fee: True,
-  ) == (2 * 100 + 9 * 100, 10000)
+  ) == 1100
 }
 
 pub fn has_single_spending(redeemers: Dict<ScriptPurpose, Redeemer>) -> Bool {

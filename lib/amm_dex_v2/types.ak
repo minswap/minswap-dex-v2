@@ -34,10 +34,8 @@ pub type PoolDatum {
   reserve_a: Int,
   reserve_b: Int,
   base_fee_a_numerator: Int,
-  base_fee_a_denominator: Int,
   base_fee_b_numerator: Int,
-  base_fee_b_denominator: Int,
-  profit_sharing_opt: Option<ProfitSharing>,
+  fee_sharing_numerator_opt: Option<Int>,
   allow_dynamic_fee: Bool,
 }
 
@@ -59,7 +57,7 @@ pub type PoolBatchingRedeemer {
   orders_fee: List<Int>,
   input_indexes: List<Int>,
   pool_input_indexes_opt: Option<List<Int>>,
-  vol_fees: List<Option<(Int, Int)>>,
+  vol_fees: List<Option<Int>>,
 }
 
 pub type SwapRouting {
@@ -275,10 +273,8 @@ pub type BatchingPool {
   asset_b: Asset,
   lp_asset: Asset,
   trading_fee_a_numerator: Int,
-  trading_fee_a_denominator: Int,
   trading_fee_b_numerator: Int,
-  trading_fee_b_denominator: Int,
-  profit_sharing: Option<(Int, Int)>,
+  fee_sharing_numerator_opt: Option<Int>,
   pool_state_in: PoolState,
   pool_state_out: PoolState,
 }

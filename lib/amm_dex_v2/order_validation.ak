@@ -39,10 +39,8 @@ fn validate_swap_exact_in(
   asset_b: Asset,
   used_batcher_fee: Int,
   trading_fee_a_numerator: Int,
-  trading_fee_a_denominator: Int,
   trading_fee_b_numerator: Int,
-  trading_fee_b_denominator: Int,
-  profit_sharing_opt: Option<(Int, Int)>,
+  fee_sharing_numerator_opt: Option<Int>,
   pool_state: PoolState,
   kill_on_failed: Bool,
   is_slippage_satisfied: fn(Int) -> Bool,
@@ -54,14 +52,7 @@ fn validate_swap_exact_in(
     value_reserve_b,
     total_liquidity,
   ) = pool_state
-  let (
-    asset_in,
-    asset_out,
-    reserve_in,
-    reserve_out,
-    trading_fee_numerator,
-    trading_fee_denominator,
-  ) =
+  let (asset_in, asset_out, reserve_in, reserve_out, trading_fee_numerator) =
     if a_to_b_direction {
       (
         asset_a,
@@ -69,7 +60,6 @@ fn validate_swap_exact_in(
         datum_reserve_a,
         datum_reserve_b,
         trading_fee_a_numerator,
-        trading_fee_a_denominator,
       )
     } else {
       (
@@ -78,7 +68,6 @@ fn validate_swap_exact_in(
         datum_reserve_b,
         datum_reserve_a,
         trading_fee_b_numerator,
-        trading_fee_b_denominator,
       )
     }
   let Asset { policy_id: asset_in_policy_id, asset_name: asset_in_asset_name } =
@@ -108,14 +97,12 @@ fn validate_swap_exact_in(
       reserve_out: reserve_out,
       amount_in: swap_amount,
       trading_fee_numerator: trading_fee_numerator,
-      trading_fee_denominator: trading_fee_denominator,
     )
   let earned_fee_in =
     math.calculate_earned_fee_in(
       amount_in: swap_amount,
       trading_fee_numerator: trading_fee_numerator,
-      trading_fee_denominator: trading_fee_denominator,
-      fee_sharing_opt: profit_sharing_opt,
+      fee_sharing_numerator_opt: fee_sharing_numerator_opt,
     )
   let slippage_satisfied = is_slippage_satisfied(amount_out)
   if slippage_satisfied {
@@ -179,10 +166,8 @@ fn validate_swap_exact_out(
   asset_b: Asset,
   used_batcher_fee: Int,
   trading_fee_a_numerator: Int,
-  trading_fee_a_denominator: Int,
   trading_fee_b_numerator: Int,
-  trading_fee_b_denominator: Int,
-  profit_sharing_opt: Option<(Int, Int)>,
+  fee_sharing_numerator_opt: Option<Int>,
   kill_on_failed: Bool,
   pool_state: PoolState,
 ) -> PoolState {
@@ -193,14 +178,7 @@ fn validate_swap_exact_out(
     value_reserve_b,
     total_liquidity,
   ) = pool_state
-  let (
-    asset_in,
-    asset_out,
-    reserve_in,
-    reserve_out,
-    trading_fee_numerator,
-    trading_fee_denominator,
-  ) =
+  let (asset_in, asset_out, reserve_in, reserve_out, trading_fee_numerator) =
     if a_to_b_direction {
       (
         asset_a,
@@ -208,7 +186,6 @@ fn validate_swap_exact_out(
         datum_reserve_a,
         datum_reserve_b,
         trading_fee_a_numerator,
-        trading_fee_a_denominator,
       )
     } else {
       (
@@ -217,7 +194,6 @@ fn validate_swap_exact_out(
         datum_reserve_b,
         datum_reserve_a,
         trading_fee_b_numerator,
-        trading_fee_b_denominator,
       )
     }
   let Asset { policy_id: asset_in_policy_id, asset_name: asset_in_asset_name } =
@@ -230,14 +206,12 @@ fn validate_swap_exact_out(
       reserve_out,
       expected_receive,
       trading_fee_numerator,
-      trading_fee_denominator,
     )
   let earned_fee_in =
     math.calculate_earned_fee_in(
       amount_in: necessary_amount_in,
       trading_fee_numerator: trading_fee_numerator,
-      trading_fee_denominator: trading_fee_denominator,
-      fee_sharing_opt: profit_sharing_opt,
+      fee_sharing_numerator_opt: fee_sharing_numerator_opt,
     )
   let maximum_swap_amount =
     when maximum_swap_amount_option is {
@@ -315,11 +289,9 @@ fn validate_deposit(
   asset_b: Asset,
   lp_asset: Asset,
   used_batcher_fee: Int,
-  profit_sharing_opt: Option<(Int, Int)>,
+  fee_sharing_numerator_opt: Option<Int>,
   trading_fee_a_numerator: Int,
-  trading_fee_a_denominator: Int,
   trading_fee_b_numerator: Int,
-  trading_fee_b_denominator: Int,
   kill_on_failed: Bool,
   pool_state: PoolState,
 ) -> PoolState {
@@ -377,10 +349,8 @@ fn validate_deposit(
       reserve_b: datum_reserve_b,
       total_liquidity: total_liquidity,
       trading_fee_a_numerator: trading_fee_a_numerator,
-      trading_fee_a_denominator: trading_fee_a_denominator,
       trading_fee_b_numerator: trading_fee_b_numerator,
-      trading_fee_b_denominator: trading_fee_b_denominator,
-      profit_sharing_opt: profit_sharing_opt,
+      fee_sharing_numerator_opt: fee_sharing_numerator_opt,
     )
   let slippage_satisfied = lp_amount >= minimum_lp
   if slippage_satisfied {
@@ -525,11 +495,9 @@ fn validate_zap_out(
   asset_b: Asset,
   lp_asset: Asset,
   used_batcher_fee: Int,
-  profit_sharing_opt: Option<(Int, Int)>,
+  fee_sharing_numerator_opt: Option<Int>,
   trading_fee_a_numerator: Int,
-  trading_fee_a_denominator: Int,
   trading_fee_b_numerator: Int,
-  trading_fee_b_denominator: Int,
   kill_on_failed: Bool,
   pool_state: PoolState,
 ) -> PoolState {
@@ -569,10 +537,8 @@ fn validate_zap_out(
       total_liquidity: total_liquidity,
       a_to_b_direction: a_to_b_direction,
       trading_fee_a_numerator: trading_fee_a_numerator,
-      trading_fee_a_denominator: trading_fee_a_denominator,
       trading_fee_b_numerator: trading_fee_b_numerator,
-      trading_fee_b_denominator: trading_fee_b_denominator,
-      profit_sharing_opt: profit_sharing_opt,
+      fee_sharing_numerator_opt: fee_sharing_numerator_opt,
     )
   let slippage_satisfied = amount_out >= minimum_receive
   if slippage_satisfied {
@@ -635,10 +601,8 @@ fn validate_partial_swap(
   asset_b: Asset,
   used_batcher_fee: Int,
   trading_fee_a_numerator: Int,
-  trading_fee_a_denominator: Int,
   trading_fee_b_numerator: Int,
-  trading_fee_b_denominator: Int,
-  profit_sharing_opt: Option<(Int, Int)>,
+  fee_sharing_numerator_opt: Option<Int>,
   pool_state: PoolState,
 ) -> (Int, Int, Int, Int, Int, Int, Bool) {
   let (
@@ -648,14 +612,7 @@ fn validate_partial_swap(
     value_reserve_b,
     total_liquidity,
   ) = pool_state
-  let (
-    asset_in,
-    asset_out,
-    reserve_in,
-    reserve_out,
-    trading_fee_numerator,
-    trading_fee_denominator,
-  ) =
+  let (asset_in, asset_out, reserve_in, reserve_out, trading_fee_numerator) =
     if a_to_b_direction {
       (
         asset_a,
@@ -663,7 +620,6 @@ fn validate_partial_swap(
         datum_reserve_a,
         datum_reserve_b,
         trading_fee_a_numerator,
-        trading_fee_a_denominator,
       )
     } else {
       (
@@ -672,7 +628,6 @@ fn validate_partial_swap(
         datum_reserve_b,
         datum_reserve_a,
         trading_fee_b_numerator,
-        trading_fee_b_denominator,
       )
     }
   let Asset { policy_id: asset_in_policy_id, asset_name: asset_in_asset_name } =
@@ -684,7 +639,6 @@ fn validate_partial_swap(
       reserve_in: reserve_in,
       reserve_out: reserve_out,
       trading_fee_numerator: trading_fee_numerator,
-      trading_fee_denominator: trading_fee_denominator,
       io_ratio_numerator: io_ratio_numerator,
       io_ratio_denominator: io_ratio_denominator,
     )
@@ -701,14 +655,12 @@ fn validate_partial_swap(
       reserve_out: reserve_out,
       amount_in: swapable_amount_in,
       trading_fee_numerator: trading_fee_numerator,
-      trading_fee_denominator: trading_fee_denominator,
     )
   let earned_fee_in =
     math.calculate_earned_fee_in(
       amount_in: swapable_amount_in,
       trading_fee_numerator: trading_fee_numerator,
-      trading_fee_denominator: trading_fee_denominator,
-      fee_sharing_opt: profit_sharing_opt,
+      fee_sharing_numerator_opt: fee_sharing_numerator_opt,
     )
   let expect_order_value_out =
     order_in_value
@@ -761,10 +713,8 @@ fn validate_withdraw_imbalance(
   lp_asset: Asset,
   used_batcher_fee: Int,
   trading_fee_a_numerator: Int,
-  trading_fee_a_denominator: Int,
   trading_fee_b_numerator: Int,
-  trading_fee_b_denominator: Int,
-  profit_sharing_opt: Option<(Int, Int)>,
+  fee_sharing_numerator_opt: Option<Int>,
   kill_on_failed: Bool,
   pool_state: PoolState,
 ) -> PoolState {
@@ -798,12 +748,10 @@ fn validate_withdraw_imbalance(
       reserve_a: datum_reserve_a,
       reserve_b: datum_reserve_b,
       trading_fee_a_numerator: trading_fee_a_numerator,
-      trading_fee_a_denominator: trading_fee_a_denominator,
       trading_fee_b_numerator: trading_fee_b_numerator,
-      trading_fee_b_denominator: trading_fee_b_denominator,
       withdrawal_lp_amount: withdrawal_lp_amount,
       total_liquidity: total_liquidity,
-      profit_sharing_opt: profit_sharing_opt,
+      fee_sharing_numerator_opt: fee_sharing_numerator_opt,
     )
   let slippage_satisfied = amount_a_out >= minimum_amount_a
   if slippage_satisfied {
@@ -897,10 +845,8 @@ fn get_multi_routing_swap_amount_out(
     pool_state_out,
     lp_asset: pool_lp_asset,
     trading_fee_a_numerator,
-    trading_fee_a_denominator,
     trading_fee_b_numerator,
-    trading_fee_b_denominator,
-    profit_sharing,
+    fee_sharing_numerator_opt,
     ..
   } = pool
   let (
@@ -919,21 +865,11 @@ fn get_multi_routing_swap_amount_out(
   ) = pool_state_out
   let SwapRouting { lp_asset: routing_lp_asset, a_to_b_direction } = routing
   expect pool_lp_asset == routing_lp_asset
-  let (reserve_in, reserve_out, trading_fee_numerator, trading_fee_denominator) =
+  let (reserve_in, reserve_out, trading_fee_numerator) =
     if a_to_b_direction {
-      (
-        old_datum_reserve_a,
-        old_datum_reserve_b,
-        trading_fee_a_numerator,
-        trading_fee_a_denominator,
-      )
+      (old_datum_reserve_a, old_datum_reserve_b, trading_fee_a_numerator)
     } else {
-      (
-        old_datum_reserve_b,
-        old_datum_reserve_a,
-        trading_fee_b_numerator,
-        trading_fee_b_denominator,
-      )
+      (old_datum_reserve_b, old_datum_reserve_a, trading_fee_b_numerator)
     }
 
   expect amount_in > 0
@@ -943,14 +879,12 @@ fn get_multi_routing_swap_amount_out(
       reserve_out: reserve_out,
       amount_in: amount_in,
       trading_fee_numerator: trading_fee_numerator,
-      trading_fee_denominator: trading_fee_denominator,
     )
   let earned_fee_in =
     math.calculate_earned_fee_in(
       amount_in: amount_in,
       trading_fee_numerator: trading_fee_numerator,
-      trading_fee_denominator: trading_fee_denominator,
-      fee_sharing_opt: profit_sharing,
+      fee_sharing_numerator_opt: fee_sharing_numerator_opt,
     )
   expect amount_out > 0
   expect
@@ -1135,10 +1069,8 @@ pub fn apply_orders(
   asset_b: Asset,
   lp_asset: Asset,
   trading_fee_a_numerator: Int,
-  trading_fee_a_denominator: Int,
   trading_fee_b_numerator: Int,
-  trading_fee_b_denominator: Int,
-  profit_sharing_opt: Option<(Int, Int)>,
+  fee_sharing_numerator_opt: Option<Int>,
   end_valid_time_range: Int,
   order_inputs: List<Input>,
   order_outputs: List<Output>,
@@ -1209,10 +1141,8 @@ pub fn apply_orders(
             asset_b: asset_b,
             used_batcher_fee: used_batcher_fee,
             trading_fee_a_numerator: trading_fee_a_numerator,
-            trading_fee_a_denominator: trading_fee_a_denominator,
             trading_fee_b_numerator: trading_fee_b_numerator,
-            trading_fee_b_denominator: trading_fee_b_denominator,
-            profit_sharing_opt: profit_sharing_opt,
+            fee_sharing_numerator_opt: fee_sharing_numerator_opt,
             pool_state: pool_state,
             kill_on_failed: order_killable,
             is_slippage_satisfied: fn(amount_out) {
@@ -1239,10 +1169,8 @@ pub fn apply_orders(
             asset_b: asset_b,
             used_batcher_fee: used_batcher_fee,
             trading_fee_a_numerator: trading_fee_a_numerator,
-            trading_fee_a_denominator: trading_fee_a_denominator,
             trading_fee_b_numerator: trading_fee_b_numerator,
-            trading_fee_b_denominator: trading_fee_b_denominator,
-            profit_sharing_opt: profit_sharing_opt,
+            fee_sharing_numerator_opt: fee_sharing_numerator_opt,
             pool_state: pool_state,
             kill_on_failed: False,
             is_slippage_satisfied: fn(amount_out) {
@@ -1277,10 +1205,8 @@ pub fn apply_orders(
             asset_b: asset_b,
             used_batcher_fee: used_batcher_fee,
             trading_fee_a_numerator: trading_fee_a_numerator,
-            trading_fee_a_denominator: trading_fee_a_denominator,
             trading_fee_b_numerator: trading_fee_b_numerator,
-            trading_fee_b_denominator: trading_fee_b_denominator,
-            profit_sharing_opt: profit_sharing_opt,
+            fee_sharing_numerator_opt: fee_sharing_numerator_opt,
             pool_state: pool_state,
             kill_on_failed: False,
             is_slippage_satisfied: fn(amount_out) {
@@ -1313,10 +1239,8 @@ pub fn apply_orders(
             asset_b: asset_b,
             used_batcher_fee: used_batcher_fee,
             trading_fee_a_numerator: trading_fee_a_numerator,
-            trading_fee_a_denominator: trading_fee_a_denominator,
             trading_fee_b_numerator: trading_fee_b_numerator,
-            trading_fee_b_denominator: trading_fee_b_denominator,
-            profit_sharing_opt: profit_sharing_opt,
+            fee_sharing_numerator_opt: fee_sharing_numerator_opt,
             kill_on_failed: order_killable,
             pool_state: pool_state,
           ),
@@ -1340,11 +1264,9 @@ pub fn apply_orders(
             asset_b: asset_b,
             lp_asset: lp_asset,
             used_batcher_fee: used_batcher_fee,
-            profit_sharing_opt: profit_sharing_opt,
+            fee_sharing_numerator_opt: fee_sharing_numerator_opt,
             trading_fee_a_numerator: trading_fee_a_numerator,
-            trading_fee_a_denominator: trading_fee_a_denominator,
             trading_fee_b_numerator: trading_fee_b_numerator,
-            trading_fee_b_denominator: trading_fee_b_denominator,
             kill_on_failed: order_killable,
             pool_state: pool_state,
           ),
@@ -1406,11 +1328,9 @@ pub fn apply_orders(
             asset_b: asset_b,
             lp_asset: lp_asset,
             used_batcher_fee: used_batcher_fee,
-            profit_sharing_opt: profit_sharing_opt,
+            fee_sharing_numerator_opt: fee_sharing_numerator_opt,
             trading_fee_a_numerator: trading_fee_a_numerator,
-            trading_fee_a_denominator: trading_fee_a_denominator,
             trading_fee_b_numerator: trading_fee_b_numerator,
-            trading_fee_b_denominator: trading_fee_b_denominator,
             kill_on_failed: order_killable,
             pool_state: pool_state,
           ),
@@ -1458,10 +1378,8 @@ pub fn apply_orders(
             asset_b: asset_b,
             used_batcher_fee: used_batcher_fee,
             trading_fee_a_numerator: trading_fee_a_numerator,
-            trading_fee_a_denominator: trading_fee_a_denominator,
             trading_fee_b_numerator: trading_fee_b_numerator,
-            trading_fee_b_denominator: trading_fee_b_denominator,
-            profit_sharing_opt: profit_sharing_opt,
+            fee_sharing_numerator_opt: fee_sharing_numerator_opt,
             pool_state: pool_state,
           )
         expect
@@ -1545,10 +1463,8 @@ pub fn apply_orders(
             lp_asset: lp_asset,
             used_batcher_fee: used_batcher_fee,
             trading_fee_a_numerator: trading_fee_a_numerator,
-            trading_fee_a_denominator: trading_fee_a_denominator,
             trading_fee_b_numerator: trading_fee_b_numerator,
-            trading_fee_b_denominator: trading_fee_b_denominator,
-            profit_sharing_opt: profit_sharing_opt,
+            fee_sharing_numerator_opt: fee_sharing_numerator_opt,
             kill_on_failed: order_killable,
             pool_state: pool_state,
           ),
@@ -1584,10 +1500,8 @@ pub fn apply_orders(
         asset_b: asset_b,
         lp_asset: lp_asset,
         trading_fee_a_numerator: trading_fee_a_numerator,
-        trading_fee_a_denominator: trading_fee_a_denominator,
         trading_fee_b_numerator: trading_fee_b_numerator,
-        trading_fee_b_denominator: trading_fee_b_denominator,
-        profit_sharing_opt: profit_sharing_opt,
+        fee_sharing_numerator_opt: fee_sharing_numerator_opt,
         end_valid_time_range: end_valid_time_range,
         order_inputs: rest_inputs,
         order_outputs: rest_outs,

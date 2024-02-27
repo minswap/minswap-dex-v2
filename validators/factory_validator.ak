@@ -168,10 +168,8 @@ validator(
       reserve_a: pool_datum_reserve_a,
       reserve_b: pool_datum_reserve_b,
       base_fee_a_numerator: pool_datum_base_fee_a_numerator,
-      base_fee_a_denominator: pool_datum_base_fee_a_denominator,
       base_fee_b_numerator: pool_datum_base_fee_b_numerator,
-      base_fee_b_denominator: pool_datum_base_fee_b_denominator,
-      profit_sharing_opt: pool_datum_profit_sharing_opt,
+      fee_sharing_numerator_opt: pool_datum_fee_sharing_numerator_opt,
       allow_dynamic_fee: pool_allow_dynamic_fee,
     } = pool_out_datum
     let estimated_amount_a =
@@ -202,19 +200,11 @@ validator(
         |> value.add(asset_b_policy_id, asset_b_asset_name, amount_b)
         |> value.add(authen_policy_id, lp_asset_name, remaining_liquidity)
         |> value.add(authen_policy_id, utils.pool_auth_asset_name, 1)
-    expect and {
-        pool_datum_base_fee_a_numerator == pool_datum_base_fee_b_numerator,
-        pool_datum_base_fee_a_denominator == pool_datum_base_fee_b_denominator,
-      }
+    expect pool_datum_base_fee_a_numerator == pool_datum_base_fee_b_numerator
     let stardard_fees =
-      [(5, 10000), (3, 1000), (1, 100)]
+      [5, 30, 100]
     let is_valid_trading_fee =
-      if
-      list.has(
-        stardard_fees,
-        (pool_datum_base_fee_a_numerator, pool_datum_base_fee_a_denominator),
-      ){
-      
+      if list.has(stardard_fees, pool_datum_base_fee_a_numerator) {
         True
       } else {
         and {
@@ -227,11 +217,8 @@ validator(
           ),
           pool_validation.validate_fee_percent(
             fee_num: pool_datum_base_fee_a_numerator,
-            fee_den: pool_datum_base_fee_a_denominator,
             max_fee_num: utils.max_base_fee_numerator,
-            max_fee_den: utils.max_base_fee_denominator,
             min_fee_num: utils.min_base_fee_numerator,
-            min_fee_den: utils.min_base_fee_denominator,
           ),
         }
       }
@@ -254,8 +241,8 @@ validator(
       is_valid_trading_fee,
       // Dynamic Fee is not allowed in Pool Creation 
       pool_allow_dynamic_fee == False,
-      // profit_sharing must be empty
-      pool_datum_profit_sharing_opt == None,
+      // fee_sharing_numerator_opt must be empty
+      pool_datum_fee_sharing_numerator_opt == None,
       // Transaction must mint necessary assets
       value.from_minted_value(mint) == pool_validation.get_pool_creation_expected_mint(
         authen_policy_id: authen_policy_id,

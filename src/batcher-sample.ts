@@ -18,6 +18,8 @@ const DEFAULT_BATCHER_FEE = 2_000000n;
 const DEFAULT_DEPOSIT_ADA = 2_000000n;
 const DEFAULT_INIT_POOL_ADA = 3_000000n;
 
+const DEFAULT_FEE_DENOMINATOR = 10000n;
+
 function computeLPAssetName(assetA: Asset, assetB: Asset): string {
   const k1 = sha3(assetA.policyId + assetA.tokenName);
   const k2 = sha3(assetB.policyId + assetB.tokenName);
@@ -33,13 +35,12 @@ function calculateAmountOut({
   reserveIn: bigint;
   reserveOut: bigint;
   amountIn: bigint;
-  tradingFee: [bigint, bigint];
+  tradingFee: bigint;
 }): bigint {
-  const [tradingFeeNumerator, tradingFeeDenominator] = tradingFee;
-  const diff = tradingFeeDenominator - tradingFeeNumerator;
+  const diff = DEFAULT_FEE_DENOMINATOR - tradingFee;
   const inWithFee = diff * amountIn;
   const numerator = inWithFee * reserveOut;
-  const denominator = tradingFeeDenominator * reserveIn + inWithFee;
+  const denominator = DEFAULT_FEE_DENOMINATOR * reserveIn + inWithFee;
   return numerator / denominator;
 }
 
@@ -49,20 +50,18 @@ function calculateEarnedFeeIn({
   feeSharing,
 }: {
   amountIn: bigint;
-  tradingFee: [bigint, bigint];
-  feeSharing?: [bigint, bigint];
+  tradingFee: bigint;
+  feeSharing?: bigint;
 }): {
   lpFee: bigint;
   feeShare: bigint;
 } {
-  const [tradingFeeNumerator, tradingFeeDenominator] = tradingFee;
-  const lpFee = (amountIn * tradingFeeNumerator) / tradingFeeDenominator;
+  const lpFee = (amountIn * tradingFee) / DEFAULT_FEE_DENOMINATOR;
   let feeShare = 0n;
   if (feeSharing) {
-    const [feeSharingNumerator, feeSharingDenominator] = feeSharing;
     feeShare =
-      (amountIn * tradingFeeNumerator * feeSharingNumerator) /
-      (tradingFeeDenominator * feeSharingDenominator);
+      (amountIn * tradingFee * feeSharing) /
+      (DEFAULT_FEE_DENOMINATOR * DEFAULT_FEE_DENOMINATOR);
   }
 
   return {
@@ -84,7 +83,7 @@ function calculateSwapExactIn({
   tradingFee: PoolBaseFee;
   amountIn: bigint;
   direction: OrderDirection;
-  feeSharing?: [bigint, bigint];
+  feeSharing?: bigint;
 }): {
   newDatumReserves: [bigint, bigint];
   newValueReserves: [bigint, bigint];
@@ -94,8 +93,8 @@ function calculateSwapExactIn({
   const [valueReserveA, valueReserveB] = [...valueReserves];
   const [reserveIn, reserveOut, tradingFeeIn] =
     direction === OrderDirection.A_TO_B
-      ? [datumReserveA, datumReserveB, tradingFee.feeA]
-      : [datumReserveB, datumReserveA, tradingFee.feeB];
+      ? [datumReserveA, datumReserveB, tradingFee.feeANumerator]
+      : [datumReserveB, datumReserveA, tradingFee.feeBNumerator];
   const amountOut = calculateAmountOut({
     amountIn: amountIn,
     reserveIn: reserveIn,
@@ -312,10 +311,10 @@ async function main(): Promise<void> {
     totalLiquidity: totalLiquidity,
     reserveA: 27_877_961_987941n,
     reserveB: 414_804_973_691450n,
-    profitSharing: undefined,
+    feeSharingNumerator: undefined,
     baseFee: {
-      feeA: [3n, 1000n],
-      feeB: [1n, 100n],
+      feeANumerator: 30n,
+      feeBNumerator: 100n,
     },
     allowDynamicFee: false,
   };
@@ -393,7 +392,7 @@ async function main(): Promise<void> {
         tradingFee: poolDatum.baseFee,
         amountIn: swapAmount,
         direction: swapDirection,
-        feeSharing: poolDatum.profitSharing,
+        feeSharing: poolDatum.feeSharingNumerator,
       });
     tempDatumReserves = newDatumReserves;
     tempValueReserves = newValueReserves;

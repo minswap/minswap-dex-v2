@@ -30,49 +30,35 @@ pub const maximum_deadline_range = 77760000000
 
 pub const default_burn_liquidity = 10
 
+pub const default_fee_denominator = 10000
+
 // Base Fee constraint
 // Max 10%
-pub const max_base_fee_numerator = 1
-
-pub const max_base_fee_denominator = 10
+pub const max_base_fee_numerator = 1000
 
 // Min 0.05%
 pub const min_base_fee_numerator = 5
 
-pub const min_base_fee_denominator = 10000
-
 // Vol Fee constraint
 // Max 2%
-pub const max_vol_fee_numerator = 2
-
-pub const max_vol_fee_denominator = 100
+pub const max_vol_fee_numerator = 200
 
 // Min 0%
 pub const min_vol_fee_numerator = 0
 
-pub const min_vol_fee_denominator = 1
-
 // Trading Fee constraint
 // Max 10%
-pub const max_trading_fee_numerator = 1
-
-pub const max_trading_fee_denominator = 10
+pub const max_trading_fee_numerator = 1000
 
 // Min 0.05%
 pub const min_trading_fee_numerator = 5
 
-pub const min_trading_fee_denominator = 10000
-
 // Fee Sharing constraint
 // Max 50%
-pub const max_fee_sharing_numerator = 1
-
-pub const max_fee_sharing_denominator = 2
+pub const max_fee_sharing_numerator = 5000
 
 // Min 16.66%
-pub const min_fee_sharing_numerator = 1
-
-pub const min_fee_sharing_denominator = 6
+pub const min_fee_sharing_numerator = 1666
 
 pub fn sorted_asset(asset_a: Asset, asset_b: Asset) -> Bool {
   let Asset { policy_id: asset_a_policy_id, asset_name: asset_a_asset_name } =
