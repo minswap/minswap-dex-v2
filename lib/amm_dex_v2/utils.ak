@@ -28,6 +28,8 @@ pub const admin_policy_id =
 // Maximum expiration time of Batcher license from now (to prevent minting infinity license)
 pub const maximum_deadline_range = 77760000000
 
+pub const default_burn_liquidity = 10
+
 // Base Fee constraint
 // Max 10%
 pub const max_base_fee_numerator = 1
