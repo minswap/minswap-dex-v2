@@ -147,6 +147,7 @@ There are 10 order types:
    - _routings_: The routings (including a list of _direction_ and _lp_asset_), which is defined Liquidity Pools the swap is routing through
    - _swap_amount_option_: Amount of Asset In which users want to exchange, [References](../lib/amm_dex_v2/types.ak#L72)
    - _minimum_receive_: Minimum amount of Asset Out which users want to receive after exchanging
+ - **Donation**: is utilized for the purpose of contributing assets from the pool to charitable causes or designated recipients, allowing users to make philanthropic contributions using the resources within the pool.
 
 
 An Order Datum keeps information about Order Type and some other informations:
@@ -637,6 +638,11 @@ Transaction structure:
            - Value:
              - _batcher_fee_ + additional ADA to cover output (if need)
              - Token is swapping
+         -  _Donation_:
+              - Step: Nothing
+              - Value:
+                - _batcher_fee_
+                - Token A and Token B
    - Change UTxOs
 
 
@@ -755,6 +761,7 @@ Transaction structure:
            - Value:
              - _batcher_fee_ * (_hops_ - 1) + change in ADA
              - remaining swapping Token and received Token
+       - Donation: No Output
    - Batcher Change UTxOs
 
  - Withdrawal: 
