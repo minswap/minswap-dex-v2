@@ -203,7 +203,6 @@ validator(
     expect and {
         // User Inputs and Input Indexes must have the same length
         builtin.length_of_bytearray(input_indexes) == list.length(user_inputs),
-        // utils.compare_list_length(input_indexes, user_inputs),
         // Pool Inputs & Outputs must have the same length
         utils.compare_list_length(pool_inputs, pool_outputs),
       }
