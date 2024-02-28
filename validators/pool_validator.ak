@@ -1,4 +1,5 @@
 use aiken/builtin
+use aiken/bytearray
 use aiken/dict
 use aiken/list
 use aiken/transaction.{
@@ -140,9 +141,9 @@ validator(
       )
     expect and {
         // Input indexes must not be empty list
-        !builtin.null_list(input_indexes),
+        builtin.length_of_bytearray(input_indexes) > 0,
         // Input indexes must be unique
-        utils.is_list_unique(input_indexes),
+        utils.is_unique_bytearray_unsorted(input_indexes),
         // validate Transaction won't mint any assets
         value.is_zero(value.from_minted_value(mint)),
       }
@@ -181,7 +182,7 @@ validator(
     // on the off-chain and on-chain will sort the TxIns by the indexes
     // Input Indexes in parameter will be reversed indexs of @order_inputs to reduce calculate step in On-Chain
     let sorted_user_inputs =
-      list.foldl(
+      bytearray.foldl(
         input_indexes,
         [],
         fn(idx, ips) { list.push(ips, utils.list_at_index(user_inputs, idx)) },
@@ -201,7 +202,8 @@ validator(
 
     expect and {
         // User Inputs and Input Indexes must have the same length
-        utils.compare_list_length(input_indexes, user_inputs),
+        builtin.length_of_bytearray(input_indexes) == list.length(user_inputs),
+        // utils.compare_list_length(input_indexes, user_inputs),
         // Pool Inputs & Outputs must have the same length
         utils.compare_list_length(pool_inputs, pool_outputs),
       }

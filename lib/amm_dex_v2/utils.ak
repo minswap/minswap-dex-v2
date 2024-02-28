@@ -348,3 +348,173 @@ pub fn is_list_unique(list: List<a>) -> Bool {
     [x, ..xs] -> !contains_element(xs, x) && is_list_unique(xs)
   }
 }
+
+fn do_is_unique_bytearray_unsorted(
+  self: ByteArray,
+  acc: ByteArray,
+  index: Int,
+  length: Int,
+) {
+  if index >= length {
+    True
+  } else {
+    let value_as_index = builtin.index_bytearray(self, index)
+    let acc_value = builtin.index_bytearray(acc, value_as_index)
+    if acc_value == 1 {
+      fail
+    } else {
+      let left_slice = builtin.slice_bytearray(0, value_as_index, acc)
+      let righ_slice = builtin.slice_bytearray(value_as_index + 1, 64, acc)
+      let new_acc =
+        builtin.append_bytearray(
+          left_slice,
+          builtin.cons_bytearray(1, righ_slice),
+        )
+      do_is_unique_bytearray_unsorted(self, new_acc, index + 1, length)
+    }
+  }
+}
+
+pub fn is_unique_bytearray_unsorted(array: ByteArray) {
+  let empty =
+    #[0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+    ]
+  let length = builtin.length_of_bytearray(array)
+  do_is_unique_bytearray_unsorted(array, empty, 0, length)
+}
+
+test unique_bytearray_unsorted() {
+  let array = #[1, 2, 3, 4, 2]
+  let empty =
+    #[0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+    ]
+  let length = builtin.length_of_bytearray(array)
+  let u = do_is_unique_bytearray_unsorted(array, empty, 0, length)
+  u == False
+}

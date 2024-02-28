@@ -1,4 +1,4 @@
-import { Assets, Constr, Data, fromText, Lucid, UTxO } from "lucid-cardano";
+import { Assets, Constr, Data, fromText, Lucid, toHex, UTxO } from "lucid-cardano";
 
 import { sha3 } from "./hash";
 import { EmulatorProvider } from "./provider";
@@ -133,21 +133,21 @@ function calculateSwapExactIn({
   };
 }
 
-function calculateOrderIndexes(txIns: TxIn[]): bigint[] {
+function calculateOrderIndexes(txIns: TxIn[]): Uint8Array {
   // first, we need to sort order by TxID and TxIndex
   const tempTxIns = [...txIns];
   tempTxIns.sort((a, b) => TxIn.compare(a, b));
   // then, we loop the original orders backwards and add the indexes to resulting array
-  const ret: bigint[] = [];
+  const ret: number[] = [];
   for (let i = txIns.length - 1; i >= 0; i--) {
     for (let j = 0; j < tempTxIns.length; j++) {
       if (TxIn.compare(txIns[i], tempTxIns[j]) === 0) {
-        ret.push(BigInt(j));
+        ret.push(j);
         break;
       }
     }
   }
-  return ret;
+  return new Uint8Array(ret);
 }
 
 async function buildBatchTx({
@@ -235,7 +235,7 @@ async function buildBatchTx({
   const poolBatchingRedeemer = new Constr(0, [
     BigInt(licenseIndex),
     orders.map((_) => DEFAULT_BATCHER_FEE),
-    inputIndexes,
+    toHex(inputIndexes),
     new Constr(1, []),
     [new Constr(1, [])],
   ]);
@@ -376,7 +376,7 @@ async function main(): Promise<void> {
 
   let tempDatumReserves: [bigint, bigint] = [amountA, amountB];
   let tempValueReserves: [bigint, bigint] = [amountA, amountB];
-  for (let i = 0; i < 27; i++) {
+  for (let i = 0; i < 32; i++) {
     const orderIn: UTxO = {
       txHash:
         "5573777bedba6bb5f56541681256158dcf8ebfbc9e7251277d25b118517dce10",
