@@ -140,9 +140,7 @@ validator(
         validity_range: validity_range,
       )
     expect and {
-        // Input indexes must not be empty list
-        builtin.length_of_bytearray(input_indexes) > 0,
-        // Input indexes must be unique
+        // Input indexes must not be empty list and be unique
         utils.is_unique_bytearray_unsorted(input_indexes),
         // validate Transaction won't mint any assets
         value.is_zero(value.from_minted_value(mint)),
@@ -301,10 +299,10 @@ validator(
             // The number of Pool Inputs and Pool Outputs must be the same with _routings_ length
             utils.compare_list_length(pool_inputs, routings),
             // Pool Input Indexes must be unique
-            utils.is_list_unique(pool_input_indexes),
+            utils.is_unique_bytearray_unsorted(pool_input_indexes),
           }
         let sorted_pool_inputs =
-          list.foldl(
+          bytearray.foldl(
             pool_input_indexes,
             [],
             fn(idx, ps) { list.push(ps, utils.list_at_index(pool_inputs, idx)) },

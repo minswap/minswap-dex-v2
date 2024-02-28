@@ -52,7 +52,7 @@ pub type PoolBatchingRedeemer {
   license_index: Int,
   orders_fee: List<Int>,
   input_indexes: ByteArray,
-  pool_input_indexes_opt: Option<List<Int>>,
+  pool_input_indexes_opt: Option<ByteArray>,
   vol_fees: List<Option<Int>>,
 }
 

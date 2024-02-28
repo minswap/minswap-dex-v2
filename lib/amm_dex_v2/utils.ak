@@ -442,9 +442,13 @@ fn do_is_unique_bytearray_unsorted(
   }
 }
 
-pub fn is_unique_bytearray_unsorted(array: ByteArray) {
+pub fn is_unique_bytearray_unsorted(array: ByteArray) -> Bool {
   let length = builtin.length_of_bytearray(array)
-  do_is_unique_bytearray_unsorted(array, empty_mark, 0, length)
+  if length > 0 {
+    do_is_unique_bytearray_unsorted(array, empty_mark, 0, length)
+  } else {
+    False
+  }
 }
 
 test test_unique_bytearray_unsorted_1() {
@@ -490,24 +494,25 @@ test test_unique_bytearray_unsorted_1() {
       39,
       40,
     ]
-  let length = builtin.length_of_bytearray(array)
-  do_is_unique_bytearray_unsorted(array, empty_mark, 0, length)
+  is_unique_bytearray_unsorted(array)
 }
 
 test test_unique_bytearray_unsorted_2() {
   let array = #[1, 2, 3, 4, 5, 6, 5]
-  let length = builtin.length_of_bytearray(array)
-  !do_is_unique_bytearray_unsorted(array, empty_mark, 0, length)
+  !is_unique_bytearray_unsorted(array)
 }
 
 test test_unique_bytearray_unsorted_3() {
   let array = #[0, 1, 2, 3, 4, 5, 6, 0]
-  let length = builtin.length_of_bytearray(array)
-  !do_is_unique_bytearray_unsorted(array, empty_mark, 0, length)
+  !is_unique_bytearray_unsorted(array)
 }
 
 test test_unique_bytearray_unsorted_4() fail {
   let array = #[0, 1, 2, 3, 4, 5, 64, 0]
-  let length = builtin.length_of_bytearray(array)
-  !do_is_unique_bytearray_unsorted(array, empty_mark, 0, length)
+  !is_unique_bytearray_unsorted(array)
+}
+
+test test_unique_bytearray_unsorted_5() {
+  let array = #[]
+  !is_unique_bytearray_unsorted(array)
 }
