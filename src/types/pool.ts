@@ -8,8 +8,8 @@ import { LucidCredential } from "./address";
 import { Asset } from "./asset";
 
 export type PoolBaseFee = {
-    feeA: [bigint, bigint];
-    feeB: [bigint, bigint];
+    feeANumerator: bigint;
+    feeBNumerator: bigint;
 };
 
 export type PoolDatum = {
@@ -20,7 +20,7 @@ export type PoolDatum = {
     reserveA: bigint;
     reserveB: bigint;
     baseFee: PoolBaseFee;
-    profitSharing?: [bigint, bigint];
+    feeSharingNumerator?: bigint;
     allowDynamicFee: boolean;
 };
 
@@ -35,13 +35,9 @@ export namespace PoolDatum {
             dat.totalLiquidity,
             dat.reserveA,
             dat.reserveB,
-            dat.baseFee.feeA[0],
-            dat.baseFee.feeA[1],
-            dat.baseFee.feeB[0],
-            dat.baseFee.feeB[1],
-            dat.profitSharing ? new Constr(0, [
-                [dat.profitSharing[0], dat.profitSharing[1]]
-            ]) : new Constr(1, []),
+            dat.baseFee.feeANumerator,
+            dat.baseFee.feeBNumerator,
+            dat.feeSharingNumerator ? new Constr(0, [dat.feeSharingNumerator]) : new Constr(1, []),
             new Constr(dat.allowDynamicFee ? 1 : 0, [])
         ])
     }

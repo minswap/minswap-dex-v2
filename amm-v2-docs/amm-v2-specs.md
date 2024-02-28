@@ -278,8 +278,8 @@ Anytime new Pool is created, a Factory UTxO will be spent can create the 2 new o
      - _asset_a_ and _asset_b_ must be the same with Factory Redeemer
      - _total_liquidity_ must be sqrt(_amount_a_ * _amount_b_)
      - _reserve_a_ and _reserve_b_ must be _amount_a_ and _amount_b_
-     - _trading_fee_percentage_ must be between **0.05%** and **10%**
-     - _profit_sharing_ must be empty
+     - _base_fee_a_numerator_ and _base_fee_b_numerator_ must be between **5** and **1000**
+     - _fee_sharing_numerator_opt_ must be empty
    - Pool Value must only have necessary Token: Asset A, Asset B, remaining LP Token (_MAX_INT64_ - _total_liquidity_), 1 Pool NFT Token and 3 ADA (required ADA for an UTxO)
    - validate that transaction only mint 3 types of tokens:
      - 1 Factory NFT Token
@@ -307,26 +307,22 @@ Pool validator is the most important part in the system. It's responsible for gu
 - _reserve_a_: Asset A's balance of Liquidity Providers
 - _reserve_b_: Asset B's balance of Liquidity Providers
 - _base_fee_a_numerator_: Numerator of Trading Fee on Asset A side
-- _base_fee_a_denominator_: Denominator of Trading Fee on Asset A side
 - _base_fee_b_numerator_: Numerator of Trading Fee on Asset B side
-- _base_fee_b_denominator_: Denominator of Trading Fee on Asset B side
-- _profit_sharing_opt_: (Optional) Numerator and Denominator of Profit Sharing percentage, this is the percentage of Trading Fee. (eg, Trading Fee is 3%, Profit Sharing is 1/6 -> Profit Sharing = 1/6 * 3%)
+- _fee_sharing_numerator_opt_: (Optional) Numerator of Fee Sharing percentage, this is the percentage of Trading Fee. (eg, Trading Fee is 3%, Profit Sharing is 1/6 -> Profit Sharing = 1/6 * 3%)
 - _allow_dynamic_fee_: allow Batcher can decide volatility fee for each batch transaction
 
 #### 3.3.5.3 Redeemer
  - **Batching**
  - **UpdatePoolFeeOrStakeCredential**:
    - _action_: There are 2 actions in this redeemer.
-     - _UpdatePoolFee_: Allow Admin to update Liquidity Pool's fee (Trading Fee and Profit Sharing).
+     - _UpdatePoolFee_: Allow Admin to update Liquidity Pool's fee (Trading Fee and Fee Sharing).
      - _UpdatePoolStakeCredential_: Allow Admin update Pool's Stake Credential. It allows Minswap can delegate Liquidity Pool's ADA to different Stake Pools
-   - _admin_index_: Index of the UTxO holding Admin License Token in the Transaction Inputs.
- - **WithdrawLiquidityShare**:
-   - _admin_index_: Index of the UTxO holding Admin License Token in the Transaction Inputs.
+ - **WithdrawLiquidityShare**
 
 
 #### 3.3.5.4 Validation
 - **Batching**: validate that a Pool can be spent if there's a `Pool Batching` validator in the `withdrawals`
-- **UpdatePoolFeeOrStakeCredential**: Allow Admin update Liquidity Pool's fee (Trading Fee and Profit Sharing) or update Pool's Stake Credential. It allows Minswap can delegate Liquidity Pool's ADA to different Stake Pools
+- **UpdatePoolFeeOrStakeCredential**: Allow Admin update Liquidity Pool's fee (Trading Fee and Fee Sharing) or update Pool's Stake Credential. It allows Minswap can delegate Liquidity Pool's ADA to different Stake Pools
    - validate Admin with valid Admin License Token must be presented in Transaction Inputs
    - validate there is a single Pool UTxO in Transaction Inputs and single Pool UTxO in Transaction Outputs and:
      - Pool Input contains 1 valid Pool NFT Token
@@ -341,11 +337,11 @@ Pool validator is the most important part in the system. It's responsible for gu
       -  _reseve_b_
    -  Each _action_ must be followed:
       -  _UpdatePoolFee_:
-            - Trading Fee must be between **0.05%** and **10%**
-            - Profit Sharing can be on/off by setting _profit_sharing_opt_ is None or Some. Profit Sharing must be between **16.66%** and **50%**
+            - Trading Fee Numerator must be between **5** and **1000**
+            - Fee Sharing can be on/off by setting _fee_sharing_numerator_opt_ is None or Some. Fee Sharing numerator must be between **1666** and **5000**
             - Pool Address must be unchanged (both Payment and Stake Credential)
       - _UpdatePoolStakeCredential_:
-        - Trading Fee and Profit Sharing must be unchanged
+        - Trading Fee and Fee Sharing must be unchanged
         - Pool's Stake Credential can be changed to any other Stake Address
 - **WithdrawLiquidityShare**: Allow Admin can withdraw Liquidity Share to any Addresss.
    - validate Admin with valid Admin License Token must be presented in Transaction Inputs.
@@ -355,7 +351,7 @@ Pool validator is the most important part in the system. It's responsible for gu
      - Pool Datum must be unchanged
      - Transaction contain only 1 Script (Pool Script). It will avoid bad Admin stealing money from Order Contract.
    - validate Transaction won't mint any assets
-   - validate Admin withdraws the exact earned Profit Sharing amount:
+   - validate Admin withdraws the exact earned Fee Sharing amount:
      - Earned Asset A: Reserve A in Value - Reserve A in Datum
      - Earned Asset B: Reserve B in Value - Reserve B in Datum
    - validate Pool Out Value must be Pool In Value sub Earned Asset A and Earned Asset B
@@ -402,7 +398,6 @@ Batching validation has 2 scenarios:
        - _batcher_fee_ must be positive
        - _lp_asset_ in **OrderDatum** must be the same with processing Liquidity Pool
        - Order Output must be returned to _receiver_ and has _receiver_datum_
-       - TODO: Write a doc to explain Order Calculation formula
 
 - **Batching Multiple Pools**: It will process single **SwapMultiRouting** Order and multiple **Liquidity Pool**
   - validate batcher with valid License Token must be presented in Transaction Inputs:
@@ -425,7 +420,6 @@ Batching validation has 2 scenarios:
      - Order Output must be returned to _receiver_ and has _receiver_datum_
      - The number of Pool Inputs and Pool Outputs must be the same with _routings_ length
      - Calculated Asset Out must be returned to _receiver_
-     - TODO: Write a doc to explain Order Calculation formula
 ### 3.4 Transaction
 
 
@@ -511,14 +505,15 @@ Transaction structure:
        - 1 Pool NFT Asset
        - LP Asset (followed by OnChain calculation)
      - Datum:
+       - pool_batching_stake_credential
        - asset_a: Token A (2)
        - asset_b: Token B (3)
        - total_liquidity: Followed by OnChain calculation
        - reserve_a: x (4)
        - reserve_b: y (5)
-       - trading_fee_numerator: Followed by OnChain validation
-       - trading_fee_denominator: Followed by OnChain validation
-       - profit_sharing_opt: None
+       - base_fee_a_numerator: Followed by OnChain validation
+       - base_fee_b_numerator: Followed by OnChain validation
+       - fee_sharing_numerator_opt: None
    - Change UTxOs
 
 
@@ -672,14 +667,15 @@ Transaction structure:
        - LP Token
        - 1 Pool NFT Token
      - Datum:
+       - _pool_batching_stake_credential_
        - _asset_a_
        - _asset_b_
        - _total_liquidity_
        - _reserve_a_
        - _reserve_b_
-       - _trading_fee_numerator_
-       - _trading_fee_denominator_
-       - _profit_sharing_opt_
+       - _base_fee_a_numerator_
+       - _base_fee_b_numerator_
+       - _fee_sharing_numerator_opt_
      - Redeemer: Batching
  - Outputs:
    - a Pool Output
@@ -691,14 +687,15 @@ Transaction structure:
        - LP Token
        - 1 Pool NFT Token
      - Datum:
+       - _pool_batching_stake_credential_ (unchanged)
        - _asset_a_ (unchanged)
        - _asset_b_ (unchanged)
        - _total_liquidity_
        - _reserve_a_ (followed by OnChain calculation)
        - _reserve_b_ (followed by OnChain calculation)
-       - _trading_fee_numerator_ (unchanged)
-       - _trading_fee_denominator_ (unchanged)
-       - _profit_sharing_opt_ (unchanged)
+       - _base_fee_a_numerator_ (unchanged)
+       - _base_fee_b_numerator_ (unchanged)
+       - _fee_sharing_numerator_opt_ (unchanged)
    - Order Outputs:
      - Address: _receiver_
      - Datum: _receiver_datum_
@@ -791,14 +788,15 @@ Transaction structure:
        - LP Token
        - 1 Pool NFT Token
      - Datum:
+       - _pool_batching_stake_credential_
        - _asset_a_
        - _asset_b_
        - _total_liquidity_
        - _reserve_a_
        - _reserve_b_
-       - _trading_fee_numerator_
-       - _trading_fee_denominator_
-       - _profit_sharing_opt_
+       - _base_fee_a_numerator_
+       - _base_fee_b_numerator_
+       - _fee_sharing_numerator_opt_
      - Redeemer: Batching
    - Batcher UTxO
      - Address: Batcher Address
@@ -815,14 +813,15 @@ Transaction structure:
        - LP Token (unchanged)
        - 1 Pool NFT Token
      - Datum:
+       - _pool_batching_stake_credential_ (unchanged)
        - _asset_a_ (unchanged)
        - _asset_b_ (unchanged)
        - _total_liquidity_ (unchanged)
        - _reserve_a_ (followed by OnChain calculation)
        - _reserve_b_ (followed by OnChain calculation)
-       - _trading_fee_numerator_ (unchanged)
-       - _trading_fee_denominator_ (unchanged)
-       - _profit_sharing_opt_ (unchanged)
+       - _base_fee_a_numerator_ (unchanged)
+       - _base_fee_b_numerator_ (unchanged)
+       - _fee_sharing_numerator_opt_ (unchanged)
    - Order Output
      - Address: _receiver_
      - Datum: _receiver_datum_
@@ -860,17 +859,17 @@ Transaction structures:
        - LP Token
        - 1 Pool NFT Token
      - Datum:
+       - _pool_batching_stake_credential_
        - _asset_a_
        - _asset_b_
        - _total_liquidity_
        - _reserve_a_
        - _reserve_b_
-       - _trading_fee_numerator_
-       - _trading_fee_denominator_
-       - _profit_sharing_opt_
+       - _base_fee_a_numerator_
+       - _base_fee_b_numerator_
+       - _fee_sharing_numerator_opt_
      - Redeemer: UpdatePoolFeeOrStakeCredential
        - _action_
-       - _admin_index_
  - Outputs:
    - Pool Output:
      - Address: if _action_ is:
@@ -879,9 +878,9 @@ Transaction structures:
      - Value: (unchanged)
      - Datum: if _action_ is:
        - _UpdatePoolFee_: only change:
-         -  _trading_fee_numerator_
-         -  _trading_fee_denominator_
-         -  _profit_sharing_opt_
+         -  _base_fee_a_numerator_
+         -  _base_fee_b_numerator_
+         -  _fee_sharing_numerator_opt_
        - _UpdatePoolStakeCredential_: unchanged
    - Admin Change UTxOs
 
@@ -905,16 +904,16 @@ Transaction structures:
        - LP Token
        - 1 Pool NFT Token
      - Datum:
+       - _pool_batching_stake_credential_
        - _asset_a_
        - _asset_b_
        - _total_liquidity_
        - _reserve_a_
        - _reserve_b_
-       - _trading_fee_numerator_
-       - _trading_fee_denominator_
-       - _profit_sharing_opt_
+       - _base_fee_a_numerator_
+       - _base_fee_b_numerator_
+       - _fee_sharing_numerator_opt_
      - Redeemer: WithdrawLiquidityShare
-       - _admin_index_
  - Outputs:
    - Pool Output:
      - Address: (unchanged)
