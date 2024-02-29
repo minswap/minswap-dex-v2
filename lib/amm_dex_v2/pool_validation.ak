@@ -752,6 +752,7 @@ pub fn has_single_spending(redeemers: Dict<ScriptPurpose, Redeemer>) -> Bool {
   True
 }
 
+// Validate the admin is authorized by the PubKey wallet's signature or Script wallet validation 
 pub fn is_admin_existence(
   admin_policy_id: PolicyId,
   reference_inputs: List<Input>,
@@ -759,6 +760,7 @@ pub fn is_admin_existence(
   signatories: List<Hash<Blake2b_224, VerificationKey>>,
   validity_range: ValidityRange,
 ) -> Bool {
+  // The UTxO is holding Admin token must be represented in the transaction's reference inputs
   let admin_input_opt =
     list.find(
       reference_inputs,
@@ -769,6 +771,7 @@ pub fn is_admin_existence(
     )
   when admin_input_opt is {
     Some(admin_input) -> {
+      // A valid license token is the token having expired timestamp as TokenName and must be within current time and current time + _maximum_deadline_range_
       let (_, _) =
         validate_license_expiration_and_find_license_holder(
           license_pid: admin_policy_id,
@@ -783,8 +786,12 @@ pub fn is_admin_existence(
         ..
       } = admin_input
       when payment_cred is {
+        //If the Admin function is controlled by a PubKey wallet, 
+        // the owners of the UTxO must sign the transaction with their private key. Otherwise, such action must be prohibited.
         VerificationKeyCredential(pub_key_hash) ->
           list.has(signatories, pub_key_hash)
+        // If the Admin function is controlled by a Script wallet, 
+        // the smart contract must incorporate a Withdrawal function and execute sufficient conditions to facilitate its operation
         ScriptCredential(_) -> dict.has_key(withdrawals, Inline(payment_cred))
       }
     }
