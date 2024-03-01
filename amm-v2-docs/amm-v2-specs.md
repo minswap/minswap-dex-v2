@@ -49,7 +49,8 @@ There're 5 contracts in the AMM V2 system:
    - TokenName: POSIX timestamp represents license deadline
 - Admin license token:
    - CurrencySymbol: Defined in Pool parameters. The policy is managed by team (e.g. multisig policy)
-   - TokenName: A constant string defined in pool parameters (e.g. "ADMIN")
+   - TokenName: POSIX timestamp represents license deadline
+   - Admin License is used on Factory and Pool Validator via `is_admin_existence` function and can be in a PubKey or Script wallet
 
 
 ### 3.3 Smart Contract
