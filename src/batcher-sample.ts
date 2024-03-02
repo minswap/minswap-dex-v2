@@ -147,7 +147,7 @@ function calculateOrderIndexes(txIns: TxIn[]): Uint8Array {
       }
     }
   }
-  return new Uint8Array(ret);
+  return new Uint8Array(ret.reverse());
 }
 
 async function buildBatchTx({
@@ -376,7 +376,7 @@ async function main(): Promise<void> {
 
   let tempDatumReserves: [bigint, bigint] = [amountA, amountB];
   let tempValueReserves: [bigint, bigint] = [amountA, amountB];
-  for (let i = 0; i < 32; i++) {
+  for (let i = 0; i < 35; i++) {
     const orderIn: UTxO = {
       txHash:
         "5573777bedba6bb5f56541681256158dcf8ebfbc9e7251277d25b118517dce10",

@@ -178,9 +178,9 @@ validator(
     // Currently, transaction inputs will be sorted by TxId and TxIndex of UTxO.
     // We have to calculate indexes of orders inputs sorting by the ASC created time
     // on the off-chain and on-chain will sort the TxIns by the indexes
-    // Input Indexes in parameter will be reversed indexs of @order_inputs to reduce calculate step in On-Chain
+    // Input Indexes in parameter will be the index indexes of @order_inputs
     let sorted_user_inputs =
-      bytearray.foldl(
+      bytearray.foldr(
         input_indexes,
         [],
         fn(idx, ips) { list.push(ips, utils.list_at_index(user_inputs, idx)) },
@@ -302,7 +302,7 @@ validator(
             utils.is_unique_bytearray_unsorted(pool_input_indexes),
           }
         let sorted_pool_inputs =
-          bytearray.foldl(
+          bytearray.foldr(
             pool_input_indexes,
             [],
             fn(idx, ps) { list.push(ps, utils.list_at_index(pool_inputs, idx)) },

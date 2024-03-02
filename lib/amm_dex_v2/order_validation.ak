@@ -107,10 +107,20 @@ fn validate_swap_exact_in(
   let slippage_satisfied = is_slippage_satisfied(amount_out)
   if slippage_satisfied {
     let expect_order_value_out =
-      order_in_value
-        |> value.add(ada_policy_id, ada_asset_name, -used_batcher_fee)
-        |> value.add(asset_in_policy_id, asset_in_asset_name, -swap_amount)
-        |> value.add(asset_out_policy_id, asset_out_asset_name, amount_out)
+      if utils.is_ada_asset(asset_in_policy_id, asset_in_asset_name) {
+        order_in_value
+          |> value.add(
+               ada_policy_id,
+               ada_asset_name,
+               -(used_batcher_fee + swap_amount),
+             )
+          |> value.add(asset_out_policy_id, asset_out_asset_name, amount_out)
+      } else {
+        order_in_value
+          |> value.add(ada_policy_id, ada_asset_name, -used_batcher_fee)
+          |> value.add(asset_in_policy_id, asset_in_asset_name, -swap_amount)
+          |> value.add(asset_out_policy_id, asset_out_asset_name, amount_out)
+      }
     expect
       validate_order_output(
         receiver: receiver,
@@ -231,10 +241,24 @@ fn validate_swap_exact_out(
   let slippage_satisfied = necessary_amount_in <= maximum_swap_amount
   if slippage_satisfied {
     let expect_order_value_out =
-      order_in_value
-        |> value.add(ada_policy_id, ada_asset_name, -used_batcher_fee)
-        |> value.add(asset_in_policy_id, asset_in_asset_name, -necessary_amount_in)
-        |> value.add(asset_out_policy_id, asset_out_asset_name, expected_receive)
+      if utils.is_ada_asset(asset_in_policy_id, asset_in_asset_name) {
+        order_in_value
+          |> value.add(
+               ada_policy_id,
+               ada_asset_name,
+               -(used_batcher_fee + necessary_amount_in),
+             )
+          |> value.add(asset_out_policy_id, asset_out_asset_name, expected_receive)
+      } else {
+        order_in_value
+          |> value.add(ada_policy_id, ada_asset_name, -used_batcher_fee)
+          |> value.add(
+               asset_in_policy_id,
+               asset_in_asset_name,
+               -necessary_amount_in,
+             )
+          |> value.add(asset_out_policy_id, asset_out_asset_name, expected_receive)
+      }
     expect
       validate_order_output(
         receiver: receiver,
