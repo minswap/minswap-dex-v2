@@ -5,7 +5,9 @@ use aiken/transaction.{Datum, DatumHash, InlineDatum, Input, NoDatum, Output}
 use aiken/transaction/credential.{
   Address, ScriptCredential, VerificationKeyCredential,
 }
-use aiken/transaction/value.{Value, ada_asset_name, ada_policy_id}
+use aiken/transaction/value.{
+  AssetName, PolicyId, Value, ada_asset_name, ada_policy_id,
+}
 use amm_dex_v2/math
 use amm_dex_v2/types.{
   Asset, BatchingPool, DAOAll, DAOSpecificAmount, DatumMap, Deposit,
@@ -24,6 +26,32 @@ fn get_returnable_value(order_in_value: Value, used_batcher_fee: Int) -> Value {
     ada_asset_name,
     used_batcher_fee * -1,
   )
+}
+
+fn get_swap_output_value(
+  order_in_value: Value,
+  used_batcher_fee: Int,
+  asset_in_policy_id: PolicyId,
+  asset_in_asset_name: AssetName,
+  asset_out_policy_id: PolicyId,
+  asset_out_asset_name: AssetName,
+  amount_in: Int,
+  amount_out: Int,
+) -> Value {
+  if utils.is_ada_asset(asset_in_policy_id, asset_in_asset_name) {
+    order_in_value
+      |> value.add(ada_policy_id, ada_asset_name, -(used_batcher_fee + amount_in))
+      |> value.add(asset_out_policy_id, asset_out_asset_name, amount_out)
+  } else if utils.is_ada_asset(asset_out_policy_id, asset_out_asset_name) {
+    order_in_value
+      |> value.add(ada_policy_id, ada_asset_name, amount_out - used_batcher_fee)
+      |> value.add(asset_in_policy_id, asset_in_asset_name, -amount_in)
+  } else {
+    order_in_value
+      |> value.add(ada_policy_id, ada_asset_name, -used_batcher_fee)
+      |> value.add(asset_in_policy_id, asset_in_asset_name, -amount_in)
+      |> value.add(asset_out_policy_id, asset_out_asset_name, amount_out)
+  }
 }
 
 fn validate_swap_exact_in(
@@ -107,20 +135,16 @@ fn validate_swap_exact_in(
   let slippage_satisfied = is_slippage_satisfied(amount_out)
   if slippage_satisfied {
     let expect_order_value_out =
-      if utils.is_ada_asset(asset_in_policy_id, asset_in_asset_name) {
-        order_in_value
-          |> value.add(
-               ada_policy_id,
-               ada_asset_name,
-               -(used_batcher_fee + swap_amount),
-             )
-          |> value.add(asset_out_policy_id, asset_out_asset_name, amount_out)
-      } else {
-        order_in_value
-          |> value.add(ada_policy_id, ada_asset_name, -used_batcher_fee)
-          |> value.add(asset_in_policy_id, asset_in_asset_name, -swap_amount)
-          |> value.add(asset_out_policy_id, asset_out_asset_name, amount_out)
-      }
+      get_swap_output_value(
+        order_in_value: order_in_value,
+        used_batcher_fee: used_batcher_fee,
+        asset_in_policy_id: asset_in_policy_id,
+        asset_in_asset_name: asset_in_asset_name,
+        asset_out_policy_id: asset_out_policy_id,
+        asset_out_asset_name: asset_out_asset_name,
+        amount_in: swap_amount,
+        amount_out: amount_out,
+      )
     expect
       validate_order_output(
         receiver: receiver,
@@ -241,24 +265,16 @@ fn validate_swap_exact_out(
   let slippage_satisfied = necessary_amount_in <= maximum_swap_amount
   if slippage_satisfied {
     let expect_order_value_out =
-      if utils.is_ada_asset(asset_in_policy_id, asset_in_asset_name) {
-        order_in_value
-          |> value.add(
-               ada_policy_id,
-               ada_asset_name,
-               -(used_batcher_fee + necessary_amount_in),
-             )
-          |> value.add(asset_out_policy_id, asset_out_asset_name, expected_receive)
-      } else {
-        order_in_value
-          |> value.add(ada_policy_id, ada_asset_name, -used_batcher_fee)
-          |> value.add(
-               asset_in_policy_id,
-               asset_in_asset_name,
-               -necessary_amount_in,
-             )
-          |> value.add(asset_out_policy_id, asset_out_asset_name, expected_receive)
-      }
+      get_swap_output_value(
+        order_in_value: order_in_value,
+        used_batcher_fee: used_batcher_fee,
+        asset_in_policy_id: asset_in_policy_id,
+        asset_in_asset_name: asset_in_asset_name,
+        asset_out_policy_id: asset_out_policy_id,
+        asset_out_asset_name: asset_out_asset_name,
+        amount_in: necessary_amount_in,
+        amount_out: expected_receive,
+      )
     expect
       validate_order_output(
         receiver: receiver,
@@ -687,10 +703,16 @@ fn validate_partial_swap(
       fee_sharing_numerator_opt: fee_sharing_numerator_opt,
     )
   let expect_order_value_out =
-    order_in_value
-      |> value.add(ada_policy_id, ada_asset_name, -used_batcher_fee)
-      |> value.add(asset_in_policy_id, asset_in_asset_name, -swapable_amount_in)
-      |> value.add(asset_out_policy_id, asset_out_asset_name, amount_out)
+    get_swap_output_value(
+      order_in_value: order_in_value,
+      used_batcher_fee: used_batcher_fee,
+      asset_in_policy_id: asset_in_policy_id,
+      asset_in_asset_name: asset_in_asset_name,
+      asset_out_policy_id: asset_out_policy_id,
+      asset_out_asset_name: asset_out_asset_name,
+      amount_in: swapable_amount_in,
+      amount_out: amount_out,
+    )
   expect and {
       swapable_amount_in > 0,
       swapable_amount_in >= minimum_swap_amount_required,
