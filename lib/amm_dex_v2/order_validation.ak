@@ -1097,7 +1097,7 @@ pub fn apply_orders(
   fee_sharing_numerator_opt: Option<Int>,
   end_valid_time_range: Int,
   order_inputs: List<Input>,
-  order_outputs: List<Output>,
+  all_outputs: List<Output>,
   orders_fee: List<Int>,
   pool_state: PoolState,
 ) -> PoolState {
@@ -1149,7 +1149,7 @@ pub fn apply_orders(
         minimum_receive,
         order_killable,
       ) -> {
-        expect [output, ..rest_outputs] = order_outputs
+        expect [output, ..rest_outputs] = all_outputs
         expect minimum_receive > 0
         (
           validate_swap_exact_in(
@@ -1177,7 +1177,7 @@ pub fn apply_orders(
         )
       }
       StopLoss(a_to_b_direction, swap_amount_option, stop_loss_receive) -> {
-        expect [output, ..rest_outputs] = order_outputs
+        expect [output, ..rest_outputs] = all_outputs
         expect stop_loss_receive > 0
         (
           validate_swap_exact_in(
@@ -1210,7 +1210,7 @@ pub fn apply_orders(
         minimum_receive,
         stop_loss_receive,
       ) -> {
-        expect [output, ..rest_outputs] = order_outputs
+        expect [output, ..rest_outputs] = all_outputs
         expect and {
             minimum_receive > 0,
             stop_loss_receive > 0,
@@ -1246,7 +1246,7 @@ pub fn apply_orders(
         expected_receive,
         order_killable,
       ) -> {
-        expect [output, ..rest_outputs] = order_outputs
+        expect [output, ..rest_outputs] = all_outputs
         expect expected_receive > 0
         (
           validate_swap_exact_out(
@@ -1272,7 +1272,7 @@ pub fn apply_orders(
         )
       }
       Deposit(deposit_amount_option, minimum_lp, order_killable) -> {
-        expect [output, ..rest_outputs] = order_outputs
+        expect [output, ..rest_outputs] = all_outputs
         expect minimum_lp > 0
         (
           validate_deposit(
@@ -1303,7 +1303,7 @@ pub fn apply_orders(
         minimum_asset_b,
         order_killable,
       ) -> {
-        expect [output, ..rest_outputs] = order_outputs
+        expect [output, ..rest_outputs] = all_outputs
         expect and {
             minimum_asset_a > 0,
             minimum_asset_b > 0,
@@ -1335,7 +1335,7 @@ pub fn apply_orders(
         minimum_receive,
         order_killable,
       ) -> {
-        expect [output, ..rest_outputs] = order_outputs
+        expect [output, ..rest_outputs] = all_outputs
         expect minimum_receive > 0
         (
           validate_zap_out(
@@ -1370,7 +1370,7 @@ pub fn apply_orders(
         minimum_swap_amount_required,
         max_batcher_fee_each_time,
       ) -> {
-        expect [output, ..rest_outputs] = order_outputs
+        expect [output, ..rest_outputs] = all_outputs
         let Output { value: order_out_value, .. } = output
         expect and {
             io_ratio_numerator > 0,
@@ -1464,7 +1464,7 @@ pub fn apply_orders(
         minimum_asset_a,
         order_killable,
       ) -> {
-        expect [output, ..rest_outputs] = order_outputs
+        expect [output, ..rest_outputs] = all_outputs
         expect and {
             ratio_asset_a > 0,
             ratio_asset_b > 0,
@@ -1504,19 +1504,13 @@ pub fn apply_orders(
             used_batcher_fee: used_batcher_fee,
             pool_state: pool_state,
           ),
-          order_outputs,
+          all_outputs,
         )
       SwapMultiRouting(_, _, _) -> fail
     }
 
   when rest_inputs is {
-    [] -> {
-      expect and {
-          rest_outs == [],
-          rest_batcher_fees == [],
-        }
-      new_state
-    }
+    [] -> new_state
     _ ->
       apply_orders(
         datum_map: datum_map,
@@ -1528,7 +1522,7 @@ pub fn apply_orders(
         fee_sharing_numerator_opt: fee_sharing_numerator_opt,
         end_valid_time_range: end_valid_time_range,
         order_inputs: rest_inputs,
-        order_outputs: rest_outs,
+        all_outputs: rest_outs,
         orders_fee: rest_batcher_fees,
         pool_state: new_state,
       )

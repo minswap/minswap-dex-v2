@@ -186,18 +186,6 @@ validator(
         fn(idx, ips) { list.push(ips, utils.list_at_index(user_inputs, idx)) },
       )
 
-    // Order Outputs are Outputs which aren't Pool & Batcher UTxOs
-    // Their ordering must be the same with @sorted_order_inputs, so @order_outputs at index i is the output if @sorted_order_inputs at index i
-    let user_outputs =
-      list.filter(
-        outputs,
-        fn(output) {
-          let Output { address: addr, .. } = output
-          let Address { payment_credential: payment_cred, .. } = addr
-          addr != batcher_address && payment_cred != pool_payment_cred
-        },
-      )
-
     expect and {
         // User Inputs and Input Indexes must have the same length
         builtin.length_of_bytearray(input_indexes) == list.length(user_inputs),
@@ -208,7 +196,7 @@ validator(
     when pool_inputs is {
       [pool_input] -> {
         // In case transaction only contains 1 Pool Input & Output, all order types are accepted except SwapMultiRouting
-        expect [pool_output] = pool_outputs
+        let pool_output = pool_outputs |> builtin.head_list
         expect [vol_fee] = vol_fees
         let Input { output: pool_in_output, .. } = pool_input
         let BatchingPool {
@@ -239,7 +227,7 @@ validator(
           fee_sharing_numerator_opt: fee_sharing_numerator_opt,
           end_valid_time_range: end_valid_time_range,
           order_inputs: sorted_user_inputs,
-          order_outputs: user_outputs,
+          all_outputs: outputs,
           orders_fee: orders_fee,
           pool_state: pool_state_in,
         )
@@ -248,7 +236,7 @@ validator(
       _ -> {
         // In case transaction only contains more than 1 Pool Input & Output, only single SwapMultiRouting Order is accepted
         expect [order_input] = sorted_user_inputs
-        expect [order_output] = user_outputs
+        let order_output = outputs |> builtin.head_list
         expect [order_fee] = orders_fee
         let Input {
           output: Output {

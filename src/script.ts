@@ -3,6 +3,7 @@ import {
   applyParamsToScript,
   Constr,
   Credential,
+  fromHex,
   fromText,
   Lucid,
   MintingPolicy,
@@ -200,6 +201,22 @@ export function getContractScripts(lucid: Lucid): {
     "addr_test1vzztre5epvtj5p72sh28nvrs3e6s4xxn95f66cvg0sqsk7qd3mah0";
   const testReferenceTxHash =
     "eb5d5d3cf842b171b09a1878fc8c16cf7a5ad6a0d18e3122feb31078e224680a";
+
+  const authenSize = fromHex(authenMintingScript.script).length
+  const orderSize = fromHex(orderScript.script).length
+  const poolSize = fromHex(poolScript.script).length
+  const factorySize = fromHex(factoryScript.script).length
+  const expiredOrderSize = fromHex(expiredOrderCancellationScript.script).length
+  const poolBatchingSize = fromHex(poolBatchingScript.script).length
+  
+  console.log(`
+    - Authen size: ${authenSize} bytes
+    - Order size: ${orderSize} bytes
+    - Pool size: ${poolSize} bytes
+    - Factory size: ${factorySize} bytes
+    - Expired Order Cancel size: ${expiredOrderSize} bytes
+    - Pool batching size: ${poolBatchingSize} bytes
+  `)
   return {
     authenPolicyId,
     orderAddress,

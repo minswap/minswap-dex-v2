@@ -255,13 +255,6 @@ async function buildBatchTx({
       Data.to(new Constr(0, []))
     )
     .collectFrom([licenseUtxo])
-    .payToContract(
-      pool.poolIn.address,
-      {
-        inline: pool.poolOut.datum,
-      },
-      pool.poolOut.value
-    )
     .withdraw(scripts.poolBatchingAddress, 0n, Data.to(poolBatchingRedeemer))
     .validFrom(validFrom.getTime())
     .validTo(validTo.getTime())
@@ -270,6 +263,13 @@ async function buildBatchTx({
   for (const { orderOut } of orders) {
     tx.payToAddress(orderOut.address, orderOut.value);
   }
+  tx.payToContract(
+    pool.poolIn.address,
+    {
+      inline: pool.poolOut.datum,
+    },
+    pool.poolOut.value
+  )
 
   const txComplete = await tx.complete({
     change: {
@@ -376,7 +376,7 @@ async function main(): Promise<void> {
 
   let tempDatumReserves: [bigint, bigint] = [amountA, amountB];
   let tempValueReserves: [bigint, bigint] = [amountA, amountB];
-  for (let i = 0; i < 35; i++) {
+  for (let i = 0; i < 36; i++) {
     const orderIn: UTxO = {
       txHash:
         "5573777bedba6bb5f56541681256158dcf8ebfbc9e7251277d25b118517dce10",
