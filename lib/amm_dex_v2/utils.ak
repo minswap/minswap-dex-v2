@@ -21,9 +21,25 @@ pub const pool_auth_asset_name = #"4d5350"
 // the legitimate Factory TokenName
 pub const factory_auth_asset_name = #"4d53"
 
-// Policy ID managed by the Minswap team, used for minting Admin License assets
-pub const admin_policy_id =
+// Policy ID managed by the Minswap team, used for minting Custom Pool Creator License assets
+pub const custom_pool_creator_policy_id =
   #"f8c20eb8b2e773e21cf41ab6354cf09bd255ebed0bd8847c655e67b4"
+
+// Policy ID managed by the Minswap team, used for minting Pool Fee Updater License assets
+pub const pool_fee_updater_policy_id =
+  #"1793821c850772260c34c63d60f9dbe73f58f31b9d406d948e22f6f1"
+
+// Policy ID managed by the Minswap team, used for minting Fee Sharing Taker License assets
+pub const fee_sharing_taker_policy_id =
+  #"c22c402b78351676f0b09f2454c8b226f076e7acd4f0df2260fee99f"
+
+// Policy ID managed by the Minswap team, used for minting Pool Stake Key Updater License assets
+pub const pool_stake_key_updater_policy_id =
+  #"aba1b6268131b67cf5e79e866adf105611faab9fecbf24604e1c767c"
+
+// Policy ID managed by the Minswap team, used for minting Pool Dynamic Fee Updater License assets
+pub const pool_dynamic_fee_updater_policy_id =
+  #"aba91d786d50ff300197ba56468a093a1b9ae07581b9d71122e374b6"
 
 // Maximum expiration time of Batcher license from now (to prevent minting infinity license)
 pub const maximum_deadline_range = 77760000000
@@ -33,8 +49,8 @@ pub const default_burn_liquidity = 10
 pub const default_fee_denominator = 10000
 
 // Base Fee constraint
-// Max 10%
-pub const max_base_fee_numerator = 1000
+// Max 20%
+pub const max_base_fee_numerator = 2000
 
 // Min 0.05%
 pub const min_base_fee_numerator = 5
@@ -47,8 +63,8 @@ pub const max_vol_fee_numerator = 200
 pub const min_vol_fee_numerator = 0
 
 // Trading Fee constraint
-// Max 10%
-pub const max_trading_fee_numerator = 1000
+// Max 20%
+pub const max_trading_fee_numerator = 2000
 
 // Min 0.05%
 pub const min_trading_fee_numerator = 5

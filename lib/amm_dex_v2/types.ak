@@ -35,17 +35,16 @@ pub type PoolDatum {
   allow_dynamic_fee: Bool,
 }
 
-pub type UpdatePoolFeeOrStakeCredentialAction {
+pub type UpdatePoolParametersAction {
   UpdatePoolFee
+  UpdateDynamicFee
   UpdatePoolStakeCredential
 }
 
 pub type PoolRedeemer {
   Batching
-  UpdatePoolFeeOrStakeCredential {
-    action: UpdatePoolFeeOrStakeCredentialAction,
-  }
-  WithdrawLiquidityShare
+  UpdatePoolParameters { action: UpdatePoolParametersAction }
+  WithdrawFeeSharing
 }
 
 pub type PoolBatchingRedeemer {

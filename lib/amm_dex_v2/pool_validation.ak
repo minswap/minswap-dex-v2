@@ -13,8 +13,8 @@ use aiken/transaction/value.{
   AssetName, PolicyId, Value, ada_asset_name, ada_policy_id,
 }
 use amm_dex_v2/types.{
-  Asset, BatchingPool, PoolDatum, UpdatePoolFee,
-  UpdatePoolFeeOrStakeCredentialAction, UpdatePoolStakeCredential,
+  Asset, BatchingPool, PoolDatum, UpdateDynamicFee, UpdatePoolFee,
+  UpdatePoolParametersAction, UpdatePoolStakeCredential,
 }
 use amm_dex_v2/utils
 
@@ -210,8 +210,12 @@ pub fn get_batching_pool(
   }
 }
 
-pub fn validate_update_pool_datum_or_stake_credential(
-  action: UpdatePoolFeeOrStakeCredentialAction,
+pub fn validate_update_pool_parameters(
+  reference_inputs: List<Input>,
+  withdrawals: Dict<StakeCredential, Int>,
+  extra_signatories: List<Hash<Blake2b_224, VerificationKey>>,
+  validity_range: ValidityRange,
+  action: UpdatePoolParametersAction,
   authen_policy_id: PolicyId,
   pool_input: Input,
   pool_in_datum: PoolDatum,
@@ -246,29 +250,32 @@ pub fn validate_update_pool_datum_or_stake_credential(
     }
   expect pool_out_datum: PoolDatum =
     utils.must_find_script_inline_datum(raw_pool_out_datum)
+  let PoolDatum {
+    pool_batching_stake_credential: pool_in_stake_credential,
+    asset_a: pool_in_asset_a,
+    asset_b: pool_in_asset_b,
+    total_liquidity: pool_in_total_liquidity,
+    reserve_a: pool_in_reserve_a,
+    reserve_b: pool_in_reserve_b,
+    base_fee_a_numerator: pool_in_base_fee_a_numerator,
+    base_fee_b_numerator: pool_in_base_fee_b_numerator,
+    fee_sharing_numerator_opt: pool_in_fee_sharing_numerator_opt,
+    allow_dynamic_fee: pool_in_allow_dynamic_fee,
+  } = pool_in_datum
+  let PoolDatum {
+    pool_batching_stake_credential: pool_out_stake_credential,
+    asset_a: pool_out_asset_a,
+    asset_b: pool_out_asset_b,
+    total_liquidity: pool_out_total_liquidity,
+    reserve_a: pool_out_reserve_a,
+    reserve_b: pool_out_reserve_b,
+    base_fee_a_numerator: pool_out_base_fee_a_numerator,
+    base_fee_b_numerator: pool_out_base_fee_b_numerator,
+    fee_sharing_numerator_opt: pool_out_fee_sharing_numerator_opt,
+    allow_dynamic_fee: pool_out_allow_dynamic_fee,
+  } = pool_out_datum
   when action is {
     UpdatePoolFee -> {
-      let PoolDatum {
-        pool_batching_stake_credential: pool_in_stake_credential,
-        asset_a: pool_in_asset_a,
-        asset_b: pool_in_asset_b,
-        total_liquidity: pool_in_total_liquidity,
-        reserve_a: pool_in_reserve_a,
-        reserve_b: pool_in_reserve_b,
-        ..
-      } = pool_in_datum
-      let PoolDatum {
-        pool_batching_stake_credential: pool_out_stake_credential,
-        asset_a: pool_out_asset_a,
-        asset_b: pool_out_asset_b,
-        total_liquidity: pool_out_total_liquidity,
-        reserve_a: pool_out_reserve_a,
-        reserve_b: pool_out_reserve_b,
-        base_fee_a_numerator: pool_out_base_fee_a_numerator,
-        base_fee_b_numerator: pool_out_base_fee_b_numerator,
-        fee_sharing_numerator_opt: pool_out_fee_sharing_numerator_opt,
-        ..
-      } = pool_out_datum
       // Profit Sharing can be on/off by setting fee_sharing_numerator_opt is None or Some. 
       // Profit Sharing numerator must be between **1666** and **5000**
       let is_valid_fee_sharing =
@@ -282,6 +289,14 @@ pub fn validate_update_pool_datum_or_stake_credential(
             )
         }
       and {
+        // Transaction requires Pool Fee Updater license token to execute
+        is_admin_existence(
+          admin_policy_id: utils.pool_fee_updater_policy_id,
+          reference_inputs: reference_inputs,
+          withdrawals: withdrawals,
+          signatories: extra_signatories,
+          validity_range: validity_range,
+        ),
         // Irrelevant fields on Pool Datum must be unchanged
         pool_in_stake_credential == pool_out_stake_credential,
         pool_in_asset_a == pool_out_asset_a,
@@ -289,9 +304,10 @@ pub fn validate_update_pool_datum_or_stake_credential(
         pool_in_total_liquidity == pool_out_total_liquidity,
         pool_in_reserve_a == pool_out_reserve_a,
         pool_in_reserve_b == pool_out_reserve_b,
+        pool_in_allow_dynamic_fee == pool_out_allow_dynamic_fee,
         // Pool Address must be unchanged (both Payment and Stake Credential)
         pool_in_address == pool_out_address,
-        // Trading Fee must be between **0.05%** and **10%**
+        // Trading Fee must be between **0.05%** and **20%**
         validate_fee_percent(
           fee_num: pool_out_base_fee_a_numerator,
           max_fee_num: utils.max_base_fee_numerator,
@@ -305,8 +321,40 @@ pub fn validate_update_pool_datum_or_stake_credential(
         is_valid_fee_sharing,
       }
     }
-    // Pool Datum must be unchanged
-    UpdatePoolStakeCredential -> pool_in_datum == pool_out_datum
+    UpdateDynamicFee -> and {
+        // Transaction requires Pool Dynamic Fee Updater license token to execute
+        is_admin_existence(
+          admin_policy_id: utils.pool_dynamic_fee_updater_policy_id,
+          reference_inputs: reference_inputs,
+          withdrawals: withdrawals,
+          signatories: extra_signatories,
+          validity_range: validity_range,
+        ),
+        // Irrelevant fields on Pool Datum must be unchanged
+        pool_in_stake_credential == pool_out_stake_credential,
+        pool_in_asset_a == pool_out_asset_a,
+        pool_in_asset_b == pool_out_asset_b,
+        pool_in_total_liquidity == pool_out_total_liquidity,
+        pool_in_reserve_a == pool_out_reserve_a,
+        pool_in_reserve_b == pool_out_reserve_b,
+        pool_in_base_fee_a_numerator == pool_out_base_fee_a_numerator,
+        pool_in_base_fee_b_numerator == pool_out_base_fee_b_numerator,
+        pool_in_fee_sharing_numerator_opt == pool_out_fee_sharing_numerator_opt,
+        // Pool Address must be unchanged (both Payment and Stake Credential)
+        pool_in_address == pool_out_address,
+      }
+    UpdatePoolStakeCredential -> and {
+        // Transaction requires Pool Stake Key Updater license token to execute
+        is_admin_existence(
+          admin_policy_id: utils.pool_stake_key_updater_policy_id,
+          reference_inputs: reference_inputs,
+          withdrawals: withdrawals,
+          signatories: extra_signatories,
+          validity_range: validity_range,
+        ),
+        // Pool Datum must be unchanged
+        pool_in_datum == pool_out_datum,
+      }
   }
 }
 
@@ -323,7 +371,7 @@ pub fn validate_fee_percent(
   }
 }
 
-pub fn validate_withdraw_liquidity_share(
+pub fn validate_withdraw_fee_sharing(
   authen_policy_id: PolicyId,
   pool_input: Input,
   pool_in_datum: PoolDatum,

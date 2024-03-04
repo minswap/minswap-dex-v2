@@ -29,7 +29,11 @@ There're 5 contracts in the AMM V2 system:
 
 - User: An entity who wants to interact with Liquidity Pool to deposit/withdraw liquidity or swap. The only requirement of users is that they must not be the same as batcher (because of how we filter UTxOs)
 - Batcher: An entity who aggregate order UTxOs from users and match them with liquidity pool UTxO. A batcher must hold a batcher's license token. The license token must not be expired and the expired time must be between current time and Maximum Deadline (to prevent minting license with infinity deadline).
-- Admin (aka Minswap team): An entity who has permission to update Liquidity Pool's fee, withdraw fee sharing and change the pool's stake address. An Admin must hold an admin's license token.
+- Custom Pool creator: An entity who has permission to create a Liquidity Pool with custom pool's base fee within allowed range (0.05% to 20%). The creator must hold an Custom Pool Creator's license token
+- Pool Fee updater: An entity who has permission to create a Liquidity Pool's base fee and fee sharing to any value within allowed range (0.05% to 20% for base fee and 16.66% to 50% for fee sharing). The updater must hold an Pool Fee Updater's license token
+- Fee Sharing taker: An entity who has permission to withdraw Liquidity Pool's fee sharing. The taker must hold an Fee Sharing taker's license token
+- Pool Stake Key Updater:  An entity who has permission to update Liquidity Pool's stake credential. The updater must hold an Pool Stake Key Updater's license token
+- Pool Dynamic Fee updater: An entity who has permission to enable or disable Liquidity Pool's dynamic fee. The updater must hold an Pool Dynamic Fee Updater's license token
 
 
 ### 3.2 Tokens
@@ -45,12 +49,25 @@ There're 5 contracts in the AMM V2 system:
    - CurrencySymbol: Authen Minting Policy
    - TokenName: Hash of Pool's Asset A and Asset B (`SHA_256(SHA_256(AssetA), SHA_256(AssetB))`)
 - Batcher license token: Permit batcher to apply pool
-   - CurrencySymbol: Defined in Pool parameters. The policy is managed by team (e.g. multisig policy)
+   - CurrencySymbol: Defined in the constant `batcher_license_policy_id`. The policy is managed by team (e.g. multisig policy)
    - TokenName: POSIX timestamp represents license deadline
-- Admin license token:
-   - CurrencySymbol: Defined in Pool parameters. The policy is managed by team (e.g. multisig policy)
-   - TokenName: POSIX timestamp represents license deadline
-   - Admin License is used on Factory and Pool Validator via `is_admin_existence` function and can be in a PubKey or Script wallet
+- Liquidity Pool's parameters license token:
+   - Custom Pool Creator license token:
+     - CurrencySymbol: Defined in the constant `custom_pool_creator_policy_id`. The policy is managed by team (e.g. multisig policy)
+     - TokenName: POSIX timestamp represents license deadline
+   - Pool Fee Updater license token:
+     - CurrencySymbol: Defined in the constant `pool_fee_updater_policy_id`. The policy is managed by team (e.g. multisig policy)
+     - TokenName: POSIX timestamp represents license deadline
+   - Fee Sharing Taker license token:
+     - CurrencySymbol: Defined in the constant `fee_sharing_taker_policy_id`. The policy is managed by team (e.g. multisig policy)
+     - TokenName: POSIX timestamp represents license deadline
+   - Pool Stake Key Updater license token:
+     - CurrencySymbol: Defined in the constant `pool_stake_key_updater_policy_id`. The policy is managed by team (e.g. multisig policy)
+     - TokenName: POSIX timestamp represents license deadline
+   - Pool Dynamic Fee Updater license token:
+     - CurrencySymbol: Defined in the constant `pool_dynamic_fee_updater_policy_id`. The policy is managed by team (e.g. multisig policy)
+     - TokenName: POSIX timestamp represents license deadline
+   - These license tokens is used on Factory and Pool Validator via `is_admin_existence` function and can be in a PubKey or Script wallet
 
 
 ### 3.3 Smart Contract
@@ -314,43 +331,40 @@ Pool validator is the most important part in the system. It's responsible for gu
 
 #### 3.3.5.3 Redeemer
  - **Batching**
- - **UpdatePoolFeeOrStakeCredential**:
+ - **UpdatePoolParameters**:
    - _action_: There are 2 actions in this redeemer.
      - _UpdatePoolFee_: Allow Admin to update Liquidity Pool's fee (Trading Fee and Fee Sharing).
+     - _UpdateDynamicFee_: Allow Admin to enable/disable Liquidity Pool's dynamic fee.
      - _UpdatePoolStakeCredential_: Allow Admin update Pool's Stake Credential. It allows Minswap can delegate Liquidity Pool's ADA to different Stake Pools
- - **WithdrawLiquidityShare**
+ - **WithdrawFeeSharing**
 
 
 #### 3.3.5.4 Validation
 - **Batching**: validate that a Pool can be spent if there's a `Pool Batching` validator in the `withdrawals`
-- **UpdatePoolFeeOrStakeCredential**: Allow Admin update Liquidity Pool's fee (Trading Fee and Fee Sharing) or update Pool's Stake Credential. It allows Minswap can delegate Liquidity Pool's ADA to different Stake Pools
-   - validate Admin with valid Admin License Token must be presented in Transaction Inputs
+- **UpdatePoolParameters**: Allow Admin update Liquidity Pool's fee (Trading Fee and Fee Sharing), enable/disable Dynamic Fee or update Pool's Stake Credential. It allows Minswap can delegate Liquidity Pool's ADA to different Stake Pools
+   - validate Admin with valid Admin License Token must be presented in Transaction Reference Inputs and has enough authority 
    - validate there is a single Pool UTxO in Transaction Inputs and single Pool UTxO in Transaction Outputs and:
      - Pool Input contains 1 valid Pool NFT Token
      - Pool Input and Output Value must be unchanged
-     - Transaction contain only 1 Script (Pool Script). It will avoid bad Admin stealing money from Order Contract.
+     - Transaction contain only 1 Spending Script (Pool Script). It will avoid bad Admin stealing money from Order Contract.
    -  validate Transaction won't mint any assets
-   -  Both **UpdatePoolFeeOrStakeCredential** _action_ must not change these fields on the Pool Datum:
-      -  _asset_a_
-      -  _asset_b_
-      -  _total_liquidity_
-      -  _reserve_a_
-      -  _reseve_b_
-   -  Each _action_ must be followed:
+   -  Each **UpdatePoolParameters** action has limited power to change some of Pool's parameters and stake address. Otherwise, it's not allowed  
       -  _UpdatePoolFee_:
-            - Trading Fee Numerator must be between **5** and **1000**
-            - Fee Sharing can be on/off by setting _fee_sharing_numerator_opt_ is None or Some. Fee Sharing numerator must be between **1666** and **5000**
-            - Pool Address must be unchanged (both Payment and Stake Credential)
-      - _UpdatePoolStakeCredential_:
-        - Trading Fee and Fee Sharing must be unchanged
-        - Pool's Stake Credential can be changed to any other Stake Address
-- **WithdrawLiquidityShare**: Allow Admin can withdraw Liquidity Share to any Addresss.
-   - validate Admin with valid Admin License Token must be presented in Transaction Inputs.
+         -  Update _base_fee_a_numerator_, _base_fee_b_numerator_ and the new value must be between **5** and **2000**
+         -  Update _fee_sharing_numerator_opt_ is None or Some and the new value must be between **1666** and **5000**
+         -  Pool Address must be unchanged (both Payment and Stake Credential)
+      -  _UpdateDynamicFee_: 
+         -  Update _allow_dynamic_fee_ value to True or False
+         -  Pool Address must be unchanged (both Payment and Stake Credential)
+      -  _UpdatePoolStakeCredential_: 
+         -  Update Pool's Stake Credential to any other Stake Address
+- **WithdrawFeeSharing**: Allow Admin can withdraw Liquidity Share to any Addresss.
+   - validate Admin with valid Admin License Token must be presented in Transaction Reference Inputs and has enough authority 
    - validate there is a single Pool UTxO in Transaction Inputs and single Pool UTxO in Transaction Outputs and:
      - Pool Input contains 1 valid Pool NFT Token
      - Pool Input and Output Address must be unchanged (both Payment and Stake Credential)
      - Pool Datum must be unchanged
-     - Transaction contain only 1 Script (Pool Script). It will avoid bad Admin stealing money from Order Contract.
+     - Transaction contain only 1 Spending Script (Pool Script). It will avoid bad Admin stealing money from Order Contract.
    - validate Transaction won't mint any assets
    - validate Admin withdraws the exact earned Fee Sharing amount:
      - Earned Asset A: Reserve A in Value - Reserve A in Datum
@@ -841,16 +855,17 @@ Transaction structure:
          - vol_fees
 
 
-### 3.4.5 Update Pool Fee Or Stake Credential
+### 3.4.5 Update Pool Parameters
 
 
 Transaction structures:
- - Inputs:
+ - Reference Inputs:
    - Admin UTxO:
      - Address: Admin Address
      - Value:
        - ADA
        - 1 Admin License Token
+ - Inputs:
    - Pool UTxO:
      - Address: Pool Address
      - Value: 
@@ -869,12 +884,13 @@ Transaction structures:
        - _base_fee_a_numerator_
        - _base_fee_b_numerator_
        - _fee_sharing_numerator_opt_
-     - Redeemer: UpdatePoolFeeOrStakeCredential
+     - Redeemer: UpdatePoolParametersAction
        - _action_
  - Outputs:
    - Pool Output:
      - Address: if _action_ is:
        - _UpdatePoolFee_: unchanged
+       - _UpdateDynamicFee_: unchanged
        - _UpdatePoolStakeCredential_: only change Stake Credential
      - Value: (unchanged)
      - Datum: if _action_ is:
@@ -882,20 +898,23 @@ Transaction structures:
          -  _base_fee_a_numerator_
          -  _base_fee_b_numerator_
          -  _fee_sharing_numerator_opt_
+        -  _UpdateDynamicFee_: only change:
+           -  _allow_dynamic_fee_
        - _UpdatePoolStakeCredential_: unchanged
    - Admin Change UTxOs
 
 
-### 3.4.6 Withdraw Liquidity Share
+### 3.4.6 Withdraw Fee Sharing
 
 
 Transaction structures:
- - Inputs:
+ - Reference Inputs:
    - Admin UTxO:
      - Address: Admin Address
      - Value:
        - ADA
        - 1 Admin License Token
+ - Inputs:
    - Pool UTxO:
      - Address: Pool Address
      - Value: 
@@ -914,7 +933,7 @@ Transaction structures:
        - _base_fee_a_numerator_
        - _base_fee_b_numerator_
        - _fee_sharing_numerator_opt_
-     - Redeemer: WithdrawLiquidityShare
+     - Redeemer: WithdrawFeeSharing
  - Outputs:
    - Pool Output:
      - Address: (unchanged)

@@ -209,7 +209,7 @@ validator(
       } else {
         and {
           pool_validation.is_admin_existence(
-            admin_policy_id: utils.admin_policy_id,
+            admin_policy_id: utils.custom_pool_creator_policy_id,
             reference_inputs: reference_inputs,
             withdrawals: withdrawals,
             signatories: extra_signatories,

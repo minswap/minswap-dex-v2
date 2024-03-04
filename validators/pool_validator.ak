@@ -11,8 +11,8 @@ use amm_dex_v2/order_validation
 use amm_dex_v2/pool_validation
 use amm_dex_v2/types.{
   Batching, BatchingPool, OrderDatum, PoolBatchingRedeemer, PoolDatum,
-  PoolRedeemer, SwapMultiRouting, SwapRouting, UpdatePoolFeeOrStakeCredential,
-  WithdrawLiquidityShare,
+  PoolRedeemer, SwapMultiRouting, SwapRouting, UpdatePoolParameters,
+  WithdrawFeeSharing,
 }
 use amm_dex_v2/utils
 
@@ -33,7 +33,7 @@ validator(
         let PoolDatum { pool_batching_stake_credential, .. } = datum
         dict.has_key(withdrawals, pool_batching_stake_credential)
       }
-      UpdatePoolFeeOrStakeCredential(action) -> {
+      UpdatePoolParameters(action) -> {
         let Transaction {
           inputs,
           reference_inputs,
@@ -47,20 +47,16 @@ validator(
         } = transaction
         expect Some(pool_input) = transaction.find_input(inputs, pool_input_ref)
         and {
-          // Transaction requires admin token to execute
-          pool_validation.is_admin_existence(
-            admin_policy_id: utils.admin_policy_id,
-            reference_inputs: reference_inputs,
-            withdrawals: withdrawals,
-            signatories: extra_signatories,
-            validity_range: validity_range,
-          ),
           // Transaction contain only 1 Spending Script (Pool Script). 
           // It will avoid bad Admin can steal money from Order Contract.
           pool_validation.has_single_spending(redeemers),
           // This Redeemer won't mint anything 
           value.is_zero(value.from_minted_value(mint)),
-          pool_validation.validate_update_pool_datum_or_stake_credential(
+          pool_validation.validate_update_pool_parameters(
+            reference_inputs: reference_inputs,
+            withdrawals: withdrawals,
+            extra_signatories: extra_signatories,
+            validity_range: validity_range,
             action: action,
             authen_policy_id: authen_policy_id,
             pool_input: pool_input,
@@ -69,7 +65,7 @@ validator(
           ),
         }
       }
-      WithdrawLiquidityShare -> {
+      WithdrawFeeSharing -> {
         let Transaction {
           inputs,
           reference_inputs,
@@ -83,9 +79,9 @@ validator(
         } = transaction
         expect Some(pool_input) = transaction.find_input(inputs, pool_input_ref)
         and {
-          // Transaction requires admin token to execute
+          // Transaction requires Fee Sharing Taker license token to execute
           pool_validation.is_admin_existence(
-            admin_policy_id: utils.admin_policy_id,
+            admin_policy_id: utils.fee_sharing_taker_policy_id,
             reference_inputs: reference_inputs,
             withdrawals: withdrawals,
             signatories: extra_signatories,
@@ -96,7 +92,7 @@ validator(
           pool_validation.has_single_spending(redeemers),
           // This Redeemer won't mint anything 
           value.is_zero(value.from_minted_value(mint)),
-          pool_validation.validate_withdraw_liquidity_share(
+          pool_validation.validate_withdraw_fee_sharing(
             authen_policy_id: authen_policy_id,
             pool_input: pool_input,
             pool_in_datum: datum,
