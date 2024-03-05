@@ -115,11 +115,32 @@ export namespace OrderStep {
     }
 }
 
+export enum AuthorizationMethodType {
+    SIGNATURE = 0,
+    SPEND_SCRIPT,
+    WITHDRAW_SCRIPT,
+    MINT_SCRIPT
+}
+
+export type AuthorizationMethod = {
+    type: AuthorizationMethodType,
+    hash: string;
+}
+
+export namespace AuthorizationMethod {
+    export function toPlutus(m: AuthorizationMethod): Constr<Data> {
+        return new Constr(m.type, [
+            m.hash
+        ])
+    }
+}
+
 export type OrderDatum = {
-    sender: string;
-    senderDatum: OrderExtraDatum;
-    receiver: string;
-    receiverDatum: OrderExtraDatum;
+    canceller: AuthorizationMethod,
+    refundReceiver: string;
+    refundReceiverDatum: OrderExtraDatum;
+    successReceiver: string;
+    successReceiverDatum: OrderExtraDatum;
     lpAsset: Asset;
     step: OrderSwapExactInStep;
     maxBatcherFee: bigint;
@@ -129,10 +150,11 @@ export type OrderDatum = {
 export namespace OrderDatum {
     export function toPlutus(dat: OrderDatum): Constr<Data>{
         return new Constr(0, [
-            AddressPlutusData.toPlutus(dat.sender),
-            OrderExtraDatum.toPlutus(dat.senderDatum),
-            AddressPlutusData.toPlutus(dat.receiver),
-            OrderExtraDatum.toPlutus(dat.receiverDatum),
+            AuthorizationMethod.toPlutus(dat.canceller),
+            AddressPlutusData.toPlutus(dat.refundReceiver),
+            OrderExtraDatum.toPlutus(dat.refundReceiverDatum),
+            AddressPlutusData.toPlutus(dat.successReceiver),
+            OrderExtraDatum.toPlutus(dat.successReceiverDatum),
             Asset.toPlutus(dat.lpAsset),
             OrderStep.toPlutus(dat.step),
             dat.maxBatcherFee,

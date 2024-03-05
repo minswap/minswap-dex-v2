@@ -220,15 +220,24 @@ pub type ExtraOrderDatum {
   EODInlineDatum { hash: CustomDatumHash }
 }
 
+pub type AuthorizationMethod {
+  Signature { pub_key_hash: PubKeyHash }
+  SpendScript { script_hash: ValidatorHash }
+  WithdrawScript { script_hash: ValidatorHash }
+  MintScript { script_hash: ValidatorHash }
+}
+
 pub type OrderDatum {
-  // The address of order's creator, only sender can cancel the order immediately
-  sender: Address,
+  // The address's payment credential that can cancel the order, can by PubKey or Script
+  canceller: AuthorizationMethod,
+  // The address of the output after being killed by Batcher or cancelled by bots (order is expired)
+  refund_receiver: Address,
   // The datum hash of the output after being killed by Batcher or cancelled by bots (order is expired)
-  sender_datum: ExtraOrderDatum,
+  refund_receiver_datum: ExtraOrderDatum,
   // The address which receives the funds after order is processed
-  receiver: Address,
+  success_receiver: Address,
   // The datum hash of the output after order is processed.
-  receiver_datum: ExtraOrderDatum,
+  success_receiver_datum: ExtraOrderDatum,
   // The Liquidity Pool's LP Asset that the order will be applied to
   lp_asset: Asset,
   // The information about Order Type

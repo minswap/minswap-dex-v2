@@ -167,10 +167,11 @@ There are 10 order types:
 An Order Datum keeps information about Order Type and some other informations:
 
 
-- _sender_: The address of order's creator, only sender can cancel the order
-- _sender_datum_: the datum of the output after cancelling order by anyone or killing by batcher.
-- _receiver_: The address which receives the funds after order is processed
-- _receiver_datum_: the datum of the output after order is processed.
+- _canceller_: The address's payment credential that can cancel the order, can by PubKey or Script
+- _refund_receiver_: The address of the output after being killed by Batcher or cancelled by bots (order is expired)
+- _refund_receiver_datum_: The datum hash of the output after being killed by Batcher or cancelled by bots (order is expired)
+- _success_receiver_: The address which receives the funds after order is processed
+- _success_receiver_datum_: the datum of the output after order is processed.
 - _lp_asset_: The Liquidity Pool's LP Asset that the order will be applied to
 - _step_: The information about Order Type which we mentioned above
 - _max_batcher_fee_: The maximum fee users have to pay to Batcher to execute batching transaction. The actual fee Batcher will take might be less than the maximum fee
@@ -190,8 +191,13 @@ An Order Datum keeps information about Order Type and some other informations:
 
 - **ApplyOrder**: the redeemer will allow spending Order UTxO in Batching transaction
    - validate that an Order can be spent if there's a `Pool Batching` validator in the `withdrawals`
-- **CancelOrder**: the redeemer will allow _sender_ to spend Order UTxO to get back locked funds.
-   - validate that the transaction has _sender_'s signature or _sender_ script UTxO in the Transaction Inputs
+- **CancelOrder**: the redeemer will allow _canceller_ to spend Order UTxO to get back locked funds.
+   - validate that the the authorization of _canceller_
+   - _canceller_ can be one of 4 authorization methods:
+     - _Signature_: requires the signature in transaction's signatories
+     - _SpendScript_: requires its Utxo has to present in the transaction inputs
+     - _WithdrawScript_: requires the script hash has to present in the transaction withdrawals
+     - _MintScript_: requires minting tokens that has the same policy id with script hash and present in transaction minting. Token's quantity must not be zero
 - **CancelExpiredOrderByAnyone**: the redeemer will allow anyone to spend Order UTxO to unlock funds going back to user
    - validate that an Order can be spent if there's a `Expired Order Cancellation` validator in the `withdrawals`
 
@@ -410,7 +416,7 @@ Batching validation has 2 scenarios:
        - All amount fields in Order Step must be positive
        - _batcher_fee_ must be positive
        - _lp_asset_ in **OrderDatum** must be the same with processing Liquidity Pool
-       - Order Output must be returned to _receiver_ and has _receiver_datum_
+       - the destination output must be returned to _refund_receiver_ + _refund_receiver_datum_ if the order is killed by batcher or _success_receiver_ + _success_receiver_datum_ if the order is processed
 
 - **Batching Multiple Pools**: It will process single **SwapMultiRouting** Order and multiple **Liquidity Pool**
   - validate batcher with valid License Token must be presented in Transaction Inputs:
@@ -430,9 +436,8 @@ Batching validation has 2 scenarios:
      - All amount fields in Order Step must be positive
      - _batcher_fee_ must be positive
      - _lp_asset_ in **OrderDatum** must be the same with LP Asset of first Liquidity Pool in routing list
-     - Order Output must be returned to _receiver_ and has _receiver_datum_
      - The number of Pool Inputs and Pool Outputs must be the same with _routings_ length
-     - Calculated Asset Out must be returned to _receiver_
+     - the destination output must be returned to _refund_receiver_ + _refund_receiver_datum_ if the order is killed by batcher or _success_receiver_ + _success_receiver_datum_ if the order is processed
 ### 3.4 Transaction
 
 
@@ -536,7 +541,7 @@ Transaction structure:
 Create Order transaction will transfer User funds into an Order UTxO.
 
 
-Besides common information such as _sender_, _receiver_, etc, each order type requires different information in _step_ field (note that we only mention _field name_ here, the fields' descriptions have been explained above)
+Besides common information such as _canceller_, _refund_receiver_, etc, each order type requires different information in _step_ field (note that we only mention _field name_ here, the fields' descriptions have been explained above)
 
 
 Transaction structure:
@@ -545,10 +550,11 @@ Transaction structure:
    - Order UTxOs (a single transaction can create multiple orders)
      - Address: Order Address
      - Datum:
-       - _sender_
-       - _sender_datum_
-       - _receiver_
-       - _receiver_datum_
+       - _canceller_
+       - _refund_receiver_
+       - _refund_receiver_datum_
+       - _success_receiver_
+       - _success_receiver_datum_
        - _lp_asset_
        - _batcher_fee_
        - _expired_setting_opt_
@@ -710,8 +716,8 @@ Transaction structure:
        - _base_fee_b_numerator_ (unchanged)
        - _fee_sharing_numerator_opt_ (unchanged)
    - Order Outputs:
-     - Address: _receiver_
-     - Datum: _receiver_datum_
+     - Address: _success_receiver_
+     - Datum: _success_receiver_datum_
      - Value:
        - _SwapExactIn_:
          - Value:
@@ -755,10 +761,11 @@ Transaction structure:
              - remaining swapping Token and received Token
          - Create new _PartialSwap_ Order if _hops_ > 1 and remaining Swapping Token is greater than _minimum_swap_amount_required_
            - Datum:
-             - _sender_ (unchanged)
-             - _sender_datum_ (unchanged)
-             - _receiver_ (unchanged)
-             - _receiver_datum_ (unchanged)
+             - _canceller_
+             - _refund_receiver_ (unchanged)
+             - _refund_receiver_datum_ (unchanged)
+             - _success_receiver_ (unchanged)
+             - _success_receiver_datum_ (unchanged)
              - _lp_asset_ (unchanged)
              - _batcher_fee_ (unchanged)
              - _step_: _PartialSwap_

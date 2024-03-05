@@ -1,10 +1,19 @@
-import { Assets, Constr, Data, fromText, Lucid, toHex, UTxO } from "lucid-cardano";
+import {
+  Assets,
+  Constr,
+  Data,
+  fromText,
+  Lucid,
+  toHex,
+  UTxO,
+} from "lucid-cardano";
 
 import { sha3 } from "./hash";
 import { EmulatorProvider } from "./provider";
 import { getContractScripts } from "./script";
 import { ADA, Asset } from "./types/asset";
 import {
+  AuthorizationMethodType,
   OrderAmountType,
   OrderDatum,
   OrderDirection,
@@ -269,7 +278,7 @@ async function buildBatchTx({
       inline: pool.poolOut.datum,
     },
     pool.poolOut.value
-  )
+  );
 
   const txComplete = await tx.complete({
     change: {
@@ -336,16 +345,22 @@ async function main(): Promise<void> {
 
   const testUserAddr =
     "addr_test1vrxhzzazrwa988jumcrtt7kt6gf7rwd4jxzr0kfvxjaqvwqavxh3s";
+  const cancellerPubKeyHash =
+    "cd710ba21bba539e5cde06b5facbd213e1b9b5918437d92c34ba0638";
   const totalOrderAmount = 2_000_000000n;
   const swapAmount = 1_000_000000n;
   const swapDirection = OrderDirection.A_TO_B;
   const orderDatum: OrderDatum = {
-    sender: testUserAddr,
-    senderDatum: {
+    canceller: {
+      type: AuthorizationMethodType.SIGNATURE,
+      hash: cancellerPubKeyHash,
+    },
+    refundReceiver: testUserAddr,
+    refundReceiverDatum: {
       type: OrderExtraDatumType.NO_DATUM,
     },
-    receiver: testUserAddr,
-    receiverDatum: {
+    successReceiver: testUserAddr,
+    successReceiverDatum: {
       type: OrderExtraDatumType.NO_DATUM,
     },
     lpAsset: lpAsset,
@@ -376,7 +391,7 @@ async function main(): Promise<void> {
 
   let tempDatumReserves: [bigint, bigint] = [amountA, amountB];
   let tempValueReserves: [bigint, bigint] = [amountA, amountB];
-  for (let i = 0; i < 36; i++) {
+  for (let i = 0; i < 35; i++) {
     const orderIn: UTxO = {
       txHash:
         "5573777bedba6bb5f56541681256158dcf8ebfbc9e7251277d25b118517dce10",
@@ -406,7 +421,7 @@ async function main(): Promise<void> {
     orders.push({
       orderIn: orderIn,
       orderOut: {
-        address: orderDatum.receiver,
+        address: orderDatum.successReceiver,
         value: orderOutValue,
       },
     });

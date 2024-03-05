@@ -202,13 +202,15 @@ export function getContractScripts(lucid: Lucid): {
   const testReferenceTxHash =
     "eb5d5d3cf842b171b09a1878fc8c16cf7a5ad6a0d18e3122feb31078e224680a";
 
-  const authenSize = fromHex(authenMintingScript.script).length
-  const orderSize = fromHex(orderScript.script).length
-  const poolSize = fromHex(poolScript.script).length
-  const factorySize = fromHex(factoryScript.script).length
-  const expiredOrderSize = fromHex(expiredOrderCancellationScript.script).length
-  const poolBatchingSize = fromHex(poolBatchingScript.script).length
-  
+  const authenSize = fromHex(authenMintingScript.script).length;
+  const orderSize = fromHex(orderScript.script).length;
+  const poolSize = fromHex(poolScript.script).length;
+  const factorySize = fromHex(factoryScript.script).length;
+  const expiredOrderSize = fromHex(
+    expiredOrderCancellationScript.script
+  ).length;
+  const poolBatchingSize = fromHex(poolBatchingScript.script).length;
+
   console.log(`
     - Authen size: ${authenSize} bytes
     - Order size: ${orderSize} bytes
@@ -216,7 +218,7 @@ export function getContractScripts(lucid: Lucid): {
     - Factory size: ${factorySize} bytes
     - Expired Order Cancel size: ${expiredOrderSize} bytes
     - Pool batching size: ${poolBatchingSize} bytes
-  `)
+  `);
   return {
     authenPolicyId,
     orderAddress,

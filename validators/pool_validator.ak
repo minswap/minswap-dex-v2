@@ -246,8 +246,8 @@ validator(
         expect order_in_datum: OrderDatum =
           utils.must_find_script_datum(datums, raw_order_in_datum)
         let OrderDatum {
-          receiver,
-          receiver_datum,
+          success_receiver,
+          success_receiver_datum,
           step: order_step,
           max_batcher_fee,
           lp_asset: order_lp_asset,
@@ -267,8 +267,8 @@ validator(
             order_fee <= max_batcher_fee,
             // Order Output must be returned to receiver and might have receiver_datum
             order_validation.validate_order_receiver(
-              receiver: receiver,
-              receiver_datum: receiver_datum,
+              receiver: success_receiver,
+              receiver_datum: success_receiver_datum,
               output: order_output,
             ),
             // In case expired setting is turned on, the execution time must not exceed the expired_time
