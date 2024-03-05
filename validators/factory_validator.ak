@@ -25,16 +25,7 @@ validator(
   ) {
     let ScriptContext { transaction, purpose } = context
     expect Spend(factory_ref) = purpose
-    let Transaction {
-      inputs,
-      reference_inputs,
-      mint,
-      outputs,
-      withdrawals,
-      extra_signatories,
-      validity_range,
-      ..
-    } = transaction
+    let Transaction { inputs, mint, outputs, .. } = transaction
     let FactoryRedeemer { asset_a, asset_b } = redeemer
     let FactoryDatum { head: current_head, tail: current_tail } = datum
     let Asset { policy_id: asset_a_policy_id, asset_name: asset_a_asset_name } =
@@ -200,28 +191,6 @@ validator(
         |> value.add(asset_b_policy_id, asset_b_asset_name, amount_b)
         |> value.add(authen_policy_id, lp_asset_name, remaining_liquidity)
         |> value.add(authen_policy_id, utils.pool_auth_asset_name, 1)
-    expect pool_datum_base_fee_a_numerator == pool_datum_base_fee_b_numerator
-    let stardard_fees =
-      [5, 30, 100]
-    let is_valid_trading_fee =
-      if list.has(stardard_fees, pool_datum_base_fee_a_numerator) {
-        True
-      } else {
-        and {
-          pool_validation.is_admin_existence(
-            admin_policy_id: utils.custom_pool_creator_policy_id,
-            reference_inputs: reference_inputs,
-            withdrawals: withdrawals,
-            signatories: extra_signatories,
-            validity_range: validity_range,
-          ),
-          pool_validation.validate_fee_percent(
-            fee_num: pool_datum_base_fee_a_numerator,
-            max_fee_num: utils.max_base_fee_numerator,
-            min_fee_num: utils.min_base_fee_numerator,
-          ),
-        }
-      }
     and {
       // stake_credential must be the same with configured credential
       pool_stake_credential == pool_batching_stake_credential,
@@ -237,8 +206,14 @@ validator(
       amount_a > 0,
       amount_b > 0,
       total_liquidity > 0,
-      // base_fee_a_numerator and base_fee_b_numerator must be between **5** and **1000**
-      is_valid_trading_fee,
+      // base_fee_a_numerator and base_fee_b_numerator must be the same
+      pool_datum_base_fee_a_numerator == pool_datum_base_fee_b_numerator,
+      // base_fee_a_numerator and base_fee_b_numerator must be between **5** and **2000**
+      pool_validation.validate_fee_percent(
+        fee_num: pool_datum_base_fee_a_numerator,
+        max_fee_num: utils.max_base_fee_numerator,
+        min_fee_num: utils.min_base_fee_numerator,
+      ),
       // Dynamic Fee is not allowed in Pool Creation 
       pool_allow_dynamic_fee == False,
       // fee_sharing_numerator_opt must be empty

@@ -29,7 +29,6 @@ There're 5 contracts in the AMM V2 system:
 
 - User: An entity who wants to interact with Liquidity Pool to deposit/withdraw liquidity or swap. The only requirement of users is that they must not be the same as batcher (because of how we filter UTxOs)
 - Batcher: An entity who aggregate order UTxOs from users and match them with liquidity pool UTxO. A batcher must hold a batcher's license token. The license token must not be expired and the expired time must be between current time and Maximum Deadline (to prevent minting license with infinity deadline).
-- Custom Pool creator: An entity who has permission to create a Liquidity Pool with custom pool's base fee within allowed range (0.05% to 20%). The creator must hold an Custom Pool Creator's license token
 - Pool Fee updater: An entity who has permission to create a Liquidity Pool's base fee and fee sharing to any value within allowed range (0.05% to 20% for base fee and 16.66% to 50% for fee sharing). The updater must hold an Pool Fee Updater's license token
 - Fee Sharing taker: An entity who has permission to withdraw Liquidity Pool's fee sharing. The taker must hold an Fee Sharing taker's license token
 - Pool Stake Key Updater:  An entity who has permission to update Liquidity Pool's stake credential. The updater must hold an Pool Stake Key Updater's license token
@@ -52,9 +51,6 @@ There're 5 contracts in the AMM V2 system:
    - CurrencySymbol: Defined in the constant `batcher_license_policy_id`. The policy is managed by team (e.g. multisig policy)
    - TokenName: POSIX timestamp represents license deadline
 - Liquidity Pool's parameters license token:
-   - Custom Pool Creator license token:
-     - CurrencySymbol: Defined in the constant `custom_pool_creator_policy_id`. The policy is managed by team (e.g. multisig policy)
-     - TokenName: POSIX timestamp represents license deadline
    - Pool Fee Updater license token:
      - CurrencySymbol: Defined in the constant `pool_fee_updater_policy_id`. The policy is managed by team (e.g. multisig policy)
      - TokenName: POSIX timestamp represents license deadline
@@ -296,8 +292,10 @@ Anytime new Pool is created, a Factory UTxO will be spent can create the 2 new o
      - _asset_a_ and _asset_b_ must be the same with Factory Redeemer
      - _total_liquidity_ must be sqrt(_amount_a_ * _amount_b_)
      - _reserve_a_ and _reserve_b_ must be _amount_a_ and _amount_b_
-     - _base_fee_a_numerator_ and _base_fee_b_numerator_ must be between **5** and **1000**
+     - _base_fee_a_numerator_ and _base_fee_b_numerator_ must be the same
+     - _base_fee_a_numerator_ and _base_fee_b_numerator_ must be between **5** and **2000**
      - _fee_sharing_numerator_opt_ must be empty
+     - _allow_dynamic_fee_ must be False
    - Pool Value must only have necessary Token: Asset A, Asset B, remaining LP Token (_MAX_INT64_ - _total_liquidity_), 1 Pool NFT Token and 3 ADA (required ADA for an UTxO)
    - validate that transaction only mint 3 types of tokens:
      - 1 Factory NFT Token
