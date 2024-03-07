@@ -1,6 +1,5 @@
 use aiken/builtin
 use aiken/dict
-use aiken/interval.{Finite, Interval, IntervalBound}
 use aiken/list
 use aiken/transaction.{
   Input, Output, ScriptContext, Spend, Transaction, WithdrawFrom,
@@ -11,9 +10,10 @@ use aiken/transaction/credential.{
 use aiken/transaction/value
 use amm_dex_v2/order_validation
 use amm_dex_v2/types.{
-  ApplyOrder, CancelExpiredOrderByAnyone, CancelOrderByOwner, MintScript,
-  OrderDatum, OrderRedeemer, Signature, SpendScript, WithdrawScript,
+  ApplyOrder, CancelExpiredOrderByAnyone, CancelOrderByOwner, OAMMintScript,
+  OAMSignature, OAMSpendScript, OAMWithdrawScript, OrderDatum, OrderRedeemer,
 }
+use amm_dex_v2/utils
 
 validator(
   // the Stake Credential of Pool Batching Validator
@@ -39,10 +39,11 @@ validator(
         // Canceller can be one of 4 authorization methods
         when canceller is {
           // In case the wallet is a PubKey, its signature is required 
-          Signature(pub_key_hash) -> list.has(extra_signatories, pub_key_hash)
+          OAMSignature(pub_key_hash) ->
+            list.has(extra_signatories, pub_key_hash)
           // In case the wallet is a Script and offer Spend method
           // its Utxo has to present in the transaction inputs
-          SpendScript(script_hash) -> {
+          OAMSpendScript(script_hash) -> {
             let canceller_credential = ScriptCredential(script_hash)
             !builtin.null_list(
               list.filter(
@@ -59,14 +60,14 @@ validator(
           }
           // In case the wallet is a Script and offer Withdrawal method
           // it has to make a withdrawal and present in transaction withdrawals
-          WithdrawScript(script_hash) -> {
+          OAMWithdrawScript(script_hash) -> {
             let credential = Inline(ScriptCredential(script_hash))
             dict.has_key(withdrawals, credential)
           }
           // In case the wallet is a Script and offer Minting method
           // it has to mint tokens that has defined policy id and present in transaction minting
           // Token's quantity must not be zero
-          MintScript(script_hash) -> {
+          OAMMintScript(script_hash) -> {
             let fst_token_quantity =
               mint
                 |> value.from_minted_value()
@@ -112,11 +113,8 @@ validator {
         },
       )
 
-    let Interval {
-      lower_bound: IntervalBound { bound_type: lower_bound_type, .. },
-      ..
-    } = validity_range
-    expect Finite(start_valid_time_range) = lower_bound_type
+    let start_valid_time_range =
+      utils.must_get_finite_start_validity(validity_range)
     order_validation.validate_cancel_expired_orders(
       order_inputs: order_inputs,
       all_outputs: outputs,

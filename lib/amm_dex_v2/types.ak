@@ -48,7 +48,7 @@ pub type PoolRedeemer {
 }
 
 pub type PoolBatchingRedeemer {
-  license_index: Int,
+  batcher_index: ByteArray,
   orders_fee: List<Int>,
   input_indexes: ByteArray,
   pool_input_indexes_opt: Option<ByteArray>,
@@ -220,16 +220,16 @@ pub type ExtraOrderDatum {
   EODInlineDatum { hash: CustomDatumHash }
 }
 
-pub type AuthorizationMethod {
-  Signature { pub_key_hash: PubKeyHash }
-  SpendScript { script_hash: ValidatorHash }
-  WithdrawScript { script_hash: ValidatorHash }
-  MintScript { script_hash: ValidatorHash }
+pub type OrderAuthorizationMethod {
+  OAMSignature { pub_key_hash: PubKeyHash }
+  OAMSpendScript { script_hash: ValidatorHash }
+  OAMWithdrawScript { script_hash: ValidatorHash }
+  OAMMintScript { script_hash: ValidatorHash }
 }
 
 pub type OrderDatum {
   // The address's payment credential that can cancel the order, can by PubKey or Script
-  canceller: AuthorizationMethod,
+  canceller: OrderAuthorizationMethod,
   // The address of the output after being killed by Batcher or cancelled by bots (order is expired)
   refund_receiver: Address,
   // The datum hash of the output after being killed by Batcher or cancelled by bots (order is expired)
@@ -290,3 +290,12 @@ pub type BatchingPool {
 // Total Liquidity
 pub type PoolState =
   (Int, Int, Int, Int, Int)
+
+pub type GlobalSetting {
+  batchers: List<Address>,
+  pool_fee_updater: Address,
+  fee_sharing_taker: Address,
+  pool_stake_key_updater: Address,
+  pool_dynamic_fee_updater: Address,
+  admin: Address,
+}

@@ -1,15 +1,17 @@
+use aiken/builtin
 use aiken/dict
 use aiken/list
 use aiken/transaction.{
   Input, Mint, Output, OutputReference, ScriptContext, Spend, Transaction,
 }
+use aiken/transaction/credential.{Address, ScriptCredential}
 use aiken/transaction/value
 use amm_dex_v2/pool_validation
 use amm_dex_v2/types.{
   Asset, AuthenRedeemer, CreatePool, FactoryDatum, FactoryRedeemer,
-  MintFactoryAuthen,
+  GlobalSetting, MintFactoryAuthen,
 }
-use amm_dex_v2/utils.{factory_auth_asset_name}
+use amm_dex_v2/utils
 
 validator(
   // @out_ref is a Reference of an Unspent Transaction Output,
@@ -33,7 +35,7 @@ validator(
               value.quantity_of(
                 out_value,
                 authen_policy_id,
-                factory_auth_asset_name,
+                utils.factory_auth_asset_name,
               ) == 1
             },
           )
@@ -89,12 +91,28 @@ validator(
 
         // validate that the redeemer only mint a single Factory Token 
         let mint_value = value.from_minted_value(mint)
-        expect [(minted_pid, minted_an, minted_amount)] =
-          value.flatten(mint_value)
+        expect [
+          (minted_pid_1, minted_an_1, minted_amount_1),
+          (minted_pid_2, minted_an_2, minted_amount_2),
+        ] = value.flatten(mint_value)
+        let is_valid_minted_asset_name =
+          if builtin.less_than_bytearray(minted_an_1, minted_an_2) {
+            and {
+              minted_an_1 == utils.global_setting_asset_name,
+              minted_an_2 == utils.factory_auth_asset_name,
+            }
+          } else {
+            and {
+              minted_an_1 == utils.factory_auth_asset_name,
+              minted_an_2 == utils.global_setting_asset_name,
+            }
+          }
         expect and {
-            minted_pid == authen_policy_id,
-            minted_an == factory_auth_asset_name,
-            minted_amount == 1,
+            minted_pid_1 == authen_policy_id,
+            minted_pid_2 == authen_policy_id,
+            minted_amount_1 == 1,
+            minted_amount_2 == 1,
+            is_valid_minted_asset_name,
           }
         // validate that there's only 1 Factory UTxO in the Transaction Outputs
         // The Factory UTxO must contain Factory Token in the value
@@ -106,7 +124,7 @@ validator(
               value.quantity_of(
                 out_value,
                 authen_policy_id,
-                factory_auth_asset_name,
+                utils.factory_auth_asset_name,
               ) == 1
             },
           )
@@ -114,11 +132,49 @@ validator(
         expect factory_datum: FactoryDatum =
           utils.must_find_script_inline_datum(factory_raw_datum)
         let FactoryDatum { head, tail } = factory_datum
+
+        expect [global_setting_output] =
+          list.filter(
+            outputs,
+            fn(output) {
+              let Output {
+                address: Address { payment_credential: payment_cred, .. },
+                ..
+              } = output
+              when payment_cred is {
+                ScriptCredential(h) -> h == authen_policy_id
+                _ -> False
+              }
+            },
+          )
+        let Output {
+          value: global_setting_value,
+          datum: global_setting_datum_raw,
+          ..
+        } = global_setting_output
+        expect global_setting: GlobalSetting =
+          utils.must_find_script_inline_datum(global_setting_datum_raw)
+        let GlobalSetting { batchers, .. } = global_setting
         and {
           head == #"00",
           tail == #"ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff00",
+          !builtin.null_list(batchers),
+          value.quantity_of(
+            global_setting_value,
+            authen_policy_id,
+            utils.global_setting_asset_name,
+          ) == 1,
         }
       }
     }
+  }
+
+  fn validate_spend_global_setting(
+    _data: Data,
+    _r: Data,
+    context: ScriptContext,
+  ) {
+    expect ScriptContext { purpose: Spend(_), .. } = context
+    True
   }
 }

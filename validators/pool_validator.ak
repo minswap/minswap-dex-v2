@@ -10,8 +10,9 @@ use aiken/transaction/value.{PolicyId}
 use amm_dex_v2/order_validation
 use amm_dex_v2/pool_validation
 use amm_dex_v2/types.{
-  Batching, BatchingPool, OrderDatum, PoolBatchingRedeemer, PoolDatum,
-  PoolRedeemer, SwapMultiRouting, SwapRouting, UpdatePoolParameters,
+  Batching, BatchingPool, GlobalSetting, OrderDatum, PoolBatchingRedeemer,
+  PoolDatum, PoolRedeemer, SwapMultiRouting, SwapRouting, UpdateDynamicFee,
+  UpdatePoolFee, UpdatePoolParameters, UpdatePoolStakeCredential,
   WithdrawFeeSharing,
 }
 use amm_dex_v2/utils
@@ -42,21 +43,39 @@ validator(
           mint,
           withdrawals,
           extra_signatories,
-          validity_range,
           ..
         } = transaction
         expect Some(pool_input) = transaction.find_input(inputs, pool_input_ref)
+        let global_setting =
+          pool_validation.get_and_validate_global_setting(
+            reference_inputs: reference_inputs,
+            authen_policy_id: authen_policy_id,
+          )
+        let GlobalSetting {
+          pool_fee_updater,
+          pool_stake_key_updater,
+          pool_dynamic_fee_updater,
+          ..
+        } = global_setting
+        let authorizer =
+          when action is {
+            UpdatePoolFee -> pool_fee_updater
+            UpdateDynamicFee -> pool_dynamic_fee_updater
+            UpdatePoolStakeCredential -> pool_stake_key_updater
+          }
         and {
+          pool_validation.authorize_license_holder_by_global_setting(
+            license_address: authorizer,
+            transaction_inputs: inputs,
+            withdrawals: withdrawals,
+            extra_signatories: extra_signatories,
+          ),
           // Transaction contain only 1 Spending Script (Pool Script). 
           // It will avoid bad Admin can steal money from Order Contract.
           pool_validation.has_single_spending(redeemers),
           // This Redeemer won't mint anything 
           value.is_zero(value.from_minted_value(mint)),
           pool_validation.validate_update_pool_parameters(
-            reference_inputs: reference_inputs,
-            withdrawals: withdrawals,
-            extra_signatories: extra_signatories,
-            validity_range: validity_range,
             action: action,
             authen_policy_id: authen_policy_id,
             pool_input: pool_input,
@@ -74,18 +93,22 @@ validator(
           mint,
           withdrawals,
           extra_signatories,
-          validity_range,
           ..
         } = transaction
         expect Some(pool_input) = transaction.find_input(inputs, pool_input_ref)
+        let global_setting =
+          pool_validation.get_and_validate_global_setting(
+            reference_inputs: reference_inputs,
+            authen_policy_id: authen_policy_id,
+          )
+        let GlobalSetting { fee_sharing_taker, .. } = global_setting
         and {
           // Transaction requires Fee Sharing Taker license token to execute
-          pool_validation.is_admin_existence(
-            admin_policy_id: utils.fee_sharing_taker_policy_id,
-            reference_inputs: reference_inputs,
+          pool_validation.authorize_license_holder_by_global_setting(
+            license_address: fee_sharing_taker,
+            transaction_inputs: inputs,
             withdrawals: withdrawals,
-            signatories: extra_signatories,
-            validity_range: validity_range,
+            extra_signatories: extra_signatories,
           ),
           // Transaction contain only 1 Spending Script (Pool Script). 
           // It will avoid bad Admin can steal money from Order Contract.
@@ -117,25 +140,41 @@ validator(
       transaction,
       purpose: WithdrawFrom(stake_credential),
     } = context
-    let Transaction { inputs, outputs, datums, validity_range, mint, .. } =
-      transaction
+    let Transaction {
+      inputs,
+      outputs,
+      datums,
+      validity_range,
+      mint,
+      reference_inputs,
+      extra_signatories,
+      withdrawals,
+      ..
+    } = transaction
     let PoolBatchingRedeemer {
-      license_index,
+      batcher_index,
       orders_fee,
       input_indexes,
       pool_input_indexes_opt,
       vol_fees,
     } = redeemer
-    // Batching Redeemer provides @license_index which help save calculation cost
-    let license_input = utils.list_at_index(inputs, license_index)
-    // A valid license token is the token having expired timestamp as TokenName and must be within current time and current time + _maximum_deadline_range_
-    let (batcher_address, end_valid_time_range) =
-      pool_validation.validate_license_expiration_and_find_license_holder(
-        license_pid: utils.batcher_license_policy_id,
-        license_input: license_input,
-        validity_range: validity_range,
+    let global_setting =
+      pool_validation.get_and_validate_global_setting(
+        reference_inputs: reference_inputs,
+        authen_policy_id: authen_policy_id,
       )
+    let GlobalSetting { batchers, .. } = global_setting
+    let end_valid_time_range =
+      utils.must_get_finite_end_validity(validity_range)
+    let batcher_address =
+      utils.list_at_index(batchers, builtin.index_bytearray(batcher_index, 0))
     expect and {
+        pool_validation.authorize_license_holder_by_global_setting(
+          license_address: batcher_address,
+          transaction_inputs: inputs,
+          withdrawals: withdrawals,
+          extra_signatories: extra_signatories,
+        ),
         // Input indexes must not be empty list and be unique
         utils.is_unique_bytearray_unsorted(input_indexes),
         // validate Transaction won't mint any assets

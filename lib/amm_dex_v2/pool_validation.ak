@@ -1,10 +1,8 @@
+use aiken/builtin
 use aiken/dict.{Dict}
 use aiken/hash.{Blake2b_224, Hash}
-use aiken/interval.{Finite, Interval, IntervalBound}
 use aiken/list
-use aiken/transaction.{
-  Input, Output, Redeemer, ScriptPurpose, Spend, ValidityRange,
-}
+use aiken/transaction.{Input, Output, Redeemer, ScriptPurpose, Spend}
 use aiken/transaction/credential.{
   Address, Inline, PaymentCredential, ScriptCredential, StakeCredential,
   VerificationKey, VerificationKeyCredential,
@@ -13,40 +11,74 @@ use aiken/transaction/value.{
   AssetName, PolicyId, Value, ada_asset_name, ada_policy_id,
 }
 use amm_dex_v2/types.{
-  Asset, BatchingPool, PoolDatum, UpdateDynamicFee, UpdatePoolFee,
+  Asset, BatchingPool, GlobalSetting, PoolDatum, UpdateDynamicFee, UpdatePoolFee,
   UpdatePoolParametersAction, UpdatePoolStakeCredential,
 }
 use amm_dex_v2/utils
 
-pub fn validate_license_expiration_and_find_license_holder(
-  license_pid: PolicyId,
-  license_input: Input,
-  validity_range: ValidityRange,
-) -> (Address, Int) {
+pub fn get_and_validate_global_setting(
+  reference_inputs: List<Input>,
+  authen_policy_id: PolicyId,
+) -> GlobalSetting {
   let Input {
-    output: Output { address: license_holder_addr, value: license_value, .. },
+    output: Output {
+      address: global_setting_addr,
+      value: global_setting_value,
+      datum: global_setting_datum_raw,
+      ..
+    },
     ..
-  } = license_input
-  expect [(license_asset_name, license_amount)] =
-    license_value
-      |> value.tokens(license_pid)
-      |> dict.to_list()
-  let license_deadline = utils.bytearray_to_positive_int(license_asset_name)
-  let Interval {
-    lower_bound: IntervalBound { bound_type: lower_bound_type, .. },
-    upper_bound: IntervalBound { bound_type: upper_bound_type, .. },
-  } = validity_range
-  expect Finite(start_valid_time_range) = lower_bound_type
-  expect Finite(end_valid_time_range) = upper_bound_type
-  // - Only Batcher with valid license token can trigger @ApplyPool redeemer validation.  
-  // - A valid license token is the token with @tokenName (representing for expired milliseconds) 
-  //   and must be within the time range from current_time to current_time + maximum_deadline_range
+  } = reference_inputs |> builtin.head_list
+  expect Address { payment_credential: ScriptCredential(hash), .. } =
+    global_setting_addr
   expect and {
-      license_amount == 1,
-      license_deadline >= end_valid_time_range,
-      license_deadline <= start_valid_time_range + utils.maximum_deadline_range,
+      hash == authen_policy_id,
+      (
+        global_setting_value
+          |> value.quantity_of(authen_policy_id, utils.global_setting_asset_name)
+      ) == 1,
     }
-  (license_holder_addr, end_valid_time_range)
+  expect global_setting_datum: GlobalSetting =
+    utils.must_find_script_inline_datum(global_setting_datum_raw)
+  global_setting_datum
+}
+
+pub fn authorize_license_holder_by_global_setting(
+  license_address: Address,
+  transaction_inputs: List<Input>,
+  withdrawals: Dict<StakeCredential, Int>,
+  extra_signatories: List<Hash<Blake2b_224, VerificationKey>>,
+) -> Bool {
+  let Address { payment_credential: license_holder_payment_cred, .. } =
+    license_address
+  when license_holder_payment_cred is {
+    //If the Admin function is controlled by a PubKey wallet, 
+    // the owners of the UTxO must sign the transaction with their private key. Otherwise, such action must be prohibited.
+    VerificationKeyCredential(pub_key_hash) ->
+      list.has(extra_signatories, pub_key_hash)
+    // If the Admin function is controlled by a Script wallet, 
+    // the smart contract must incorporate a Withdrawal function and execute sufficient conditions to facilitate its operation
+    ScriptCredential(script_hash) -> {
+      let authorized_via_withdrawal =
+        dict.has_key(withdrawals, Inline(ScriptCredential(script_hash)))
+      if authorized_via_withdrawal {
+        True
+      } else {
+        let holder_inputs =
+          list.filter(
+            transaction_inputs,
+            fn(input) {
+              let Input { output, .. } = input
+              let Output { address: out_address, .. } = output
+              let Address { payment_credential: out_payment_credential, .. } =
+                out_address
+              out_payment_credential == license_holder_payment_cred
+            },
+          )
+        !builtin.null_list(holder_inputs)
+      }
+    }
+  }
 }
 
 pub fn get_batching_pool(
@@ -211,10 +243,6 @@ pub fn get_batching_pool(
 }
 
 pub fn validate_update_pool_parameters(
-  reference_inputs: List<Input>,
-  withdrawals: Dict<StakeCredential, Int>,
-  extra_signatories: List<Hash<Blake2b_224, VerificationKey>>,
-  validity_range: ValidityRange,
   action: UpdatePoolParametersAction,
   authen_policy_id: PolicyId,
   pool_input: Input,
@@ -289,14 +317,6 @@ pub fn validate_update_pool_parameters(
             )
         }
       and {
-        // Transaction requires Pool Fee Updater license token to execute
-        is_admin_existence(
-          admin_policy_id: utils.pool_fee_updater_policy_id,
-          reference_inputs: reference_inputs,
-          withdrawals: withdrawals,
-          signatories: extra_signatories,
-          validity_range: validity_range,
-        ),
         // Irrelevant fields on Pool Datum must be unchanged
         pool_in_stake_credential == pool_out_stake_credential,
         pool_in_asset_a == pool_out_asset_a,
@@ -322,14 +342,6 @@ pub fn validate_update_pool_parameters(
       }
     }
     UpdateDynamicFee -> and {
-        // Transaction requires Pool Dynamic Fee Updater license token to execute
-        is_admin_existence(
-          admin_policy_id: utils.pool_dynamic_fee_updater_policy_id,
-          reference_inputs: reference_inputs,
-          withdrawals: withdrawals,
-          signatories: extra_signatories,
-          validity_range: validity_range,
-        ),
         // Irrelevant fields on Pool Datum must be unchanged
         pool_in_stake_credential == pool_out_stake_credential,
         pool_in_asset_a == pool_out_asset_a,
@@ -343,18 +355,7 @@ pub fn validate_update_pool_parameters(
         // Pool Address must be unchanged (both Payment and Stake Credential)
         pool_in_address == pool_out_address,
       }
-    UpdatePoolStakeCredential -> and {
-        // Transaction requires Pool Stake Key Updater license token to execute
-        is_admin_existence(
-          admin_policy_id: utils.pool_stake_key_updater_policy_id,
-          reference_inputs: reference_inputs,
-          withdrawals: withdrawals,
-          signatories: extra_signatories,
-          validity_range: validity_range,
-        ),
-        // Pool Datum must be unchanged
-        pool_in_datum == pool_out_datum,
-      }
+    UpdatePoolStakeCredential -> pool_in_datum == pool_out_datum
   }
 }
 
@@ -511,20 +512,20 @@ pub fn get_trading_fee_numerator(
 test test_get_trading_fee_numerator() {
   and {
     get_trading_fee_numerator(
-      base_fee_num: 1000,
+      base_fee_num: utils.max_base_fee_numerator,
       vol_fee_opt: None,
       allow_dynamic_fee: False,
-    ) == 1000,
+    ) == utils.max_base_fee_numerator,
     get_trading_fee_numerator(
-      base_fee_num: 1000,
-      vol_fee_opt: Some(200),
+      base_fee_num: utils.max_base_fee_numerator,
+      vol_fee_opt: Some(utils.max_vol_fee_numerator),
       allow_dynamic_fee: False,
-    ) == 1000,
+    ) == utils.max_base_fee_numerator,
     get_trading_fee_numerator(
-      base_fee_num: 800,
+      base_fee_num: utils.max_base_fee_numerator - 200,
       vol_fee_opt: Some(200),
       allow_dynamic_fee: True,
-    ) == 1000,
+    ) == utils.max_base_fee_numerator,
     get_trading_fee_numerator(
       base_fee_num: 900,
       vol_fee_opt: Some(100),
@@ -535,26 +536,26 @@ test test_get_trading_fee_numerator() {
 
 test test_get_trading_fee_numerator_fail_1() fail {
   get_trading_fee_numerator(
-    base_fee_num: 900,
+    base_fee_num: 1900,
     vol_fee_opt: Some(300),
     allow_dynamic_fee: True,
-  ) == 1200
+  ) == 2200
 }
 
 test test_get_trading_fee_numerator_fail_2() fail {
   get_trading_fee_numerator(
-    base_fee_num: 1100,
+    base_fee_num: 2100,
     vol_fee_opt: Some(200),
     allow_dynamic_fee: True,
-  ) == 1300
+  ) == 2300
 }
 
 test test_get_trading_fee_numerator_fail_3() fail {
   get_trading_fee_numerator(
-    base_fee_num: 900,
+    base_fee_num: 1900,
     vol_fee_opt: Some(200),
     allow_dynamic_fee: True,
-  ) == 1100
+  ) == 2100
 }
 
 pub fn has_single_spending(redeemers: Dict<ScriptPurpose, Redeemer>) -> Bool {
@@ -571,51 +572,4 @@ pub fn has_single_spending(redeemers: Dict<ScriptPurpose, Redeemer>) -> Bool {
            },
          )
   True
-}
-
-// Validate the admin is authorized by the PubKey wallet's signature or Script wallet validation 
-pub fn is_admin_existence(
-  admin_policy_id: PolicyId,
-  reference_inputs: List<Input>,
-  withdrawals: Dict<StakeCredential, Int>,
-  signatories: List<Hash<Blake2b_224, VerificationKey>>,
-  validity_range: ValidityRange,
-) -> Bool {
-  // The UTxO is holding Admin token must be represented in the transaction's reference inputs
-  let admin_input_opt =
-    list.find(
-      reference_inputs,
-      fn(input) {
-        let Input { output: Output { value: val, .. }, .. } = input
-        ( val |> value.tokens(admin_policy_id) |> dict.size() ) > 0
-      },
-    )
-  when admin_input_opt is {
-    Some(admin_input) -> {
-      // A valid license token is the token having expired timestamp as TokenName and must be within current time and current time + _maximum_deadline_range_
-      let (_, _) =
-        validate_license_expiration_and_find_license_holder(
-          license_pid: admin_policy_id,
-          license_input: admin_input,
-          validity_range: validity_range,
-        )
-      let Input {
-        output: Output {
-          address: Address { payment_credential: payment_cred, .. },
-          ..
-        },
-        ..
-      } = admin_input
-      when payment_cred is {
-        //If the Admin function is controlled by a PubKey wallet, 
-        // the owners of the UTxO must sign the transaction with their private key. Otherwise, such action must be prohibited.
-        VerificationKeyCredential(pub_key_hash) ->
-          list.has(signatories, pub_key_hash)
-        // If the Admin function is controlled by a Script wallet, 
-        // the smart contract must incorporate a Withdrawal function and execute sufficient conditions to facilitate its operation
-        ScriptCredential(_) -> dict.has_key(withdrawals, Inline(payment_cred))
-      }
-    }
-    _ -> False
-  }
 }

@@ -2,14 +2,10 @@ use aiken/builtin
 use aiken/bytearray
 use aiken/dict
 use aiken/hash
-use aiken/string
-use aiken/transaction.{Datum, DatumHash, InlineDatum, NoDatum}
+use aiken/interval.{Finite, Interval, IntervalBound}
+use aiken/transaction.{Datum, DatumHash, InlineDatum, NoDatum, ValidityRange}
 use aiken/transaction/value.{AssetName, PolicyId, ada_asset_name, ada_policy_id}
 use amm_dex_v2/types.{Asset, DatumMap}
-
-const zero_ascii_code = 48
-
-const nine_ascii_code = 57
 
 // Policy ID managed by the Minswap team, used for minting Batcher License
 pub const batcher_license_policy_id =
@@ -20,6 +16,9 @@ pub const pool_auth_asset_name = #"4d5350"
 
 // the legitimate Factory TokenName
 pub const factory_auth_asset_name = #"4d53"
+
+// the legitimate Global Setting TokenName
+pub const global_setting_asset_name = #"4754"
 
 // Policy ID managed by the Minswap team, used for minting Pool Fee Updater License assets
 pub const pool_fee_updater_policy_id =
@@ -130,33 +129,6 @@ test test_compute_lp_asset_name() {
       asset_b_asset_name,
     )
   lp_asset_name == #"82e2b1fd27a7712a1a9cf750dfbea1a5778611b20e06dd6a611df7a643f8cb75"
-}
-
-pub fn bytearray_to_positive_int(byte_arr: ByteArray) -> Int {
-  let byte_len = builtin.length_of_bytearray(byte_arr)
-  do_bytearray_positive_int(byte_arr, byte_len - 1)
-}
-
-pub fn do_bytearray_positive_int(byte_arr: ByteArray, idx: Int) -> Int {
-  let byte = builtin.index_bytearray(byte_arr, idx)
-  if zero_ascii_code <= byte && byte <= nine_ascii_code {
-    if idx == 0 {
-      byte - zero_ascii_code
-    } else {
-      do_bytearray_positive_int(byte_arr, idx - 1) * 10 + (
-        byte - zero_ascii_code
-      )
-    }
-  } else {
-    fail
-  }
-}
-
-test test_bytearray_to_positive_int() {
-  let r1 = bytearray_to_positive_int(string.to_bytearray(@"123"))
-  let r2 = bytearray_to_positive_int(string.to_bytearray(@"111"))
-  let r3 = bytearray_to_positive_int(string.to_bytearray(@"9013"))
-  r1 == 123 && r2 == 111 && r3 == 9013
 }
 
 pub fn must_find_script_inline_datum(datum: Datum) -> Data {
@@ -346,21 +318,6 @@ test test_compare_list_length_3() {
   !compare_list_length(arr1, arr2)
 }
 
-fn contains_element(list: List<a>, elem: a) -> Bool {
-  when list is {
-    [] -> False
-    [x, ..xs] -> elem == x || contains_element(xs, elem)
-  }
-}
-
-pub fn is_list_unique(list: List<a>) -> Bool {
-  when list is {
-    [] -> True
-    [_] -> True
-    [x, ..xs] -> !contains_element(xs, x) && is_list_unique(xs)
-  }
-}
-
 const empty_mark =
   #[0,
     0,
@@ -527,4 +484,22 @@ test test_unique_bytearray_unsorted_4() fail {
 test test_unique_bytearray_unsorted_5() {
   let array = #[]
   !is_unique_bytearray_unsorted(array)
+}
+
+pub fn must_get_finite_end_validity(validity_range: ValidityRange) -> Int {
+  let Interval {
+    upper_bound: IntervalBound { bound_type: upper_bound_type, .. },
+    ..
+  } = validity_range
+  expect Finite(end_valid_time_range) = upper_bound_type
+  end_valid_time_range
+}
+
+pub fn must_get_finite_start_validity(validity_range: ValidityRange) -> Int {
+  let Interval {
+    lower_bound: IntervalBound { bound_type: lower_bound_type, .. },
+    ..
+  } = validity_range
+  expect Finite(start_valid_time_range) = lower_bound_type
+  start_valid_time_range
 }
