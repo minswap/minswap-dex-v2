@@ -64,7 +64,8 @@ validator(
             UpdatePoolStakeCredential -> pool_stake_key_updater
           }
         and {
-          pool_validation.authorize_license_holder_by_global_setting(
+          // Transaction must be executed by the correct authorizer
+          pool_validation.authorize_license_holder(
             license_address: authorizer,
             transaction_inputs: inputs,
             withdrawals: withdrawals,
@@ -103,8 +104,8 @@ validator(
           )
         let GlobalSetting { fee_sharing_taker, .. } = global_setting
         and {
-          // Transaction requires Fee Sharing Taker license token to execute
-          pool_validation.authorize_license_holder_by_global_setting(
+          // Transaction must be executed by the correct authorizer
+          pool_validation.authorize_license_holder(
             license_address: fee_sharing_taker,
             transaction_inputs: inputs,
             withdrawals: withdrawals,
@@ -130,6 +131,7 @@ validator(
 validator(
   // The PolicyID of Authen Minting Policy
   authen_policy_id: PolicyId,
+  // The Payment Credential of Pool Validator
   pool_payment_cred: Credential,
 ) {
   fn validate_pool_batching(
@@ -166,10 +168,14 @@ validator(
     let GlobalSetting { batchers, .. } = global_setting
     let end_valid_time_range =
       utils.must_get_finite_end_validity(validity_range)
+
+    // Due to authorized batchers is a list so we use @batcher_index to save the On-chain cost 
+    // on searching the batcher address in this section 
     let batcher_address =
       utils.list_at_index(batchers, builtin.index_bytearray(batcher_index, 0))
     expect and {
-        pool_validation.authorize_license_holder_by_global_setting(
+        // Transaction must be executed by the authorized batchers
+        pool_validation.authorize_license_holder(
           license_address: batcher_address,
           transaction_inputs: inputs,
           withdrawals: withdrawals,

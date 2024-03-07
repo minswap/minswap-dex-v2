@@ -268,7 +268,7 @@ pub type FactoryRedeemer {
 }
 
 pub type AuthenRedeemer {
-  MintFactoryAuthen
+  DexInitialization
   CreatePool
 }
 
@@ -291,11 +291,19 @@ pub type BatchingPool {
 pub type PoolState =
   (Int, Int, Int, Int, Int)
 
+// This setting grants permissions to authorized actors who can interact with Liquidity Pool features.
 pub type GlobalSetting {
+  // List of authorized batchers who can process orders.
   batchers: List<Address>,
+  // The actor who can update the Pool's base fee and fee sharing.
   pool_fee_updater: Address,
+  // The actor who can withdraw the Pool's fee sharing.
   fee_sharing_taker: Address,
+  // The actor who can change the Pool's stake key.
   pool_stake_key_updater: Address,
+  // The actor who can update the Pool's dynamic fee.
   pool_dynamic_fee_updater: Address,
+  // The actor who can update the addresses mentioned above.
+  // This admin can be transferred to another wallet and should be stored in the most secure location.
   admin: Address,
 }

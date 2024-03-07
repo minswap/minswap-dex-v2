@@ -5,7 +5,7 @@
 
 
 - Minswap AMM V2 uses Constant Product Formula (x * y = k). This formula, most simply expressed as x * y = k, states that trades must not change the product (k) of a pair’s reserve balances (x and y). Because k remains unchanged from the reference frame of a trade, it is often referred to as the invariant. This formula has the desirable property that larger trades (relative to reserves) execute at exponentially worse rates than smaller ones.
-- The AMM V2 uses Batching architecture to solve concurrency on Cardano. Each user action will create an "Order" and "Batcher" will look through them and apply them into a "Liquidity Pool". A valid "Batcher" is a wallet which contains Minswap's License Token. Batching transaction is permissioned and only is triggered by "Batcher".
+- The AMM V2 uses Batching architecture to solve concurrency on Cardano. Each user action will create an "Order" and "Batcher" will look through them and apply them into a "Liquidity Pool". A valid "Batcher" is a wallet which is whitelisted. Batching transaction is permissioned and only is triggered by "Batcher".
 
 
 ## 2. Architecture
@@ -28,12 +28,14 @@ There're 5 contracts in the AMM V2 system:
 
 
 - User: An entity who wants to interact with Liquidity Pool to deposit/withdraw liquidity or swap. The only requirement of users is that they must not be the same as batcher (because of how we filter UTxOs)
-- Batcher: An entity who aggregate order UTxOs from users and match them with liquidity pool UTxO. A batcher must hold a batcher's license token. The license token must not be expired and the expired time must be between current time and Maximum Deadline (to prevent minting license with infinity deadline).
-- Pool Fee updater: An entity who has permission to create a Liquidity Pool's base fee and fee sharing to any value within allowed range (0.05% to 20% for base fee and 16.66% to 50% for fee sharing). The updater must hold an Pool Fee Updater's license token
-- Fee Sharing taker: An entity who has permission to withdraw Liquidity Pool's fee sharing. The taker must hold an Fee Sharing taker's license token
-- Pool Stake Key Updater:  An entity who has permission to update Liquidity Pool's stake credential. The updater must hold an Pool Stake Key Updater's license token
-- Pool Dynamic Fee updater: An entity who has permission to enable or disable Liquidity Pool's dynamic fee. The updater must hold an Pool Dynamic Fee Updater's license token
+- Batcher: An entity who aggregate order UTxOs from users and match them with liquidity pool UTxO. A batcher must be whitelisted in the Global Setting
+- Pool Fee updater: An entity who has permission to create a Liquidity Pool's base fee and fee sharing to any value within allowed range (0.05% to 20% for base fee and 16.66% to 50% for fee sharing). The actor must be whitelisted in the Global Setting
+- Fee Sharing taker: An entity who has permission to withdraw Liquidity Pool's fee sharing. The actor must be whitelisted in the Global Setting
+- Pool Stake Key Updater:  An entity who has permission to update Liquidity Pool's stake credential. The actor must be whitelisted in the Global Setting
+- Pool Dynamic Fee updater: An entity who has permission to enable or disable Liquidity Pool's dynamic fee. The actor must be whitelisted in the Global Setting
+- Admin: The actor who can update the Global Setting. This admin can be transferred to another wallet and should be stored in the most secure location.
 
+Except for the *User* role, the aforementioned actors must adhere to the rules set by the `authorize_license_holder` function and be whitelisted in the Global Setting. 
 
 ### 3.2 Tokens
 
@@ -44,26 +46,15 @@ There're 5 contracts in the AMM V2 system:
 - Pool NFT token: the Pool legitimate Token, can be only minted in Pool Creation Transaction and cannot be outside Pool Contract. The minting must be followed by rule of `Authen Minting Policy`
    - CurrencySymbol: Authen Minting Policy
    - TokenName: Defined in `Authen Minting Policy` parameters (e.g. "MSP")
+- Global Setting NFT token: the Global Setting legitimate Token, can be only minted in DEX Initialization Transaction and cannot be outside Global Setting UTxO. The minting must be followed by rule of `Authen Minting Policy`
+   - CurrencySymbol: Authen Minting Policy
+   - TokenName: Defined in `Authen Minting Policy` parameters (e.g. "GT")
 - LP token: Represents Liquidity Provider's share of pool. Each pool has a different LP token.
    - CurrencySymbol: Authen Minting Policy
    - TokenName: Hash of Pool's Asset A and Asset B (`SHA_256(SHA_256(AssetA), SHA_256(AssetB))`)
 - Batcher license token: Permit batcher to apply pool
    - CurrencySymbol: Defined in the constant `batcher_license_policy_id`. The policy is managed by team (e.g. multisig policy)
    - TokenName: POSIX timestamp represents license deadline
-- Liquidity Pool's parameters license token:
-   - Pool Fee Updater license token:
-     - CurrencySymbol: Defined in the constant `pool_fee_updater_policy_id`. The policy is managed by team (e.g. multisig policy)
-     - TokenName: POSIX timestamp represents license deadline
-   - Fee Sharing Taker license token:
-     - CurrencySymbol: Defined in the constant `fee_sharing_taker_policy_id`. The policy is managed by team (e.g. multisig policy)
-     - TokenName: POSIX timestamp represents license deadline
-   - Pool Stake Key Updater license token:
-     - CurrencySymbol: Defined in the constant `pool_stake_key_updater_policy_id`. The policy is managed by team (e.g. multisig policy)
-     - TokenName: POSIX timestamp represents license deadline
-   - Pool Dynamic Fee Updater license token:
-     - CurrencySymbol: Defined in the constant `pool_dynamic_fee_updater_policy_id`. The policy is managed by team (e.g. multisig policy)
-     - TokenName: POSIX timestamp represents license deadline
-   - These license tokens is used on Factory and Pool Validator via `is_admin_existence` function and can be in a PubKey or Script wallet
 
 
 ### 3.3 Smart Contract
@@ -205,7 +196,7 @@ An Order Datum keeps information about Order Type and some other informations:
 #### 3.3.3 Authen Minting Policy
 
 
-Authen Minting Policy is responsible for creating initial Factory `Linked List`, minting legitimate Factory, Liquidity Pool and Liquidity Pool `Share` Tokens
+Authen Minting Policy is responsible for creating initial Factory `Linked List`, minting legitimate Factory, Liquidity Pool, Global Setting and Liquidity Pool `Share` Tokens
 
 
 #### 3.3.3.1 Parameter
@@ -213,21 +204,22 @@ Authen Minting Policy is responsible for creating initial Factory `Linked List`,
 
 - _out_ref_: is a Reference of an Unspent Transaction Output, which will only be spent on `MintFactoryAuthen` redeemer to make sure this redeemer can only be called once
 
-
-#### 3.3.3.2 Redeemer
-- **MintFactoryAuthen**
+#### 3.3.3.2 Minting Purpose
+#### 3.3.3.2.1 Redeemer
+- **DexInitialization**
 - **CreatePool**
 
 
-#### 3.3.3.3 Validation
-
-
-- **MintFactoryAuthen**: The redeemer can be called once to initialize the whole AMM V2 system
+#### 3.3.3.2.2 Validation
+- **DexInitialization**: The redeemer can be called once to initialize the whole AMM V2 system
    - validate that `out_ref` must be presented in the Transaction Inputs
+   - validate that the redeemer only mint: 
+     - **a single Factory Token**
+     - **a single Global Setting Token**
    - validate that there's only 1 Factory UTxO in the Transaction Outputs. The Factory UTxO must contain Factory Token in the value and its datum is:
      - _head_: `#"00"`
      - _tail_: `#"ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff00"`
-   - validate that the redeemer only mint **a single Factory Token**
+   - validate that there's only 1 Global Setting UTxO in the Transaction Outputs. The Global Setting UTxO must contain Global Setting Token in the value.
 - **CreatePool**:  The redeemer will allow creating a new Liquidity Pool.
    - validate that there's a single Factory UTxO in the Transaction Inputs. Factory UTxO must contain Factory NFT Token in the value
    - validate that transaction only mint 3 types of tokens:
@@ -235,6 +227,24 @@ Authen Minting Policy is responsible for creating initial Factory `Linked List`,
      - 1 Pool NFT Token
      - MAX_INT64 LP Token, LP Token must have PolicyID is **AuthenMintingPolicy** and TokenName is Hash of Pool's Asset A and Asset B (`SHA_256(SHA_256(AssetA), SHA_256(AssetB))`). Asset A and Asset B are in Factory Redeemer and they must be sorted
 
+#### 3.3.3.3 Spend Purpose
+#### 3.3.3.3.1 Datum
+  - _batchers_: List of authorized batchers who can process orders
+  - _pool_fee_updater_: The actor who can update the Pool's base fee and fee sharing
+  - _fee_sharing_taker_: The actor who can withdraw the Pool's fee sharing
+  - _pool_stake_key_updater_: The actor who can change the Pool's stake key
+  - _pool_dynamic_fee_updater_: The actor who can update the Pool's dynamic fee
+  - _admin_: The actor who can update the addresses mentioned above. This admin can be transferred to another wallet and should be stored in the most secure location
+
+#### 3.3.3.3.2 Redeemer
+- **Nothing**
+
+
+#### 3.3.3.3.3 Validation
+  - validate transaction has to be executed by the Whitelisted Admin.
+  - Both Global Setting input and output must have the same payment credential and keep the Global Setting Token
+  - validate authorized batchers must not be empty
+  - validate transaction won't mint anything 
 
 #### 3.3.4 Factory Validator
 
@@ -345,8 +355,9 @@ Pool validator is the most important part in the system. It's responsible for gu
 
 #### 3.3.5.4 Validation
 - **Batching**: validate that a Pool can be spent if there's a `Pool Batching` validator in the `withdrawals`
-- **UpdatePoolParameters**: Allow Admin update Liquidity Pool's fee (Trading Fee and Fee Sharing), enable/disable Dynamic Fee or update Pool's Stake Credential. It allows Minswap can delegate Liquidity Pool's ADA to different Stake Pools
-   - validate Admin with valid Admin License Token must be presented in Transaction Reference Inputs and has enough authority 
+- **UpdatePoolParameters**: Allow Whitelisted Authorizers update Liquidity Pool's fee (Trading Fee and Fee Sharing), enable/disable Dynamic Fee or update Pool's Stake Credential. It allows Minswap can delegate Liquidity Pool's ADA to different Stake Pools
+   - transaction has to include Global Setting UTxO in the first element of Transaction reference inputs
+   - validate transaction has to be executed by the authorizers.
    - validate there is a single Pool UTxO in Transaction Inputs and single Pool UTxO in Transaction Outputs and:
      - Pool Input contains 1 valid Pool NFT Token
      - Pool Input and Output Value must be unchanged
@@ -362,8 +373,9 @@ Pool validator is the most important part in the system. It's responsible for gu
          -  Pool Address must be unchanged (both Payment and Stake Credential)
       -  _UpdatePoolStakeCredential_: 
          -  Update Pool's Stake Credential to any other Stake Address
-- **WithdrawFeeSharing**: Allow Admin can withdraw Liquidity Share to any Addresss.
-   - validate Admin with valid Admin License Token must be presented in Transaction Reference Inputs and has enough authority 
+- **WithdrawFeeSharing**: Allow Whitelisted Fee Sharing taker can withdraw Liquidity Share to any Addresss.
+   - transaction has to include Global Setting UTxO in the first element of Transaction reference inputs
+   - validate transaction has to be executed by the Whitelisted Fee Sharing.
    - validate there is a single Pool UTxO in Transaction Inputs and single Pool UTxO in Transaction Outputs and:
      - Pool Input contains 1 valid Pool NFT Token
      - Pool Input and Output Address must be unchanged (both Payment and Stake Credential)
@@ -386,6 +398,7 @@ Pool Batching validator is the sub logic of `Pool Validator`, it will ensure Bat
 
 #### 3.3.6.2 Redeemer
 
+- _batcher_index_: Index of the the batcher in authorized batchers list.
 - _license_index_: Index of the UTxO holding Batcher License Token in the Transaction Inputs.
 - _orders_fee_: Batcher fee will be deducted from orders' fund. Batcher can decide the amount of fee for each order. The Batcher Fee can not exceed the maximum batcher fee.
 - _input_indexes_: The Indexes of Orders are processing (it will be explained below)
@@ -396,9 +409,8 @@ Pool Batching validator is the sub logic of `Pool Validator`, it will ensure Bat
 
 Batching validation has 2 scenarios:
 - **Batching 1 Pool**: It can process all types of Orders except **SwapMultiRouting** Order
-  - validate batcher with valid License Token must be presented in Transaction Inputs:
-     - Batcher must sign a Batching transaction.
-     - A valid license token is the token having expired timestamp as TokenName and must be within current time and current time + _maximum_deadline_range_
+   - transaction has to include Global Setting UTxO in the first element of Transaction reference inputs
+   - validate transaction has to be executed by the Whitelisted Batcher.
    - validate _input_indexes_ must not be empty and be unique list
    - validate Transaction won't mint any assets
    - validate there is a single Pool UTxO in both Transaction Inputs and Outputs and must have the same Address (both Payment and Stake Credential)
@@ -419,9 +431,8 @@ Batching validation has 2 scenarios:
        - the destination output must be returned to _refund_receiver_ + _refund_receiver_datum_ if the order is killed by batcher or _success_receiver_ + _success_receiver_datum_ if the order is processed
 
 - **Batching Multiple Pools**: It will process single **SwapMultiRouting** Order and multiple **Liquidity Pool**
-  - validate batcher with valid License Token must be presented in Transaction Inputs:
-     - Batcher must sign a Batching transaction.
-     - A valid license token is the token having expired timestamp as TokenName and must be within current time and current time + _maximum_deadline_range_
+   - transaction has to include Global Setting UTxO in the first element of Transaction reference inputs
+   - validate transaction has to be executed by the Whitelisted Batcher.
    - validate _routing_in_indexes_ and _routing_out_indexes_ must be unique, have the same length and contain more than 1 element.
    - validate Transaction won't mint any assets
    - validate the number of Pool Inputs and Pool Outputs must be _routing_in_indexes_ length. and each Pool Input must have the same Address with Pool Output (both Payment and Stake Credential)
@@ -441,7 +452,7 @@ Batching validation has 2 scenarios:
 ### 3.4 Transaction
 
 
-### 3.4.1 Initialize Factory Linked List
+### 3.4.1 Dex Initialization
 
 
 AMM V2 requires a Factory Linked List, and the initial Linked List contains 1 element with head `#"00"` and tail `#"ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff00"`.
@@ -455,8 +466,10 @@ Transaction structure:
    - an UTxO which is defined in Authen Minting Policy (see @out_ref of AuthenMinting Policy in Section 3.3.3.1)
  - Mint:
    - Script Authen Minting Policy:
-     - Redeemer: MintFactoryAuthen
-     - Value: 1 Factory NFT Asset
+     - Redeemer: DexInitialization
+     - Value: 
+       - 1 Factory NFT Asset
+       - 1 Global Setting NFT Asset 
  - Outputs:
    - a Factory UTxO:
        - Address: Factory Address
@@ -466,6 +479,18 @@ Transaction structure:
        - Value:
          - minimum ADA
          - 1 Factory NFT Asset
+   - a Global Setting UTxO:
+       - Address: Authen Minting Address
+       - Datum:
+           - batchers
+           - pool_fee_updater
+           - fee_sharing_taker
+           - pool_stake_key_updater
+           - pool_dynamic_fee_updater
+           - admin
+       - Value:
+         - minimum ADA
+         - 1 Global Setting NFT Asset
    - Change UTxOs
 
 
@@ -670,13 +695,17 @@ It requires a Pool UTxO, Batcher UTxOs (must include Batcher License Token) and 
 
 
 Transaction structure:
+ - Reference Inputs:
+   - Global Setting UTxO:
+     - Address: Authen Minting Address
+     - Value:
+       - ADA
+       - 1 Global Setting License Token
  - Inputs:
    - Order UTxOs (see Section 3.4.3) except _SwapMultiRouting_ Order
    - Batcher UTxO
      - Address: Batcher Address
-     - Value:
-       - ADA
-       - 1 Batcher License Token (which is not expired)
+     - Value: Batcher value
    - Pool UTxO
      - Address: Pool Address
      - Value:
@@ -785,6 +814,7 @@ Transaction structure:
    - Pool Batching Withdrawal:
      - Amount: 0
      - Redeemer: PoolBatchingRedeemer
+       - batcher_index
        - license_index
        - orders_fee
        - input_indexes
@@ -797,6 +827,12 @@ Transaction allows an _SwapMultiRouting_ Order is processed through multiple Liq
 
 
 Transaction structure:
+ - Reference Inputs:
+   - Global Setting UTxO:
+     - Address: Authen Minting Address
+     - Value:
+       - ADA
+       - 1 Global Setting License Token
  - Inputs:
    - Order UTxO (see Section 3.4.3)
    - Pool UTxOs
@@ -820,9 +856,7 @@ Transaction structure:
      - Redeemer: Batching
    - Batcher UTxO
      - Address: Batcher Address
-     - Value:
-       - ADA
-       - 1 Batcher License Token (which is not expired)
+     - Value: Batcher value
  - Outputs:
    - Pool Outputs:
      - Address: Pool Address (unchanged)
@@ -865,11 +899,11 @@ Transaction structure:
 
 Transaction structures:
  - Reference Inputs:
-   - Admin UTxO:
-     - Address: Admin Address
+   - Global Setting UTxO:
+     - Address: Authen Minting Address
      - Value:
        - ADA
-       - 1 Admin License Token
+       - 1 Global Setting License Token
  - Inputs:
    - Pool UTxO:
      - Address: Pool Address
@@ -914,11 +948,11 @@ Transaction structures:
 
 Transaction structures:
  - Reference Inputs:
-   - Admin UTxO:
-     - Address: Admin Address
+   - Global Setting UTxO:
+     - Address: Authen Minting Address
      - Value:
        - ADA
-       - 1 Admin License Token
+       - 1 Global Setting License Token
  - Inputs:
    - Pool UTxO:
      - Address: Pool Address

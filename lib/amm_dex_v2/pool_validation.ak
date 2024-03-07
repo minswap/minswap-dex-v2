@@ -16,6 +16,8 @@ use amm_dex_v2/types.{
 }
 use amm_dex_v2/utils
 
+// Global Setting must be provided through the first element of @reference_inputs
+// and has to keep the Global Setting NFT in its value
 pub fn get_and_validate_global_setting(
   reference_inputs: List<Input>,
   authen_policy_id: PolicyId,
@@ -43,7 +45,7 @@ pub fn get_and_validate_global_setting(
   global_setting_datum
 }
 
-pub fn authorize_license_holder_by_global_setting(
+pub fn authorize_license_holder(
   license_address: Address,
   transaction_inputs: List<Input>,
   withdrawals: Dict<StakeCredential, Int>,
@@ -52,30 +54,28 @@ pub fn authorize_license_holder_by_global_setting(
   let Address { payment_credential: license_holder_payment_cred, .. } =
     license_address
   when license_holder_payment_cred is {
-    //If the Admin function is controlled by a PubKey wallet, 
+    //If the Authorizer is controlled by a PubKey wallet, 
     // the owners of the UTxO must sign the transaction with their private key. Otherwise, such action must be prohibited.
     VerificationKeyCredential(pub_key_hash) ->
       list.has(extra_signatories, pub_key_hash)
-    // If the Admin function is controlled by a Script wallet, 
-    // the smart contract must incorporate a Withdrawal function and execute sufficient conditions to facilitate its operation
+    // If the Authorizer is controlled by a Script wallet, 
+    // the smart contract must incorporate a Withdrawal or a Spend function and execute sufficient conditions to facilitate its operation
     ScriptCredential(script_hash) -> {
       let authorized_via_withdrawal =
         dict.has_key(withdrawals, Inline(ScriptCredential(script_hash)))
       if authorized_via_withdrawal {
         True
       } else {
-        let holder_inputs =
-          list.filter(
-            transaction_inputs,
-            fn(input) {
-              let Input { output, .. } = input
-              let Output { address: out_address, .. } = output
-              let Address { payment_credential: out_payment_credential, .. } =
-                out_address
-              out_payment_credential == license_holder_payment_cred
-            },
-          )
-        !builtin.null_list(holder_inputs)
+        list.any(
+          transaction_inputs,
+          fn(input) {
+            let Input { output, .. } = input
+            let Output { address: out_address, .. } = output
+            let Address { payment_credential: out_payment_credential, .. } =
+              out_address
+            out_payment_credential == license_holder_payment_cred
+          },
+        )
       }
     }
   }
