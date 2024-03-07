@@ -1,5 +1,4 @@
 use aiken/builtin
-use aiken/bytearray
 use aiken/dict
 use aiken/list
 use aiken/transaction.{
@@ -181,8 +180,10 @@ validator(
           withdrawals: withdrawals,
           extra_signatories: extra_signatories,
         ),
-        // Input indexes must not be empty list and be unique
-        utils.is_unique_bytearray_unsorted(input_indexes),
+        // Input indexes must not be empty list
+        !builtin.null_list(input_indexes),
+        // Input indexes must be unique
+        utils.is_list_unique(input_indexes),
         // validate Transaction won't mint any assets
         value.is_zero(value.from_minted_value(mint)),
       }
@@ -219,9 +220,9 @@ validator(
     // Currently, transaction inputs will be sorted by TxId and TxIndex of UTxO.
     // We have to calculate indexes of orders inputs sorting by the ASC created time
     // on the off-chain and on-chain will sort the TxIns by the indexes
-    // Input Indexes in parameter will be the index indexes of @order_inputs
+    // Input Indexes in parameter will be reversed indexs of @order_inputs to reduce calculate step in On-Chain
     let sorted_user_inputs =
-      bytearray.foldr(
+      list.foldl(
         input_indexes,
         [],
         fn(idx, ips) { list.push(ips, utils.list_at_index(user_inputs, idx)) },
@@ -229,7 +230,7 @@ validator(
 
     expect and {
         // User Inputs and Input Indexes must have the same length
-        builtin.length_of_bytearray(input_indexes) == list.length(user_inputs),
+        utils.compare_list_length(input_indexes, user_inputs),
         // Pool Inputs & Outputs must have the same length
         utils.compare_list_length(pool_inputs, pool_outputs),
       }
@@ -328,10 +329,10 @@ validator(
             // The number of Pool Inputs and Pool Outputs must be the same with _routings_ length
             utils.compare_list_length(pool_inputs, routings),
             // Pool Input Indexes must be unique
-            utils.is_unique_bytearray_unsorted(pool_input_indexes),
+            utils.is_list_unique(pool_input_indexes),
           }
         let sorted_pool_inputs =
-          bytearray.foldr(
+          list.foldl(
             pool_input_indexes,
             [],
             fn(idx, ps) { list.push(ps, utils.list_at_index(pool_inputs, idx)) },

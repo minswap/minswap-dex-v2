@@ -295,172 +295,19 @@ test test_compare_list_length_3() {
   !compare_list_length(arr1, arr2)
 }
 
-const empty_mark =
-  #[0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-  ]
-
-fn do_is_unique_bytearray_unsorted(
-  self: ByteArray,
-  acc: ByteArray,
-  index: Int,
-  length: Int,
-) {
-  if index >= length {
-    True
-  } else {
-    let value_as_index = builtin.index_bytearray(self, index)
-    let acc_value = builtin.index_bytearray(acc, value_as_index)
-    if acc_value == 1 {
-      False
-    } else {
-      let left_slice = builtin.slice_bytearray(0, value_as_index, acc)
-      let righ_slice = builtin.slice_bytearray(value_as_index + 1, 64, acc)
-      let new_acc =
-        builtin.append_bytearray(
-          left_slice,
-          builtin.cons_bytearray(1, righ_slice),
-        )
-      do_is_unique_bytearray_unsorted(self, new_acc, index + 1, length)
-    }
+fn contains_element(list: List<a>, elem: a) -> Bool {
+  when list is {
+    [] -> False
+    [x, ..xs] -> elem == x || contains_element(xs, elem)
   }
 }
 
-pub fn is_unique_bytearray_unsorted(array: ByteArray) -> Bool {
-  let length = builtin.length_of_bytearray(array)
-  if length > 0 {
-    do_is_unique_bytearray_unsorted(array, empty_mark, 0, length)
-  } else {
-    False
+pub fn is_list_unique(list: List<a>) -> Bool {
+  when list is {
+    [] -> True
+    [_] -> True
+    [x, ..xs] -> !contains_element(xs, x) && is_list_unique(xs)
   }
-}
-
-test test_unique_bytearray_unsorted_1() {
-  let array =
-    #[1,
-      2,
-      3,
-      4,
-      5,
-      6,
-      7,
-      8,
-      9,
-      10,
-      11,
-      12,
-      13,
-      14,
-      15,
-      16,
-      17,
-      18,
-      19,
-      20,
-      21,
-      22,
-      23,
-      24,
-      25,
-      26,
-      27,
-      28,
-      29,
-      30,
-      31,
-      32,
-      33,
-      34,
-      35,
-      36,
-      37,
-      38,
-      39,
-      40,
-    ]
-  is_unique_bytearray_unsorted(array)
-}
-
-test test_unique_bytearray_unsorted_2() {
-  let array = #[1, 2, 3, 4, 5, 6, 5]
-  !is_unique_bytearray_unsorted(array)
-}
-
-test test_unique_bytearray_unsorted_3() {
-  let array = #[0, 1, 2, 3, 4, 5, 6, 0]
-  !is_unique_bytearray_unsorted(array)
-}
-
-test test_unique_bytearray_unsorted_4() fail {
-  let array = #[0, 1, 2, 3, 4, 5, 64, 0]
-  !is_unique_bytearray_unsorted(array)
-}
-
-test test_unique_bytearray_unsorted_5() {
-  let array = #[]
-  !is_unique_bytearray_unsorted(array)
 }
 
 pub fn must_get_finite_end_validity(validity_range: ValidityRange) -> Int {

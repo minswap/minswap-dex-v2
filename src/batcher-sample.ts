@@ -143,21 +143,21 @@ function calculateSwapExactIn({
   };
 }
 
-function calculateOrderIndexes(txIns: TxIn[]): Uint8Array {
+function calculateOrderIndexes(txIns: TxIn[]): bigint[] {
   // first, we need to sort order by TxID and TxIndex
   const tempTxIns = [...txIns];
   tempTxIns.sort((a, b) => TxIn.compare(a, b));
   // then, we loop the original orders backwards and add the indexes to resulting array
-  const ret: number[] = [];
+  const ret: bigint[] = [];
   for (let i = txIns.length - 1; i >= 0; i--) {
     for (let j = 0; j < tempTxIns.length; j++) {
       if (TxIn.compare(txIns[i], tempTxIns[j]) === 0) {
-        ret.push(j);
+        ret.push(BigInt(j));
         break;
       }
     }
   }
-  return new Uint8Array(ret.reverse());
+  return ret;
 }
 
 function getGlobalSetting(lucid: Lucid): {
@@ -305,7 +305,7 @@ async function buildTxByPubKeyBatcher({
   const poolBatchingRedeemer = new Constr(0, [
     toHex(new Uint8Array([0])),
     orders.map((_) => DEFAULT_BATCHER_FEE),
-    toHex(inputIndexes),
+    inputIndexes,
     new Constr(1, []),
     [new Constr(1, [])],
   ]);
@@ -393,7 +393,7 @@ async function buildTxByScriptBatcher({
   const poolBatchingRedeemer = new Constr(0, [
     toHex(new Uint8Array([1])),
     orders.map((_) => DEFAULT_BATCHER_FEE),
-    toHex(inputIndexes),
+    inputIndexes,
     new Constr(1, []),
     [new Constr(1, [])],
   ]);
@@ -543,7 +543,7 @@ async function main(): Promise<void> {
 
   let tempDatumReserves: [bigint, bigint] = [amountA, amountB];
   let tempValueReserves: [bigint, bigint] = [amountA, amountB];
-  for (let i = 0; i < 34; i++) {
+  for (let i = 0; i < 30; i++) {
     const orderIn: UTxO = {
       txHash:
         "5573777bedba6bb5f56541681256158dcf8ebfbc9e7251277d25b118517dce10",
@@ -603,17 +603,17 @@ async function main(): Promise<void> {
     },
     orders: orders,
   });
-  await buildTxByScriptBatcher({
-    lucid: lucid,
-    pool: {
-      poolIn: poolInUtxo,
-      poolOut: {
-        value: newPoolValue,
-        datum: Data.to(PoolDatum.toPlutus(newPoolDatum)),
-      },
-    },
-    orders: orders,
-  });
+  // await buildTxByScriptBatcher({
+  //   lucid: lucid,
+  //   pool: {
+  //     poolIn: poolInUtxo,
+  //     poolOut: {
+  //       value: newPoolValue,
+  //       datum: Data.to(PoolDatum.toPlutus(newPoolDatum)),
+  //     },
+  //   },
+  //   orders: orders,
+  // });
 }
 
 void main();

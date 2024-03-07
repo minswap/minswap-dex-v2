@@ -50,8 +50,8 @@ pub type PoolRedeemer {
 pub type PoolBatchingRedeemer {
   batcher_index: ByteArray,
   orders_fee: List<Int>,
-  input_indexes: ByteArray,
-  pool_input_indexes_opt: Option<ByteArray>,
+  input_indexes: List<Int>,
+  pool_input_indexes_opt: Option<List<Int>>,
   vol_fees: List<Option<Int>>,
 }
 
