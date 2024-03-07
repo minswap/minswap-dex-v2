@@ -7,10 +7,6 @@ use aiken/transaction.{Datum, DatumHash, InlineDatum, NoDatum, ValidityRange}
 use aiken/transaction/value.{AssetName, PolicyId, ada_asset_name, ada_policy_id}
 use amm_dex_v2/types.{Asset, DatumMap}
 
-// Policy ID managed by the Minswap team, used for minting Batcher License
-pub const batcher_license_policy_id =
-  #"229013ad3a22d2d051a28e7f9214a32444ecf19998f7bdf0c2849862"
-
 // the legitimate Pool TokenName
 pub const pool_auth_asset_name = #"4d5350"
 
@@ -19,25 +15,6 @@ pub const factory_auth_asset_name = #"4d53"
 
 // the legitimate Global Setting TokenName
 pub const global_setting_asset_name = #"4754"
-
-// Policy ID managed by the Minswap team, used for minting Pool Fee Updater License assets
-pub const pool_fee_updater_policy_id =
-  #"1793821c850772260c34c63d60f9dbe73f58f31b9d406d948e22f6f1"
-
-// Policy ID managed by the Minswap team, used for minting Fee Sharing Taker License assets
-pub const fee_sharing_taker_policy_id =
-  #"c22c402b78351676f0b09f2454c8b226f076e7acd4f0df2260fee99f"
-
-// Policy ID managed by the Minswap team, used for minting Pool Stake Key Updater License assets
-pub const pool_stake_key_updater_policy_id =
-  #"aba1b6268131b67cf5e79e866adf105611faab9fecbf24604e1c767c"
-
-// Policy ID managed by the Minswap team, used for minting Pool Dynamic Fee Updater License assets
-pub const pool_dynamic_fee_updater_policy_id =
-  #"aba91d786d50ff300197ba56468a093a1b9ae07581b9d71122e374b6"
-
-// Maximum expiration time of Batcher license from now (to prevent minting infinity license)
-pub const maximum_deadline_range = 77760000000
 
 pub const default_burn_liquidity = 10
 
