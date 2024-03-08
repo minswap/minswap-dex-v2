@@ -1,4 +1,3 @@
-use aiken/builtin
 use aiken/dict.{Dict}
 use aiken/hash.{Blake2b_224, Hash}
 use aiken/list
@@ -16,30 +15,42 @@ use amm_dex_v2/types.{
 }
 use amm_dex_v2/utils
 
-// Global Setting must be provided through the first element of @reference_inputs
+// Global Setting must be provided through the @reference_inputs
 // and has to keep the Global Setting NFT in its value
 pub fn get_and_validate_global_setting(
   reference_inputs: List<Input>,
   authen_policy_id: PolicyId,
 ) -> GlobalSetting {
+  expect Some(global_input) =
+    reference_inputs
+      |> list.find(
+           fn(input) {
+             let Input {
+               output: Output {
+                 address: Address { payment_credential: payment_cred, .. },
+                 ..
+               },
+               ..
+             } = input
+             when payment_cred is {
+               ScriptCredential(hash) -> hash == authen_policy_id
+               _ -> False
+             }
+           },
+         )
   let Input {
     output: Output {
-      address: global_setting_addr,
       value: global_setting_value,
       datum: global_setting_datum_raw,
       ..
     },
     ..
-  } = reference_inputs |> builtin.head_list
-  expect Address { payment_credential: ScriptCredential(hash), .. } =
-    global_setting_addr
-  expect and {
-      hash == authen_policy_id,
-      (
-        global_setting_value
-          |> value.quantity_of(authen_policy_id, utils.global_setting_asset_name)
-      ) == 1,
-    }
+  } = global_input
+  expect
+    (
+      global_setting_value
+        |> value.quantity_of(authen_policy_id, utils.global_setting_asset_name)
+    ) == 1
   expect global_setting_datum: GlobalSetting =
     utils.must_find_script_inline_datum(global_setting_datum_raw)
   global_setting_datum

@@ -183,7 +183,7 @@ function getGlobalSetting(lucid: Lucid): {
     globalSetting: globalSetting,
     globalSettingUtxo: {
       txHash:
-        "37f875a17eee36e6ea4026de97c8b063ae649dd39fd07bce419e6b6e3c993477",
+        "eb5d5d3cf842b171b09a1878fc8c16cf7a5ad6a0d18e3122feb31078e224680a",
       outputIndex: 20,
       assets: {
         [Asset.toString(ADA)]: 1_000_000_000n,
@@ -252,7 +252,7 @@ function getScriptBatcher(lucid: Lucid): {
     },
     collateral: {
       txHash:
-        "37f875a17eee36e6ea4026de97c8b063ae649dd39fd07bce419e6b6e3c993477",
+        "eb5d5d3cf842b171b09a1878fc8c16cf7a5ad6a0d18e3122feb31078e224680a",
       outputIndex: 99,
       assets: {
         [Asset.toString(ADA)]: 5_000000n,
