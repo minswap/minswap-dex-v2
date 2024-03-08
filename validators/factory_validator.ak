@@ -202,10 +202,10 @@ validator(
       // Pool Reserve must be the same between datum and value 
       pool_datum_reserve_a == amount_a,
       pool_datum_reserve_b == amount_b,
-      // Initial Pool Reserves and liquditiy must be positive
+      // Initial Pool Reserves must be positive and the liquditiy must be greater than the burn liquidity
       amount_a > 0,
       amount_b > 0,
-      total_liquidity > 0,
+      total_liquidity > utils.default_burn_liquidity,
       // base_fee_a_numerator and base_fee_b_numerator must be the same
       pool_datum_base_fee_a_numerator == pool_datum_base_fee_b_numerator,
       // base_fee_a_numerator and base_fee_b_numerator must be between **5** and **2000**
