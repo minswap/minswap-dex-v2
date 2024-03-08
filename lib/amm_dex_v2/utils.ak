@@ -11,10 +11,10 @@ use amm_dex_v2/types.{Asset, DatumMap}
 pub const pool_auth_asset_name = #"4d5350"
 
 // the legitimate Factory TokenName
-pub const factory_auth_asset_name = #"4d53"
+pub const factory_auth_asset_name = #"4d5346"
 
 // the legitimate Global Setting TokenName
-pub const global_setting_asset_name = #"4754"
+pub const global_setting_asset_name = #"4d534753"
 
 pub const default_burn_liquidity = 10
 
