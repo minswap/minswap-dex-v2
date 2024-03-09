@@ -35,9 +35,9 @@ function getInitialParameters(): {
       txId: "2cc240daa819b2ec18a9fc9a8c86c6f2145328a64debd14ead32c589a6bfb22d",
       index: 1,
     },
-    factoryNFTName: "MS",
+    factoryNFTName: "MSF",
     poolNFTName: "MSP",
-    globalSettingNFTName: "GT",
+    globalSettingNFTName: "MSGS",
   };
 }
 
