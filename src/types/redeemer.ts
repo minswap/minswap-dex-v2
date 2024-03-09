@@ -37,8 +37,8 @@ export namespace Redeemer {
                 }
             }
 
-            const text = kind + " index " + index + " cost " + mem + " mem and " + cpu + " cpu"
-            console.log(text)
+            // const text = kind + " index " + index + " cost " + mem + " mem and " + cpu + " cpu"
+            // console.log(text)
         }
         console.log(`Total: ${totalMem} mem and ${totalCpu} cpu`)
     }

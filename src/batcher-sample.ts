@@ -1,10 +1,20 @@
-import { Assets, Constr, Data, fromText, Lucid, UTxO } from "lucid-cardano";
+import {
+  Assets,
+  Constr,
+  Data,
+  Lucid,
+  Script,
+  toHex,
+  UTxO,
+} from "lucid-cardano";
 
 import { sha3 } from "./hash";
 import { EmulatorProvider } from "./provider";
 import { getContractScripts } from "./script";
 import { ADA, Asset } from "./types/asset";
+import { GlobalSetting } from "./types/global-setting";
 import {
+  AuthorizationMethodType,
   OrderAmountType,
   OrderDatum,
   OrderDirection,
@@ -150,7 +160,112 @@ function calculateOrderIndexes(txIns: TxIn[]): bigint[] {
   return ret;
 }
 
-async function buildBatchTx({
+function getGlobalSetting(lucid: Lucid): {
+  globalSetting: GlobalSetting;
+  globalSettingUtxo: UTxO;
+} {
+  const script = getContractScripts(lucid);
+  const pubkeyBatcher = getPubKeyBatcher();
+  const scriptBatcher = getScriptBatcher(lucid);
+  const globalSetting: GlobalSetting = {
+    batchers: [pubkeyBatcher.batcherAddr, scriptBatcher.batcherAddr],
+    admin: "addr_test1vqe2eyupqj8e0jr8uumakm2zuhh2ucrcevy7hw8vztjaragvljjnc",
+    feeSharingTaker:
+      "addr_test1vqe2eyupqj8e0jr8uumakm2zuhh2ucrcevy7hw8vztjaragvljjnc",
+    poolDynamicFeeUpdater:
+      "addr_test1vqe2eyupqj8e0jr8uumakm2zuhh2ucrcevy7hw8vztjaragvljjnc",
+    poolFeeUpdater:
+      "addr_test1vqe2eyupqj8e0jr8uumakm2zuhh2ucrcevy7hw8vztjaragvljjnc",
+    poolStakeKeyUpdater:
+      "addr_test1vqe2eyupqj8e0jr8uumakm2zuhh2ucrcevy7hw8vztjaragvljjnc",
+  };
+  return {
+    globalSetting: globalSetting,
+    globalSettingUtxo: {
+      txHash:
+        "eb5d5d3cf842b171b09a1878fc8c16cf7a5ad6a0d18e3122feb31078e224680a",
+      outputIndex: 20,
+      assets: {
+        [Asset.toString(ADA)]: 1_000_000_000n,
+        [Asset.toString(script.globalSettingAsset)]: 1n,
+      },
+      address: script.authenAddress,
+      datum: Data.to(GlobalSetting.toPlutus(globalSetting)),
+    },
+  };
+}
+
+function getPubKeyBatcher(): {
+  batcherAddr: string;
+  licenseUtxo: UTxO;
+  skey: string;
+} {
+  const batcherAddr =
+    "addr_test1vq6wk0m30zgvzdpcut0th2flaj0xv2quwjajjthr8r6t9dcpt0dt5";
+  return {
+    batcherAddr: batcherAddr,
+    licenseUtxo: {
+      txHash:
+        "37f875a17eee36e6ea4026de97c8b063ae649dd39fd07bce419e6b6e3c993477",
+      outputIndex: 0,
+      assets: {
+        [Asset.toString(ADA)]: 1_000_000_000n,
+      },
+      address: batcherAddr,
+    },
+    skey: "ed25519_sk1lpsssf9u5qpwraf230jua6d7703ze2ekwl734xqykqu3seszl7aslqde8x",
+  };
+}
+
+function getScriptBatcher(lucid: Lucid): {
+  batcherAddr: string;
+  batcherRef: UTxO;
+  licenseUtxo: UTxO;
+  collateral: UTxO;
+  collateralSkey: string;
+} {
+  const batcherScript: Script = {
+    type: "PlutusV2",
+    script:
+      "583c0100003232323232222533300432323253330073370e900118041baa00114a22c60120026012002600c6ea8004526136565734aae7555cf2ba157441",
+  };
+  const batcherAddr = lucid.utils.validatorToAddress(batcherScript);
+  const batcherRef: UTxO = {
+    txHash: "eb5d5d3cf842b171b09a1878fc8c16cf7a5ad6a0d18e3122feb31078e224680a",
+    outputIndex: 10,
+    address: "addr_test1vzztre5epvtj5p72sh28nvrs3e6s4xxn95f66cvg0sqsk7qd3mah0",
+    scriptRef: batcherScript,
+    assets: {},
+  };
+  return {
+    batcherAddr: batcherAddr,
+    batcherRef: batcherRef,
+    licenseUtxo: {
+      txHash:
+        "37f875a17eee36e6ea4026de97c8b063ae649dd39fd07bce419e6b6e3c993477",
+      outputIndex: 0,
+      assets: {
+        [Asset.toString(ADA)]: 1_000_000_000n,
+      },
+      address: batcherAddr,
+      datum: Data.to(new Constr(0, [])),
+    },
+    collateral: {
+      txHash:
+        "eb5d5d3cf842b171b09a1878fc8c16cf7a5ad6a0d18e3122feb31078e224680a",
+      outputIndex: 99,
+      assets: {
+        [Asset.toString(ADA)]: 5_000000n,
+      },
+      address:
+        "addr_test1qqanmx3m8uchn2649eccsu2y3ztgkkr5rqtuznahyc2v5cwqe09wdp3al4rg9psrd43vptvavmaavsv5feldkgmyzjjq87yath",
+    },
+    collateralSkey:
+      "ed25519_sk1cx0k7z6axzggg08d2e870cgpklawa9ppw39s7dny84allq8fltyqmfsvpw",
+  };
+}
+
+async function buildTxByPubKeyBatcher({
   lucid,
   pool,
   orders,
@@ -172,58 +287,13 @@ async function buildBatchTx({
   }[];
 }): Promise<void> {
   const scripts = getContractScripts(lucid);
-  const batcherArr =
-    "addr_test1vq6wk0m30zgvzdpcut0th2flaj0xv2quwjajjthr8r6t9dcpt0dt5";
-  const licenseDate = new Date("2024-02-25T10:00:00.000Z");
-  const licenseDeadline = BigInt(
-    licenseDate.getTime() + 60 * 24 * 60 * 60 * 1000
-  );
-  const batcherLicenseAsset: Asset = {
-    policyId: scripts.batcherLicensePid,
-    tokenName: fromText(licenseDeadline.toString()),
-  };
-  const licenseUtxo: UTxO = {
-    txHash: "37f875a17eee36e6ea4026de97c8b063ae649dd39fd07bce419e6b6e3c993477",
-    outputIndex: 0,
-    assets: {
-      [Asset.toString(ADA)]: 1_000_000_000n,
-      [Asset.toString(batcherLicenseAsset)]: 1n,
-    },
-    address: batcherArr,
-  };
+  const globalSetting = getGlobalSetting(lucid);
+  const { batcherAddr, licenseUtxo, skey } = getPubKeyBatcher();
 
   lucid.selectWalletFrom({
-    address: batcherArr,
+    address: batcherAddr,
     utxos: [licenseUtxo],
   });
-
-  const inputs: UTxO[] = [
-    licenseUtxo,
-    pool.poolIn,
-    ...orders.map((o) => o.orderIn),
-  ].sort((a, b) =>
-    TxIn.compare(
-      {
-        txId: a.txHash,
-        index: a.outputIndex,
-      },
-      {
-        txId: b.txHash,
-        index: b.outputIndex,
-      }
-    )
-  );
-
-  let licenseIndex = -1;
-  for (let i = 0; i < inputs.length; i++) {
-    const isLicenseInput =
-      inputs[i].txHash === licenseUtxo.txHash &&
-      inputs[i].outputIndex === licenseUtxo.outputIndex;
-    if (isLicenseInput && licenseIndex === -1) {
-      licenseIndex = i;
-      continue;
-    }
-  }
 
   const inputIndexes = calculateOrderIndexes(
     orders.map(({ orderIn }) => ({
@@ -233,7 +303,7 @@ async function buildBatchTx({
   );
 
   const poolBatchingRedeemer = new Constr(0, [
-    BigInt(licenseIndex),
+    toHex(new Uint8Array([0])),
     orders.map((_) => DEFAULT_BATCHER_FEE),
     inputIndexes,
     new Constr(1, []),
@@ -245,6 +315,7 @@ async function buildBatchTx({
   const tx = lucid
     .newTx()
     .readFrom([
+      globalSetting.globalSettingUtxo,
       scripts.references.poolRef,
       scripts.references.orderRef,
       scripts.references.poolBatchingRef,
@@ -254,36 +325,126 @@ async function buildBatchTx({
       orders.map((o) => o.orderIn),
       Data.to(new Constr(0, []))
     )
-    .collectFrom([licenseUtxo])
-    .payToContract(
-      pool.poolIn.address,
-      {
-        inline: pool.poolOut.datum,
-      },
-      pool.poolOut.value
-    )
     .withdraw(scripts.poolBatchingAddress, 0n, Data.to(poolBatchingRedeemer))
     .validFrom(validFrom.getTime())
     .validTo(validTo.getTime())
-    .addSigner(batcherArr);
+    .addSigner(batcherAddr);
 
   for (const { orderOut } of orders) {
     tx.payToAddress(orderOut.address, orderOut.value);
   }
+  tx.payToContract(
+    pool.poolIn.address,
+    {
+      inline: pool.poolOut.datum,
+    },
+    pool.poolOut.value
+  );
 
   const txComplete = await tx.complete({
     change: {
-      address: batcherArr,
+      address: batcherAddr,
     },
   });
 
-  const txSigned = await txComplete
-    .signWithPrivateKey(
-      "ed25519_sk1lpsssf9u5qpwraf230jua6d7703ze2ekwl734xqykqu3seszl7aslqde8x"
+  const txSigned = await txComplete.signWithPrivateKey(skey).complete();
+  const txId = await txSigned.submit();
+  console.log(`Submit success by pub key batcher: ${txId}`);
+}
+
+async function buildTxByScriptBatcher({
+  lucid,
+  pool,
+  orders,
+}: {
+  lucid: Lucid;
+  pool: {
+    poolIn: UTxO;
+    poolOut: {
+      value: Assets;
+      datum: string;
+    };
+  };
+  orders: {
+    orderIn: UTxO;
+    orderOut: {
+      address: string;
+      value: Assets;
+    };
+  }[];
+}): Promise<void> {
+  const scripts = getContractScripts(lucid);
+  const globalSetting = getGlobalSetting(lucid);
+  const { batcherAddr, licenseUtxo, batcherRef, collateral, collateralSkey } =
+    getScriptBatcher(lucid);
+
+  lucid.selectWalletFrom({
+    address: collateral.address,
+    utxos: [collateral],
+  });
+
+  const inputIndexes = calculateOrderIndexes(
+    orders.map(({ orderIn }) => ({
+      txId: orderIn.txHash,
+      index: orderIn.outputIndex,
+    }))
+  );
+
+  const poolBatchingRedeemer = new Constr(0, [
+    toHex(new Uint8Array([1])),
+    orders.map((_) => DEFAULT_BATCHER_FEE),
+    inputIndexes,
+    new Constr(1, []),
+    [new Constr(1, [])],
+  ]);
+
+  const validFrom = new Date();
+  const validTo = new Date(validFrom.getTime() + 1000 * 1000);
+  const tx = lucid
+    .newTx()
+    .readFrom([
+      globalSetting.globalSettingUtxo,
+      batcherRef,
+      scripts.references.poolRef,
+      scripts.references.orderRef,
+      scripts.references.poolBatchingRef,
+    ])
+    .collectFrom([pool.poolIn], Data.to(new Constr(0, [])))
+    .collectFrom(
+      orders.map((o) => o.orderIn),
+      Data.to(new Constr(0, []))
     )
+    .collectFrom([licenseUtxo], Data.to(new Constr(0, [])))
+    .withdraw(scripts.poolBatchingAddress, 0n, Data.to(poolBatchingRedeemer))
+    .validFrom(validFrom.getTime())
+    .validTo(validTo.getTime());
+
+  for (const { orderOut } of orders) {
+    tx.payToAddress(orderOut.address, orderOut.value);
+  }
+  tx.payToContract(
+    pool.poolIn.address,
+    {
+      inline: pool.poolOut.datum,
+    },
+    pool.poolOut.value
+  );
+
+  const txComplete = await tx.complete({
+    change: {
+      address: batcherAddr,
+      outputData: {
+        inline: Data.to(new Constr(0, [])),
+      },
+    },
+    coinSelection: false,
+  });
+
+  const txSigned = await txComplete
+    .signWithPrivateKey(collateralSkey)
     .complete();
   const txId = await txSigned.submit();
-  console.log(`Submit success: ${txId}`);
+  console.log(`Submit success by script batcher: ${txId}`);
 }
 
 async function main(): Promise<void> {
@@ -336,16 +497,22 @@ async function main(): Promise<void> {
 
   const testUserAddr =
     "addr_test1vrxhzzazrwa988jumcrtt7kt6gf7rwd4jxzr0kfvxjaqvwqavxh3s";
+  const cancellerPubKeyHash =
+    "cd710ba21bba539e5cde06b5facbd213e1b9b5918437d92c34ba0638";
   const totalOrderAmount = 2_000_000000n;
   const swapAmount = 1_000_000000n;
   const swapDirection = OrderDirection.A_TO_B;
   const orderDatum: OrderDatum = {
-    sender: testUserAddr,
-    senderDatum: {
+    canceller: {
+      type: AuthorizationMethodType.SIGNATURE,
+      hash: cancellerPubKeyHash,
+    },
+    refundReceiver: testUserAddr,
+    refundReceiverDatum: {
       type: OrderExtraDatumType.NO_DATUM,
     },
-    receiver: testUserAddr,
-    receiverDatum: {
+    successReceiver: testUserAddr,
+    successReceiverDatum: {
       type: OrderExtraDatumType.NO_DATUM,
     },
     lpAsset: lpAsset,
@@ -376,7 +543,7 @@ async function main(): Promise<void> {
 
   let tempDatumReserves: [bigint, bigint] = [amountA, amountB];
   let tempValueReserves: [bigint, bigint] = [amountA, amountB];
-  for (let i = 0; i < 27; i++) {
+  for (let i = 0; i < 30; i++) {
     const orderIn: UTxO = {
       txHash:
         "5573777bedba6bb5f56541681256158dcf8ebfbc9e7251277d25b118517dce10",
@@ -406,7 +573,7 @@ async function main(): Promise<void> {
     orders.push({
       orderIn: orderIn,
       orderOut: {
-        address: orderDatum.receiver,
+        address: orderDatum.successReceiver,
         value: orderOutValue,
       },
     });
@@ -425,7 +592,7 @@ async function main(): Promise<void> {
     tempDatumReserves[0] + DEFAULT_INIT_POOL_ADA;
   newPoolValue[Asset.toString(assetB)] = tempValueReserves[1];
 
-  await buildBatchTx({
+  await buildTxByPubKeyBatcher({
     lucid: lucid,
     pool: {
       poolIn: poolInUtxo,
@@ -436,6 +603,17 @@ async function main(): Promise<void> {
     },
     orders: orders,
   });
+  // await buildTxByScriptBatcher({
+  //   lucid: lucid,
+  //   pool: {
+  //     poolIn: poolInUtxo,
+  //     poolOut: {
+  //       value: newPoolValue,
+  //       datum: Data.to(PoolDatum.toPlutus(newPoolDatum)),
+  //     },
+  //   },
+  //   orders: orders,
+  // });
 }
 
 void main();

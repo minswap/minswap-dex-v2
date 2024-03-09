@@ -2,39 +2,27 @@ use aiken/builtin
 use aiken/bytearray
 use aiken/dict
 use aiken/hash
-use aiken/string
-use aiken/transaction.{Datum, DatumHash, InlineDatum, NoDatum}
+use aiken/interval.{Finite, Interval, IntervalBound}
+use aiken/transaction.{Datum, DatumHash, InlineDatum, NoDatum, ValidityRange}
 use aiken/transaction/value.{AssetName, PolicyId, ada_asset_name, ada_policy_id}
 use amm_dex_v2/types.{Asset, DatumMap}
-
-const zero_ascii_code = 48
-
-const nine_ascii_code = 57
-
-// Policy ID managed by the Minswap team, used for minting Batcher License
-pub const batcher_license_policy_id =
-  #"229013ad3a22d2d051a28e7f9214a32444ecf19998f7bdf0c2849862"
 
 // the legitimate Pool TokenName
 pub const pool_auth_asset_name = #"4d5350"
 
 // the legitimate Factory TokenName
-pub const factory_auth_asset_name = #"4d53"
+pub const factory_auth_asset_name = #"4d5346"
 
-// Policy ID managed by the Minswap team, used for minting Admin License assets
-pub const admin_policy_id =
-  #"f8c20eb8b2e773e21cf41ab6354cf09bd255ebed0bd8847c655e67b4"
-
-// Maximum expiration time of Batcher license from now (to prevent minting infinity license)
-pub const maximum_deadline_range = 77760000000
+// the legitimate Global Setting TokenName
+pub const global_setting_asset_name = #"4d534753"
 
 pub const default_burn_liquidity = 10
 
 pub const default_fee_denominator = 10000
 
 // Base Fee constraint
-// Max 10%
-pub const max_base_fee_numerator = 1000
+// Max 20%
+pub const max_base_fee_numerator = 2000
 
 // Min 0.05%
 pub const min_base_fee_numerator = 5
@@ -47,8 +35,8 @@ pub const max_vol_fee_numerator = 200
 pub const min_vol_fee_numerator = 0
 
 // Trading Fee constraint
-// Max 10%
-pub const max_trading_fee_numerator = 1000
+// Max 20%
+pub const max_trading_fee_numerator = 2000
 
 // Min 0.05%
 pub const min_trading_fee_numerator = 5
@@ -118,33 +106,6 @@ test test_compute_lp_asset_name() {
       asset_b_asset_name,
     )
   lp_asset_name == #"82e2b1fd27a7712a1a9cf750dfbea1a5778611b20e06dd6a611df7a643f8cb75"
-}
-
-pub fn bytearray_to_positive_int(byte_arr: ByteArray) -> Int {
-  let byte_len = builtin.length_of_bytearray(byte_arr)
-  do_bytearray_positive_int(byte_arr, byte_len - 1)
-}
-
-pub fn do_bytearray_positive_int(byte_arr: ByteArray, idx: Int) -> Int {
-  let byte = builtin.index_bytearray(byte_arr, idx)
-  if zero_ascii_code <= byte && byte <= nine_ascii_code {
-    if idx == 0 {
-      byte - zero_ascii_code
-    } else {
-      do_bytearray_positive_int(byte_arr, idx - 1) * 10 + (
-        byte - zero_ascii_code
-      )
-    }
-  } else {
-    fail
-  }
-}
-
-test test_bytearray_to_positive_int() {
-  let r1 = bytearray_to_positive_int(string.to_bytearray(@"123"))
-  let r2 = bytearray_to_positive_int(string.to_bytearray(@"111"))
-  let r3 = bytearray_to_positive_int(string.to_bytearray(@"9013"))
-  r1 == 123 && r2 == 111 && r3 == 9013
 }
 
 pub fn must_find_script_inline_datum(datum: Datum) -> Data {
@@ -347,4 +308,22 @@ pub fn is_list_unique(list: List<a>) -> Bool {
     [_] -> True
     [x, ..xs] -> !contains_element(xs, x) && is_list_unique(xs)
   }
+}
+
+pub fn must_get_finite_end_validity(validity_range: ValidityRange) -> Int {
+  let Interval {
+    upper_bound: IntervalBound { bound_type: upper_bound_type, .. },
+    ..
+  } = validity_range
+  expect Finite(end_valid_time_range) = upper_bound_type
+  end_valid_time_range
+}
+
+pub fn must_get_finite_start_validity(validity_range: ValidityRange) -> Int {
+  let Interval {
+    lower_bound: IntervalBound { bound_type: lower_bound_type, .. },
+    ..
+  } = validity_range
+  expect Finite(start_valid_time_range) = lower_bound_type
+  start_valid_time_range
 }

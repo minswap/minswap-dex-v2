@@ -1,17 +1,19 @@
+use aiken/builtin
 use aiken/dict
-use aiken/interval.{Finite, Interval, IntervalBound}
 use aiken/list
 use aiken/transaction.{
   Input, Output, ScriptContext, Spend, Transaction, WithdrawFrom,
 }
 use aiken/transaction/credential.{
-  Address, ScriptCredential, StakeCredential, VerificationKeyCredential,
+  Address, Inline, ScriptCredential, StakeCredential,
 }
+use aiken/transaction/value
 use amm_dex_v2/order_validation
 use amm_dex_v2/types.{
-  ApplyOrder, CancelExpiredOrderByAnyone, CancelOrderByOwner, OrderDatum,
-  OrderRedeemer,
+  ApplyOrder, CancelExpiredOrderByAnyone, CancelOrderByOwner, OAMMintScript,
+  OAMSignature, OAMSpendScript, OAMWithdrawScript, OrderDatum, OrderRedeemer,
 }
+use amm_dex_v2/utils
 
 validator(
   // the Stake Credential of Pool Batching Validator
@@ -30,21 +32,20 @@ validator(
         dict.has_key(withdrawals, pool_batching_credential)
       }
       CancelOrderByOwner -> {
-        let Transaction { inputs, extra_signatories, .. } = transaction
+        let Transaction { inputs, extra_signatories, withdrawals, mint, .. } =
+          transaction
         expect order_datum: OrderDatum = raw_datum
-        let OrderDatum {
-          sender: Address { payment_credential: owner_payment_credential, .. },
-          ..
-        } = order_datum
-        // validate that the transaction has _sender_'s signature or _sender_ script UTxO in the Transaction Inputs
-        when owner_payment_credential is {
-          VerificationKeyCredential(owner_pkh) ->
-            // Verify transaction must be signed by Owner
-            list.has(extra_signatories, owner_pkh)
-          ScriptCredential(_) ->
-            // In case owner is script address, this script will require at least 1 owner UTxO in input
-            // If owner UTxO has enough condition to unlock itself, it can unlock this script as well
-            list.length(
+        let OrderDatum { canceller, .. } = order_datum
+        // Canceller can be one of 4 authorization methods
+        when canceller is {
+          // In case the wallet is a PubKey, its signature is required 
+          OAMSignature(pub_key_hash) ->
+            list.has(extra_signatories, pub_key_hash)
+          // In case the wallet is a Script and offer Spend method
+          // its Utxo has to present in the transaction inputs
+          OAMSpendScript(script_hash) -> {
+            let canceller_credential = ScriptCredential(script_hash)
+            !builtin.null_list(
               list.filter(
                 inputs,
                 fn(input) {
@@ -52,10 +53,30 @@ validator(
                   let Output { address: out_address, .. } = output
                   let Address { payment_credential: out_payment_credential, .. } =
                     out_address
-                  out_payment_credential == owner_payment_credential
+                  out_payment_credential == canceller_credential
                 },
               ),
-            ) > 0
+            )
+          }
+          // In case the wallet is a Script and offer Withdrawal method
+          // it has to make a withdrawal and present in transaction withdrawals
+          OAMWithdrawScript(script_hash) -> {
+            let credential = Inline(ScriptCredential(script_hash))
+            dict.has_key(withdrawals, credential)
+          }
+          // In case the wallet is a Script and offer Minting method
+          // it has to mint tokens that has defined policy id and present in transaction minting
+          // Token's quantity must not be zero
+          OAMMintScript(script_hash) -> {
+            let fst_token_quantity =
+              mint
+                |> value.from_minted_value()
+                |> value.tokens(script_hash)
+                |> dict.to_list()
+                |> builtin.head_list
+                |> builtin.snd_pair
+            fst_token_quantity != 0
+          }
         }
       }
       CancelExpiredOrderByAnyone -> {
@@ -92,11 +113,8 @@ validator {
         },
       )
 
-    let Interval {
-      lower_bound: IntervalBound { bound_type: lower_bound_type, .. },
-      ..
-    } = validity_range
-    expect Finite(start_valid_time_range) = lower_bound_type
+    let start_valid_time_range =
+      utils.must_get_finite_start_validity(validity_range)
     order_validation.validate_cancel_expired_orders(
       order_inputs: order_inputs,
       all_outputs: outputs,

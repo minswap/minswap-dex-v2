@@ -1,52 +1,43 @@
-use aiken/dict
 use aiken/hash.{Blake2b_224, Hash}
 use aiken/list
 use aiken/transaction.{
   InlineDatum, Input, Output, ScriptContext, Spend, Transaction, WithdrawFrom,
 }
-use aiken/transaction/credential.{Address, Inline, VerificationKey}
-use aiken/transaction/value.{PolicyId}
-use amm_dex_v2/pool_validation
+use aiken/transaction/credential.{
+  Address, Inline, ScriptCredential, VerificationKey,
+}
 
 type MultiSignDatum {
   pub_key_hashes: List<Hash<Blake2b_224, VerificationKey>>,
 }
 
-validator(admin_pid: PolicyId) {
+validator {
   fn withdraw(_redeemer: Data, context: ScriptContext) {
     expect ScriptContext {
-      transaction: Transaction {
-        reference_inputs,
-        extra_signatories,
-        validity_range,
-        ..
-      },
-      purpose: WithdrawFrom(stake_cred),
+      transaction: Transaction { reference_inputs, extra_signatories, .. },
+      purpose: WithdrawFrom(stake_credential),
     } = context
-    let admin_input_opt =
-      list.find(
-        reference_inputs,
-        fn(input) {
-          let Input { output: Output { value: val, .. }, .. } = input
-          ( val |> value.tokens(admin_pid) |> dict.size() ) > 0
-        },
-      )
-    expect Some(admin_input) = admin_input_opt
-    let (_, _) =
-      pool_validation.validate_license_expiration_and_find_license_holder(
-        license_pid: admin_pid,
-        license_input: admin_input,
-        validity_range: validity_range,
-      )
-    expect Input {
-      output: Output {
-        address: Address { payment_credential: payment_cred, .. },
-        datum: InlineDatum(raw_datum),
-        ..
-      },
-      ..
-    } = admin_input
-    expect stake_cred == Inline(payment_cred)
+    expect Inline(own_cred) = stake_credential
+    expect ScriptCredential(own_hash) = own_cred
+    expect Some(multi_sign_input) =
+      reference_inputs
+        |> list.find(
+             fn(input) {
+               let Input {
+                 output: Output {
+                   address: Address { payment_credential: payment_cred, .. },
+                   ..
+                 },
+                 ..
+               } = input
+               when payment_cred is {
+                 ScriptCredential(hash) -> hash == own_hash
+                 _ -> False
+               }
+             },
+           )
+    expect Input { output: Output { datum: InlineDatum(raw_datum), .. }, .. } =
+      multi_sign_input
     expect ref_datum: MultiSignDatum = raw_datum
     list.all(ref_datum.pub_key_hashes, fn(h) { list.has(extra_signatories, h) })
   }

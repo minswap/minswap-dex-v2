@@ -16,16 +16,16 @@ export class EmulatorProvider implements Provider {
   async getProtocolParameters(): Promise<ProtocolParameters> {
     return PROTOCOL_PARAMETERS_DEFAULT;
   }
-  getUtxos(_addressOrCredential: string | Credential): Promise<UTxO[]> {
-    throw new Error("Method not implemented.");
+  async getUtxos(_addressOrCredential: string | Credential): Promise<UTxO[]> {
+    return [];
   }
-  getUtxosWithUnit(
+  async getUtxosWithUnit(
     _addressOrCredential: string | Credential,
     _unit: string
   ): Promise<UTxO[]> {
-    throw new Error("Method not implemented.");
+    return [];
   }
-  getUtxoByUnit(_unit: string): Promise<UTxO> {
+  async getUtxoByUnit(_unit: string): Promise<UTxO> {
     throw new Error("Method not implemented.");
   }
   getUtxosByOutRef(_outRefs: OutRef[]): Promise<UTxO[]> {
@@ -45,6 +45,7 @@ export class EmulatorProvider implements Provider {
   }
   async submitTx(tx: string): Promise<string> {
     const cslTx = C.Transaction.from_bytes(fromHex(tx));
+    // console.log(cslTx.to_json())
     const cslTxBody = cslTx.body();
     const cslTxId = C.hash_transaction(cslTxBody);
     const cslRedeemers = cslTx.witness_set().redeemers();

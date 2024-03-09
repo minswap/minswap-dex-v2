@@ -35,21 +35,20 @@ pub type PoolDatum {
   allow_dynamic_fee: Bool,
 }
 
-pub type UpdatePoolFeeOrStakeCredentialAction {
+pub type UpdatePoolParametersAction {
   UpdatePoolFee
+  UpdateDynamicFee
   UpdatePoolStakeCredential
 }
 
 pub type PoolRedeemer {
   Batching
-  UpdatePoolFeeOrStakeCredential {
-    action: UpdatePoolFeeOrStakeCredentialAction,
-  }
-  WithdrawLiquidityShare
+  UpdatePoolParameters { action: UpdatePoolParametersAction }
+  WithdrawFeeSharing
 }
 
 pub type PoolBatchingRedeemer {
-  license_index: Int,
+  batcher_index: ByteArray,
   orders_fee: List<Int>,
   input_indexes: List<Int>,
   pool_input_indexes_opt: Option<List<Int>>,
@@ -221,15 +220,24 @@ pub type ExtraOrderDatum {
   EODInlineDatum { hash: CustomDatumHash }
 }
 
+pub type OrderAuthorizationMethod {
+  OAMSignature { pub_key_hash: PubKeyHash }
+  OAMSpendScript { script_hash: ValidatorHash }
+  OAMWithdrawScript { script_hash: ValidatorHash }
+  OAMMintScript { script_hash: ValidatorHash }
+}
+
 pub type OrderDatum {
-  // The address of order's creator, only sender can cancel the order immediately
-  sender: Address,
+  // The address's payment credential that can cancel the order, can by PubKey or Script
+  canceller: OrderAuthorizationMethod,
+  // The address of the output after being killed by Batcher or cancelled by bots (order is expired)
+  refund_receiver: Address,
   // The datum hash of the output after being killed by Batcher or cancelled by bots (order is expired)
-  sender_datum: ExtraOrderDatum,
+  refund_receiver_datum: ExtraOrderDatum,
   // The address which receives the funds after order is processed
-  receiver: Address,
+  success_receiver: Address,
   // The datum hash of the output after order is processed.
-  receiver_datum: ExtraOrderDatum,
+  success_receiver_datum: ExtraOrderDatum,
   // The Liquidity Pool's LP Asset that the order will be applied to
   lp_asset: Asset,
   // The information about Order Type
@@ -260,7 +268,7 @@ pub type FactoryRedeemer {
 }
 
 pub type AuthenRedeemer {
-  MintFactoryAuthen
+  DexInitialization
   CreatePool
 }
 
@@ -282,3 +290,20 @@ pub type BatchingPool {
 // Total Liquidity
 pub type PoolState =
   (Int, Int, Int, Int, Int)
+
+// This setting grants permissions to authorized actors who can interact with Liquidity Pool features.
+pub type GlobalSetting {
+  // List of authorized batchers who can process orders.
+  batchers: List<Address>,
+  // The actor who can update the Pool's base fee and fee sharing.
+  pool_fee_updater: Address,
+  // The actor who can withdraw the Pool's fee sharing.
+  fee_sharing_taker: Address,
+  // The actor who can change the Pool's stake key.
+  pool_stake_key_updater: Address,
+  // The actor who can update the Pool's dynamic fee.
+  pool_dynamic_fee_updater: Address,
+  // The actor who can update the addresses mentioned above.
+  // This admin can be transferred to another wallet and should be stored in the most secure location.
+  admin: Address,
+}

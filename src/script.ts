@@ -3,6 +3,7 @@ import {
   applyParamsToScript,
   Constr,
   Credential,
+  fromHex,
   fromText,
   Lucid,
   MintingPolicy,
@@ -25,23 +26,18 @@ type PlutusCompiled = {
 
 function getInitialParameters(): {
   seedTxIn: TxIn;
-  batcherLicensePid: string;
-  adminLicensePid: string;
   factoryNFTName: string;
   poolNFTName: string;
-  adminNFTName: string;
+  globalSettingNFTName: string;
 } {
   return {
     seedTxIn: {
       txId: "2cc240daa819b2ec18a9fc9a8c86c6f2145328a64debd14ead32c589a6bfb22d",
       index: 1,
     },
-    batcherLicensePid:
-      "229013ad3a22d2d051a28e7f9214a32444ecf19998f7bdf0c2849862",
-    adminLicensePid: "229013ad3a22d2d051a28e7f9214a32444ecf19998f7bdf0c2849862",
-    factoryNFTName: "MS",
+    factoryNFTName: "MSF",
     poolNFTName: "MSP",
-    adminNFTName: "MSA",
+    globalSettingNFTName: "MSGS",
   };
 }
 
@@ -112,8 +108,9 @@ function readValidator(): {
   };
 }
 
-export function getContractScripts(lucid: Lucid): {
+type ContractScript = {
   authenPolicyId: string;
+  authenAddress: string;
   poolAddress: string;
   orderAddress: string;
   factoryAddress: string;
@@ -122,7 +119,7 @@ export function getContractScripts(lucid: Lucid): {
   poolBatchingCredential: Credential;
   poolAuthAsset: Asset;
   factoryAuthAsset: Asset;
-  batcherLicensePid: string;
+  globalSettingAsset: Asset;
   references: {
     poolRef: UTxO;
     orderRef: UTxO;
@@ -131,7 +128,14 @@ export function getContractScripts(lucid: Lucid): {
     expiredOrderCancelRef: UTxO;
     poolBatchingRef: UTxO;
   };
-} {
+};
+
+let contractScript: ContractScript | undefined = undefined;
+
+export function getContractScripts(lucid: Lucid): ContractScript {
+  if (contractScript) {
+    return contractScript;
+  }
   const validators = readValidator();
   const initialParameters = getInitialParameters();
   const authenMintingScript: Script = {
@@ -187,6 +191,7 @@ export function getContractScripts(lucid: Lucid): {
     ]),
   };
 
+  const authenAddress = lucid.utils.validatorToAddress(authenMintingScript);
   const poolAddress = lucid.utils.validatorToAddress(poolScript);
   const orderAddress = lucid.utils.validatorToAddress(orderScript);
   const factoryAddress = lucid.utils.validatorToAddress(factoryScript);
@@ -200,8 +205,27 @@ export function getContractScripts(lucid: Lucid): {
     "addr_test1vzztre5epvtj5p72sh28nvrs3e6s4xxn95f66cvg0sqsk7qd3mah0";
   const testReferenceTxHash =
     "eb5d5d3cf842b171b09a1878fc8c16cf7a5ad6a0d18e3122feb31078e224680a";
-  return {
+
+  const authenSize = fromHex(authenMintingScript.script).length;
+  const orderSize = fromHex(orderScript.script).length;
+  const poolSize = fromHex(poolScript.script).length;
+  const factorySize = fromHex(factoryScript.script).length;
+  const expiredOrderSize = fromHex(
+    expiredOrderCancellationScript.script
+  ).length;
+  const poolBatchingSize = fromHex(poolBatchingScript.script).length;
+
+  console.log(`
+    - Authen size: ${authenSize} bytes
+    - Order size: ${orderSize} bytes
+    - Pool size: ${poolSize} bytes
+    - Factory size: ${factorySize} bytes
+    - Expired Order Cancel size: ${expiredOrderSize} bytes
+    - Pool batching size: ${poolBatchingSize} bytes
+  `);
+  contractScript = {
     authenPolicyId,
+    authenAddress,
     orderAddress,
     poolAddress,
     factoryAddress,
@@ -219,7 +243,10 @@ export function getContractScripts(lucid: Lucid): {
       policyId: authenPolicyId,
       tokenName: fromText(initialParameters.factoryNFTName),
     },
-    batcherLicensePid: initialParameters.batcherLicensePid,
+    globalSettingAsset: {
+      policyId: authenPolicyId,
+      tokenName: fromText(initialParameters.globalSettingNFTName),
+    },
     references: {
       poolRef: {
         txHash: testReferenceTxHash,
@@ -265,4 +292,6 @@ export function getContractScripts(lucid: Lucid): {
       },
     },
   };
+
+  return contractScript;
 }
