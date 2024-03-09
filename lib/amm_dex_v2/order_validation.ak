@@ -13,9 +13,9 @@ use amm_dex_v2/types.{
   Asset, BatchingPool, DAOAll, DAOSpecificAmount, DatumMap, Deposit,
   DepositAmountOption, Donation, EODDatumHash, EODInlineDatum, EODNoDatum,
   ExtraOrderDatum, OCO, OrderDatum, PartialSwap, PoolState, SAOAll,
-  SAOSpecificAmount, StopLoss, SwapAmountOption, SwapExactIn, SwapExactOut,
-  SwapMultiRouting, SwapRouting, WAOAll, WAOSpecificAmount, Withdraw,
-  WithdrawAmountOption, WithdrawImbalance, ZapOut,
+  SAOSpecificAmount, SortedValueList, StopLoss, SwapAmountOption, SwapExactIn,
+  SwapExactOut, SwapMultiRouting, SwapRouting, WAOAll, WAOSpecificAmount,
+  Withdraw, WithdrawAmountOption, WithdrawImbalance, ZapOut,
 }
 use amm_dex_v2/utils
 
@@ -26,6 +26,69 @@ fn get_returnable_value(order_in_value: Value, used_batcher_fee: Int) -> Value {
     ada_asset_name,
     used_batcher_fee * -1,
   )
+}
+
+fn get_optimized_swap_output_value(
+  order_in_value: Value,
+  used_batcher_fee: Int,
+  asset_a_policy_id: PolicyId,
+  asset_a_asset_name: AssetName,
+  asset_b_policy_id: PolicyId,
+  asset_b_asset_name: AssetName,
+  amount_in: Int,
+  amount_out: Int,
+  a_to_b: Bool,
+) -> Option<SortedValueList> {
+  // ADA Pair
+  if asset_a_policy_id == #"" && asset_a_asset_name == #"" {
+    let order_in_value_list = order_in_value |> utils.value_to_list
+    let ada_entry = builtin.head_list(order_in_value_list)
+    let rest_0 = builtin.tail_list(order_in_value_list)
+    let asset_a_amount =
+      builtin.snd_pair(builtin.head_list(builtin.snd_pair(ada_entry)))
+    when rest_0 is {
+      // Have only ADA, must be A To B
+      [] -> {
+        let new_asset_a_dict =
+          [(#"", asset_a_amount - ( used_batcher_fee + amount_in ))]
+        let new_asset_b_dict =
+          [(asset_b_asset_name, amount_out)]
+        if asset_a_policy_id == #"" && a_to_b {
+          Some([(#"", new_asset_a_dict), (asset_b_policy_id, new_asset_b_dict)])
+        } else {
+          fail
+        }
+      }
+      // Have 1 other asset
+      [(asset_pid, [(asset_tn, asset_amount)])] ->
+        // In case asset is asset B and the direction is B To A
+        if
+        !a_to_b && asset_pid == asset_b_policy_id && asset_tn == asset_b_asset_name{
+        
+          // Asset B have change
+          if asset_amount > amount_in {
+            Some(
+              [
+                (#"", [(#"", asset_a_amount - used_batcher_fee + amount_out)]),
+                (asset_pid, [(asset_tn, asset_amount - amount_in)]),
+              ],
+            )
+          } else if asset_amount == amount_in {
+            // Asset B have no change
+            Some(
+              [(#"", [(#"", asset_a_amount - used_batcher_fee + amount_out)])],
+            )
+          } else {
+            fail
+          }
+        } else {
+          None
+        }
+      _ -> None
+    }
+  } else {
+    None
+  }
 }
 
 fn get_swap_output_value(
@@ -51,6 +114,73 @@ fn get_swap_output_value(
       |> value.add(ada_policy_id, ada_asset_name, -used_batcher_fee)
       |> value.add(asset_in_policy_id, asset_in_asset_name, -amount_in)
       |> value.add(asset_out_policy_id, asset_out_asset_name, amount_out)
+  }
+}
+
+fn compare_swap_output_value(
+  order_in_value: Value,
+  order_out_value: Value,
+  used_batcher_fee: Int,
+  asset_a: Asset,
+  asset_b: Asset,
+  a_to_b_direction: Bool,
+  amount_in: Int,
+  amount_out: Int,
+) -> Bool {
+  when
+    get_optimized_swap_output_value(
+      order_in_value: order_in_value,
+      used_batcher_fee: used_batcher_fee,
+      asset_a_policy_id: asset_a.policy_id,
+      asset_a_asset_name: asset_a.asset_name,
+      asset_b_policy_id: asset_b.policy_id,
+      asset_b_asset_name: asset_b.asset_name,
+      amount_in: amount_in,
+      amount_out: amount_out,
+      a_to_b: a_to_b_direction,
+    )
+  is {
+    Some(v) -> v == ( order_out_value |> utils.value_to_list )
+    None -> {
+      let (asset_in, asset_out) =
+        if a_to_b_direction {
+          (asset_a, asset_b)
+        } else {
+          (asset_b, asset_a)
+        }
+      let Asset {
+        policy_id: asset_in_policy_id,
+        asset_name: asset_in_asset_name,
+      } = asset_in
+      let Asset {
+        policy_id: asset_out_policy_id,
+        asset_name: asset_out_asset_name,
+      } = asset_out
+      order_out_value == if
+      utils.is_ada_asset(asset_in_policy_id, asset_in_asset_name){
+      
+        order_in_value
+          |> value.add(
+               ada_policy_id,
+               ada_asset_name,
+               -(used_batcher_fee + amount_in),
+             )
+          |> value.add(asset_out_policy_id, asset_out_asset_name, amount_out)
+      } else if utils.is_ada_asset(asset_out_policy_id, asset_out_asset_name) {
+        order_in_value
+          |> value.add(
+               ada_policy_id,
+               ada_asset_name,
+               amount_out - used_batcher_fee,
+             )
+          |> value.add(asset_in_policy_id, asset_in_asset_name, -amount_in)
+      } else {
+        order_in_value
+          |> value.add(ada_policy_id, ada_asset_name, -used_batcher_fee)
+          |> value.add(asset_in_policy_id, asset_in_asset_name, -amount_in)
+          |> value.add(asset_out_policy_id, asset_out_asset_name, amount_out)
+      }
+    }
   }
 }
 
@@ -80,7 +210,7 @@ fn validate_swap_exact_in(
     value_reserve_b,
     total_liquidity,
   ) = pool_state
-  let (asset_in, asset_out, reserve_in, reserve_out, trading_fee_numerator) =
+  let (asset_in, _asset_out, reserve_in, reserve_out, trading_fee_numerator) =
     if a_to_b_direction {
       (
         asset_a,
@@ -100,9 +230,9 @@ fn validate_swap_exact_in(
     }
   let Asset { policy_id: asset_in_policy_id, asset_name: asset_in_asset_name } =
     asset_in
-  let Asset { policy_id: asset_out_policy_id, asset_name: asset_out_asset_name } =
-    asset_out
 
+  // let Asset { policy_id: asset_out_policy_id, asset_name: asset_out_asset_name } =
+  //   asset_out
   let swap_amount =
     when swap_amount_option is {
       SAOSpecificAmount(am) -> am
@@ -134,24 +264,23 @@ fn validate_swap_exact_in(
     )
   let slippage_satisfied = is_slippage_satisfied(amount_out)
   if slippage_satisfied {
-    let expect_order_value_out =
-      get_swap_output_value(
-        order_in_value: order_in_value,
-        used_batcher_fee: used_batcher_fee,
-        asset_in_policy_id: asset_in_policy_id,
-        asset_in_asset_name: asset_in_asset_name,
-        asset_out_policy_id: asset_out_policy_id,
-        asset_out_asset_name: asset_out_asset_name,
-        amount_in: swap_amount,
-        amount_out: amount_out,
-      )
-    expect
-      validate_order_output(
-        receiver: success_receiver,
-        receiver_datum: success_receiver_datum,
-        value: expect_order_value_out,
-        output: order_output,
-      )
+    expect and {
+        validate_order_output_1(
+          receiver: success_receiver,
+          receiver_datum: success_receiver_datum,
+          output: order_output,
+        ),
+        compare_swap_output_value(
+          order_in_value: order_in_value,
+          order_out_value: order_output.value,
+          used_batcher_fee: used_batcher_fee,
+          asset_a: asset_a,
+          asset_b: asset_b,
+          a_to_b_direction: a_to_b_direction,
+          amount_in: swap_amount,
+          amount_out: amount_out,
+        ),
+      }
     if a_to_b_direction {
       (
         datum_reserve_a + swap_amount - earned_fee_in,
@@ -1101,6 +1230,27 @@ fn validate_order_output(
     VerificationKeyCredential(_) -> is_correct_address_and_value
     ScriptCredential(_) -> and {
         is_correct_address_and_value,
+        is_valid_datum(
+          raw_datum: raw_order_output_datum,
+          extra_order_datum: receiver_datum,
+        ),
+      }
+  }
+}
+
+fn validate_order_output_1(
+  receiver: Address,
+  receiver_datum: ExtraOrderDatum,
+  output: Output,
+) -> Bool {
+  let Output { address: output_address, datum: raw_order_output_datum, .. } =
+    output
+
+  let Address { payment_credential: receiver_payment_cred, .. } = receiver
+  when receiver_payment_cred is {
+    VerificationKeyCredential(_) -> receiver == output_address
+    ScriptCredential(_) -> and {
+        receiver == output_address,
         is_valid_datum(
           raw_datum: raw_order_output_datum,
           extra_order_datum: receiver_datum,

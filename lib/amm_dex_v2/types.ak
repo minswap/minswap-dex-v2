@@ -14,6 +14,9 @@ pub type ValidatorHash =
 pub type PubKeyHash =
   Hash<Blake2b_224, VerificationKey>
 
+pub type SortedValueList =
+  List<(ByteArray, List<(ByteArray, Int)>)>
+
 pub type Asset {
   policy_id: PolicyId,
   asset_name: AssetName,
