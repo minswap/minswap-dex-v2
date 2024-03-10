@@ -19,6 +19,8 @@ use amm_dex_v2/types.{
 }
 use amm_dex_v2/utils
 
+// Construct the value when order is cancelled by the batcher
+// Only batcher fee is deducted from the order value
 fn get_returnable_value(order_in_value: Value, used_batcher_fee: Int) -> Value {
   value.add(
     order_in_value,
@@ -28,6 +30,8 @@ fn get_returnable_value(order_in_value: Value, used_batcher_fee: Int) -> Value {
   )
 }
 
+// Ad hoc solution for predicting order output value.
+// This function only handles ADA pairs and has strict asset requirements in the value.
 fn get_optimized_swap_output_value(
   order_in_value: Value,
   used_batcher_fee: Int,
@@ -39,7 +43,7 @@ fn get_optimized_swap_output_value(
   amount_out: Int,
   a_to_b: Bool,
 ) -> Option<SortedValueList> {
-  // ADA Pair
+  // Ensure that asset A is ADA
   if asset_a_policy_id == #"" && asset_a_asset_name == #"" {
     let order_in_value_list = order_in_value |> utils.value_to_list
     let ada_entry = builtin.head_list(order_in_value_list)
@@ -47,21 +51,22 @@ fn get_optimized_swap_output_value(
     let asset_a_amount =
       builtin.snd_pair(builtin.head_list(builtin.snd_pair(ada_entry)))
     when rest_0 is {
-      // Have only ADA, must be A To B
-      [] -> {
-        let new_asset_a_dict =
-          [(#"", asset_a_amount - ( used_batcher_fee + amount_in ))]
-        let new_asset_b_dict =
-          [(asset_b_asset_name, amount_out)]
-        if asset_a_policy_id == #"" && a_to_b {
-          Some([(#"", new_asset_a_dict), (asset_b_policy_id, new_asset_b_dict)])
+      // If the input value contains only ADA and the swap direction is A To B, 
+      // subtract the batcher fee and swap amount of ADA, then add asset B to the output value.
+      [] ->
+        if a_to_b {
+          Some(
+            [
+              (#"", [(#"", asset_a_amount - ( used_batcher_fee + amount_in ))]),
+              (asset_b_policy_id, [(asset_b_asset_name, amount_out)]),
+            ],
+          )
         } else {
           fail
         }
-      }
-      // Have 1 other asset
+      // If the input value contains ADA and one additional asset, with Asset B being swapped for Asset A,
+      // subtract the batcher fee and add the output amount to the ADA portion, then subtract the swap amount of Asset B.
       [(asset_pid, [(asset_tn, asset_amount)])] ->
-        // In case asset is asset B and the direction is B To A
         if
         !a_to_b && asset_pid == asset_b_policy_id && asset_tn == asset_b_asset_name{
         
@@ -156,30 +161,16 @@ fn compare_swap_output_value(
         policy_id: asset_out_policy_id,
         asset_name: asset_out_asset_name,
       } = asset_out
-      order_out_value == if
-      utils.is_ada_asset(asset_in_policy_id, asset_in_asset_name){
-      
-        order_in_value
-          |> value.add(
-               ada_policy_id,
-               ada_asset_name,
-               -(used_batcher_fee + amount_in),
-             )
-          |> value.add(asset_out_policy_id, asset_out_asset_name, amount_out)
-      } else if utils.is_ada_asset(asset_out_policy_id, asset_out_asset_name) {
-        order_in_value
-          |> value.add(
-               ada_policy_id,
-               ada_asset_name,
-               amount_out - used_batcher_fee,
-             )
-          |> value.add(asset_in_policy_id, asset_in_asset_name, -amount_in)
-      } else {
-        order_in_value
-          |> value.add(ada_policy_id, ada_asset_name, -used_batcher_fee)
-          |> value.add(asset_in_policy_id, asset_in_asset_name, -amount_in)
-          |> value.add(asset_out_policy_id, asset_out_asset_name, amount_out)
-      }
+      order_out_value == get_swap_output_value(
+        order_in_value: order_in_value,
+        used_batcher_fee: used_batcher_fee,
+        asset_in_policy_id: asset_in_policy_id,
+        asset_in_asset_name: asset_in_asset_name,
+        asset_out_policy_id: asset_out_policy_id,
+        asset_out_asset_name: asset_out_asset_name,
+        amount_in: amount_in,
+        amount_out: amount_out,
+      )
     }
   }
 }
@@ -231,8 +222,6 @@ fn validate_swap_exact_in(
   let Asset { policy_id: asset_in_policy_id, asset_name: asset_in_asset_name } =
     asset_in
 
-  // let Asset { policy_id: asset_out_policy_id, asset_name: asset_out_asset_name } =
-  //   asset_out
   let swap_amount =
     when swap_amount_option is {
       SAOSpecificAmount(am) -> am
@@ -265,7 +254,7 @@ fn validate_swap_exact_in(
   let slippage_satisfied = is_slippage_satisfied(amount_out)
   if slippage_satisfied {
     expect and {
-        validate_order_output_1(
+        validate_order_output_except_value(
           receiver: success_receiver,
           receiver_datum: success_receiver_datum,
           output: order_output,
@@ -1238,7 +1227,7 @@ fn validate_order_output(
   }
 }
 
-fn validate_order_output_1(
+fn validate_order_output_except_value(
   receiver: Address,
   receiver_datum: ExtraOrderDatum,
   output: Output,
@@ -1313,7 +1302,6 @@ pub fn apply_orders(
         Some((expired_time, _)) -> end_valid_time_range <= expired_time
       },
     }
-
   let (new_state, rest_outs) =
     when order_step is {
       SwapExactIn(
