@@ -3,9 +3,12 @@ use aiken/bytearray
 use aiken/dict
 use aiken/hash
 use aiken/interval.{Finite, Interval, IntervalBound}
+use aiken/list
 use aiken/transaction.{Datum, DatumHash, InlineDatum, NoDatum, ValidityRange}
-use aiken/transaction/value.{AssetName, PolicyId, ada_asset_name, ada_policy_id}
-use amm_dex_v2/types.{Asset, DatumMap}
+use aiken/transaction/value.{
+  AssetName, PolicyId, Value, ada_asset_name, ada_policy_id,
+}
+use amm_dex_v2/types.{Asset, DatumMap, SortedValueList}
 
 // the legitimate Pool TokenName
 pub const pool_auth_asset_name = #"4d5350"
@@ -479,4 +482,16 @@ pub fn must_get_finite_start_validity(validity_range: ValidityRange) -> Int {
   } = validity_range
   expect Finite(start_valid_time_range) = lower_bound_type
   start_valid_time_range
+}
+
+pub fn value_to_list(val: Value) -> SortedValueList {
+  val
+    |> value.to_dict
+    |> dict.to_list
+    |> list.map(
+         fn(e) {
+           let (k, v) = e
+           (k, dict.to_list(v))
+         },
+       )
 }
