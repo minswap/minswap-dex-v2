@@ -95,28 +95,18 @@ validator(
         // - 1 Global Setting NFT that have the same policy id with the own script hash 
         //        and token name is defined in @global_setting_asset_name
         let mint_value = value.from_minted_value(mint)
-        expect [
-          (minted_pid_1, minted_an_1, minted_amount_1),
-          (minted_pid_2, minted_an_2, minted_amount_2),
-        ] = value.flatten(mint_value)
-        let is_valid_minted_asset_name =
-          if builtin.less_than_bytearray(minted_an_1, minted_an_2) {
-            and {
-              minted_an_1 == utils.global_setting_asset_name,
-              minted_an_2 == utils.factory_auth_asset_name,
-            }
-          } else {
-            and {
-              minted_an_1 == utils.factory_auth_asset_name,
-              minted_an_2 == utils.global_setting_asset_name,
-            }
-          }
         expect and {
-            minted_pid_1 == authen_policy_id,
-            minted_pid_2 == authen_policy_id,
-            minted_amount_1 == 1,
-            minted_amount_2 == 1,
-            is_valid_minted_asset_name,
+            list.length(value.flatten(mint_value)) == 2,
+            value.quantity_of(
+              mint_value,
+              authen_policy_id,
+              utils.global_setting_asset_name,
+            ) == 1,
+            value.quantity_of(
+              mint_value,
+              authen_policy_id,
+              utils.factory_auth_asset_name,
+            ) == 1,
           }
         // validate that there's only 1 Factory UTxO in the Transaction Outputs
         // The Factory UTxO must contain 1 Factory Token in the value
