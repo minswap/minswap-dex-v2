@@ -466,13 +466,20 @@ test test_unique_bytearray_unsorted_5() {
   !is_unique_bytearray_unsorted(array)
 }
 
-pub fn must_get_finite_end_validity(validity_range: ValidityRange) -> Int {
+// Approximate the current time by obtaining the upper and lower bounds of the validity range. 
+// Ensure that the bounds do not exceed 10 minutes.
+pub fn must_get_current_time_approximation(validity_range: ValidityRange) -> Int {
   let Interval {
+    lower_bound: IntervalBound { bound_type: lower_bound_type, .. },
     upper_bound: IntervalBound { bound_type: upper_bound_type, .. },
-    ..
   } = validity_range
+  expect Finite(start_valid_time_range) = lower_bound_type
   expect Finite(end_valid_time_range) = upper_bound_type
-  end_valid_time_range
+  if end_valid_time_range - start_valid_time_range <= 10 * 60 * 1000 {
+    ( end_valid_time_range - start_valid_time_range ) / 2 + start_valid_time_range
+  } else {
+    fail
+  }
 }
 
 pub fn must_get_finite_start_validity(validity_range: ValidityRange) -> Int {

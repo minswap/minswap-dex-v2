@@ -1256,7 +1256,7 @@ pub fn apply_orders(
   trading_fee_a_numerator: Int,
   trading_fee_b_numerator: Int,
   fee_sharing_numerator_opt: Option<Int>,
-  end_valid_time_range: Int,
+  current_time_approximation: Int,
   order_inputs: List<Input>,
   all_outputs: List<Output>,
   orders_fee: List<Int>,
@@ -1299,7 +1299,7 @@ pub fn apply_orders(
       // In case expired setting is turned on, the execution time must not exceed the expired_time
       when expiry_setting_opt is {
         None -> True
-        Some((expired_time, _)) -> end_valid_time_range <= expired_time
+        Some((expired_time, _)) -> current_time_approximation <= expired_time
       },
     }
   let (new_state, rest_outs) =
@@ -1682,7 +1682,7 @@ pub fn apply_orders(
         trading_fee_a_numerator: trading_fee_a_numerator,
         trading_fee_b_numerator: trading_fee_b_numerator,
         fee_sharing_numerator_opt: fee_sharing_numerator_opt,
-        end_valid_time_range: end_valid_time_range,
+        current_time_approximation: current_time_approximation,
         order_inputs: rest_inputs,
         all_outputs: rest_outs,
         orders_fee: rest_batcher_fees,

@@ -166,13 +166,12 @@ validator(
         authen_policy_id: authen_policy_id,
       )
     let GlobalSetting { batchers, .. } = global_setting
-    let end_valid_time_range =
-      utils.must_get_finite_end_validity(validity_range)
+    let current_time_approximation =
+      utils.must_get_current_time_approximation(validity_range)
 
     // Due to authorized batchers is a list so we use @batcher_index to save the On-chain cost 
     // on searching the batcher address in this section 
-    let batcher_address =
-      utils.list_at_index(batchers, builtin.index_bytearray(batcher_index, 0))
+    let batcher_address = utils.list_at_index(batchers, batcher_index)
     expect and {
         // Transaction must be executed by the authorized batchers
         pool_validation.authorize_license_holder(
@@ -206,7 +205,10 @@ validator(
         },
       )
 
-    let user_inputs =
+    // We assume that inputs not belonging to the batcher or liquidity pool are orders. 
+    // These inputs' structure will be verified in the @apply_orders function and SwapMultiRouting branch. 
+    // We do not force finding the order script hash here, as we allow for the possibility of upgrading the order contract (possibly to Plutus V3).
+    let order_inputs =
       list.filter(
         inputs,
         fn(input) {
@@ -220,16 +222,16 @@ validator(
     // We have to calculate indexes of orders inputs sorting by the ASC created time
     // on the off-chain and on-chain will sort the TxIns by the indexes
     // Input Indexes in parameter will be the index indexes of @order_inputs
-    let sorted_user_inputs =
+    let sorted_order_inputs =
       bytearray.foldr(
         input_indexes,
         [],
-        fn(idx, ips) { list.push(ips, utils.list_at_index(user_inputs, idx)) },
+        fn(idx, ips) { list.push(ips, utils.list_at_index(order_inputs, idx)) },
       )
 
     expect and {
-        // User Inputs and Input Indexes must have the same length
-        builtin.length_of_bytearray(input_indexes) == list.length(user_inputs),
+        // Order Inputs and Input Indexes must have the same length
+        builtin.length_of_bytearray(input_indexes) == list.length(order_inputs),
         // Pool Inputs & Outputs must have the same length
         utils.compare_list_length(pool_inputs, pool_outputs),
       }
@@ -266,8 +268,8 @@ validator(
           trading_fee_a_numerator: trading_fee_a_numerator,
           trading_fee_b_numerator: trading_fee_b_numerator,
           fee_sharing_numerator_opt: fee_sharing_numerator_opt,
-          end_valid_time_range: end_valid_time_range,
-          order_inputs: sorted_user_inputs,
+          current_time_approximation: current_time_approximation,
+          order_inputs: sorted_order_inputs,
           all_outputs: outputs,
           orders_fee: orders_fee,
           pool_state: pool_state_in,
@@ -276,7 +278,7 @@ validator(
       [] -> False
       _ -> {
         // In case transaction only contains more than 1 Pool Input & Output, only single SwapMultiRouting Order is accepted
-        expect [order_input] = sorted_user_inputs
+        expect [order_input] = sorted_order_inputs
         let order_output = outputs |> builtin.head_list
         expect [order_fee] = orders_fee
         let Input {
@@ -319,7 +321,8 @@ validator(
             // In case expired setting is turned on, the execution time must not exceed the expired_time
             when expiry_setting_opt is {
               None -> True
-              Some((expired_time, _)) -> end_valid_time_range <= expired_time
+              Some((expired_time, _)) ->
+                current_time_approximation <= expired_time
             },
             // Order LP Asset must be the first LP Asset on the routing config
             order_lp_asset == first_routing_lp_asset,
