@@ -49,6 +49,8 @@ pub fn calculate_initial_liquidity(out_a: Int, out_b: Int) -> Int {
   }
 }
 
+// Minswap Fee Sharing takes a proportion of the Trading Fee as Protocol Revenue. 
+// This proportion is defined by the @fee_sharing_numerator_opt variable.
 pub fn calculate_earned_fee_in_fraction(
   amount_in_numerator: Int,
   amount_in_denominator: Int,
@@ -64,6 +66,8 @@ pub fn calculate_earned_fee_in_fraction(
   }
 }
 
+// Minswap Fee Sharing takes a proportion of the Trading Fee as Protocol Revenue. 
+// This proportion is defined by the @fee_sharing_numerator_opt variable.
 pub fn calculate_earned_fee_in(
   amount_in: Int,
   trading_fee_numerator: Int,
@@ -95,6 +99,9 @@ test test_calculate_earned_fee_in() {
   x && y
 }
 
+// Calculate the amount that traders receive after swapping @amount_in. 
+// Each swap incurs a Trading Fee based on the input amount.
+// Refer to "formula.md", section "1. Swap Exact In" for the detailed formula.
 pub fn calculate_amount_out(
   reserve_in: Int,
   reserve_out: Int,
@@ -119,6 +126,9 @@ test test_calculate_amount_out() {
   out == 16200168971
 }
 
+// Calculate the maximum amount that traders can swap to meet the expected rate between input and output. 
+// Each swap incurs a Trading Fee based on the input amount. 
+// Refer to "formula.md", section "7. Partial Swap" for the detailed formula.
 pub fn calculate_max_in_swap(
   reserve_in: Int,
   reserve_out: Int,
@@ -135,6 +145,9 @@ pub fn calculate_max_in_swap(
   max_in_swap
 }
 
+// Calculate the amount that traders receive after swapping @amount_in. 
+// Each swap incurs a Trading Fee based on the input amount.
+// Refer to "formula.md", section "1. Swap Exact In" for the detailed formula.
 pub fn calculate_amount_out_fraction(
   reserve_in: Int,
   reserve_out: Int,
@@ -149,6 +162,9 @@ pub fn calculate_amount_out_fraction(
   (numerator, denominator)
 }
 
+// Calculate the amount that traders need to swap to receive the exact @amount_out. 
+// Each swap incurs a Trading Fee based on the input amount. 
+// Refer to "formula.md", section "2. Swap Exact Out" for the detailed formula.
 pub fn calculate_amount_in(
   reserve_in: Int,
   reserve_out: Int,
@@ -162,13 +178,15 @@ pub fn calculate_amount_in(
   numerator / denominator + 1
 }
 
-// Calculate which amount will be swapped to supply enough amount for depositing
-// Refer: https://blog.alphafinance.io/onesideduniswap/
-// Final formular:
+// According to the constant product formula, depositing to the Liquidity Pool requires that the supplied amount of two tokens be equal to the ratio of the Pool's reserves. 
+// To accommodate both the Zap (depositing with a ratio of 1:0) and depositing with a custom ratio of two tokens, a portion of token A needs to be swapped for token B, and vice versa. 
+// Here is the final formula to calculate the necessary swap amount during the deposit:
 //    swap_amount ^ 2 * ( 1 - f ) * ( amount_out + reserve_out )
 //      + swap_amount * ( 2 - f ) * reserve_in * ( amount_out + reserve_out )
 //      + ( reserve_in ^ 2 * amount_out - reserve_in * reserve_out * amount_out )
 //    = 0
+// Refer to "formula.md", section "3. Deposit" for the detailed formula.
+// The formula is inspired by Alpha Finance: https://blog.alphaventuredao.io/onesideduniswap/
 pub fn calculate_deposit_swap_amount(
   amount_in: Int,
   amount_out: Int,
@@ -193,6 +211,7 @@ pub fn calculate_deposit_swap_amount(
   (numerator, denominator)
 }
 
+// Calculate LP Token that Liquidity Providers receives after supplying @amount_a and @amount_b
 pub fn calculate_deposit_amount(
   amount_a: Int,
   amount_b: Int,
@@ -270,6 +289,8 @@ pub fn calculate_deposit_amount(
   }
 }
 
+// Calculate amount of Token A and Token B after Liquidity Providers withdraw @withdrawal_lp_amount of LP Token
+// Refer to "formula.md", section "4. Withdraw" for the detailed formula.
 pub fn calculate_withdraw(
   reserve_a: Int,
   reserve_b: Int,
@@ -281,6 +302,9 @@ pub fn calculate_withdraw(
   (amount_a, amount_b)
 }
 
+// Determine the quantity of Token A or Token B remaining after Liquidity Providers withdraw @withdrawal_lp_amount of LP Tokens. 
+// Following the withdrawal, one of the Tokens is exchanged for the other. 
+// For detailed calculation, please refer to "formula.md", section "4. Zap Out".
 pub fn calculate_zap_out(
   withdrawal_lp_amount: Int,
   reserve_a: Int,
@@ -333,15 +357,18 @@ pub fn calculate_zap_out(
   }
 }
 
-// Base formula:
-// ( amount_in - swap_amount_in) / (amount_out + receive_amount_out) = expect_io_ratio_numerator / expect_io_ratio_denominator (1)
-// receive_amount_out = fee_diff * swap_amount_in * reserve_out / (fee_denominator * reserve_in + fee_diff * swap_amount_in) (2)
-// (1) & (2) =>>>>>
-// a * swap_amount_in ^ 2 + b * swap_amount_in + c = 0
-// Where:
-// - a = fee_diff * expect_io_ratio_denominator
-// - b = expect_io_ratio_numerator * fee_diff ( reserve_out + amount_out ) + expect_io_ratio_denominator * (fee_denominator * reserve_in - fee_diff * amount_in)
-// - c = fee_denominator * reserve_in * (expect_io_ratio_numerator * amount_out - expect_io_ratio_denominator * amount_in) 
+// According to the constant product formula, withdrawing from the Liquidity Pool requires that the withdrawal amount of two tokens be equal to the ratio of the Pool's reserves. 
+// To satisfy the expected ratio between Token A and Token B after withdrawal, a portion of token A needs to be swapped for token B, and vice versa. 
+// Here is the final formula to calculate the necessary swap amount during the withdrawal:
+//    ( amount_in - swap_amount_in) / (amount_out + receive_amount_out) = expect_io_ratio_numerator / expect_io_ratio_denominator (1)
+//    receive_amount_out = fee_diff * swap_amount_in * reserve_out / (fee_denominator * reserve_in + fee_diff * swap_amount_in) (2)
+//    (1) & (2) =>>>>>
+//    a * swap_amount_in ^ 2 + b * swap_amount_in + c = 0
+//    Where:
+//    - a = fee_diff * expect_io_ratio_denominator
+//    - b = expect_io_ratio_numerator * fee_diff ( reserve_out + amount_out ) + expect_io_ratio_denominator * (fee_denominator * reserve_in - fee_diff * amount_in)
+//    - c = fee_denominator * reserve_in * (expect_io_ratio_numerator * amount_out - expect_io_ratio_denominator * amount_in) 
+// Refer to "formula.md", section "6. Withdraw Imbalance" for the detailed formula.
 fn calculate_withdraw_swap_amount(
   amount_in: Int,
   amount_out: Int,
