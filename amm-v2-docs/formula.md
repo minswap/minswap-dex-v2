@@ -58,7 +58,7 @@ $$swap_{x} = \left\lfloor \frac{\sqrt{((2 - f) * X)^{2} - (1 - f) * Y} - (2 - f)
 $$= \left\lfloor \frac{\sqrt{((2 * f_{d} - f_{n}) * X)^{2} - f_{d} * (f_{d} - f_{n}) * Y} - (2 * f_{d} - f_{n}) * X}{(f_{d} - f_{n}) * Z} \right\rfloor $$
 
 The LP Token users receive is:
-$$\Delta L = \frac{\Delta y + receive_{y}}{y_{0} - receive_{y}} * L$$
+$$\Delta L = \frac{\Delta x - swap_{x}}{x_{0} + swap_{x}} * L$$
 
 ### 4. Withdraw
 $$\Delta x = \frac{\Delta L}{L} * x_{0}$$

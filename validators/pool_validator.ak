@@ -332,6 +332,7 @@ validator(
             utils.compare_list_length(pool_inputs, routings),
             // Pool Input Indexes must be unique
             utils.is_unique_bytearray_unsorted(pool_input_indexes),
+            builtin.length_of_bytearray(pool_input_indexes) <= 3,
           }
         let sorted_pool_inputs =
           bytearray.foldr(

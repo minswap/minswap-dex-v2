@@ -234,14 +234,6 @@ pub fn calculate_deposit_amount(
         reserve_out: reserve_b,
         trading_fee_numerator: trading_fee_a_numerator,
       )
-    let (receive_amount_b_numerator, receive_amount_b_denominator) =
-      calculate_amount_out_fraction(
-        reserve_in: reserve_a,
-        reserve_out: reserve_b,
-        amount_in_numerator: swap_amount_a_numerator,
-        amount_in_denominator: swap_amount_a_denominator,
-        trading_fee_numerator: trading_fee_a_numerator,
-      )
     let earned_fee_a =
       calculate_earned_fee_in_fraction(
         amount_in_numerator: swap_amount_a_numerator,
@@ -250,8 +242,8 @@ pub fn calculate_deposit_amount(
         fee_sharing_numerator_opt: fee_sharing_numerator_opt,
       )
     let lp_amount =
-      ( amount_b * receive_amount_b_denominator + receive_amount_b_numerator ) * total_liquidity / (
-        reserve_b * receive_amount_b_denominator - receive_amount_b_numerator
+      ( amount_a * swap_amount_a_denominator - swap_amount_a_numerator ) * total_liquidity / (
+        reserve_a * swap_amount_a_denominator + swap_amount_a_numerator
       )
     (earned_fee_a, 0, lp_amount)
   } else if ratio_a < ratio_b {
@@ -264,14 +256,6 @@ pub fn calculate_deposit_amount(
         reserve_out: reserve_a,
         trading_fee_numerator: trading_fee_b_numerator,
       )
-    let (receive_amount_a_numerator, receive_amount_a_denominator) =
-      calculate_amount_out_fraction(
-        reserve_in: reserve_b,
-        reserve_out: reserve_a,
-        amount_in_numerator: swap_amount_b_numerator,
-        amount_in_denominator: swap_amount_b_denominator,
-        trading_fee_numerator: trading_fee_b_numerator,
-      )
     let earned_fee_b =
       calculate_earned_fee_in_fraction(
         amount_in_numerator: swap_amount_b_numerator,
@@ -280,8 +264,8 @@ pub fn calculate_deposit_amount(
         fee_sharing_numerator_opt: fee_sharing_numerator_opt,
       )
     let lp_amount =
-      ( amount_a * receive_amount_a_denominator + receive_amount_a_numerator ) * total_liquidity / (
-        reserve_a * receive_amount_a_denominator - receive_amount_a_numerator
+      ( amount_b * swap_amount_b_denominator - swap_amount_b_numerator ) * total_liquidity / (
+        reserve_b * swap_amount_b_denominator + swap_amount_b_numerator
       )
     (0, earned_fee_b, lp_amount)
   } else {
