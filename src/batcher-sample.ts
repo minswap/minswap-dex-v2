@@ -303,7 +303,7 @@ async function buildTxByPubKeyBatcher({
   );
 
   const poolBatchingRedeemer = new Constr(0, [
-    toHex(new Uint8Array([0])),
+    0n,
     orders.map((_) => DEFAULT_BATCHER_FEE),
     toHex(inputIndexes),
     new Constr(1, []),
@@ -311,7 +311,7 @@ async function buildTxByPubKeyBatcher({
   ]);
 
   const validFrom = new Date();
-  const validTo = new Date(validFrom.getTime() + 1000 * 1000);
+  const validTo = new Date(validFrom.getTime() + 10 * 60 * 1000);
   const tx = lucid
     .newTx()
     .readFrom([
@@ -391,7 +391,7 @@ async function buildTxByScriptBatcher({
   );
 
   const poolBatchingRedeemer = new Constr(0, [
-    toHex(new Uint8Array([1])),
+    1n,
     orders.map((_) => DEFAULT_BATCHER_FEE),
     toHex(inputIndexes),
     new Constr(1, []),
@@ -399,7 +399,7 @@ async function buildTxByScriptBatcher({
   ]);
 
   const validFrom = new Date();
-  const validTo = new Date(validFrom.getTime() + 1000 * 1000);
+  const validTo = new Date(validFrom.getTime() + 10 * 60 * 1000);
   const tx = lucid
     .newTx()
     .readFrom([
