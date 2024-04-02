@@ -13,12 +13,14 @@ use amm_dex_v2/types.{
   Asset, BatchingPool, DAOAll, DAOSpecificAmount, DatumMap, Deposit,
   DepositAmountOption, Donation, EODDatumHash, EODInlineDatum, EODNoDatum,
   ExtraOrderDatum, OCO, OrderDatum, PartialSwap, PoolState, SAOAll,
-  SAOSpecificAmount, StopLoss, SwapAmountOption, SwapExactIn, SwapExactOut,
-  SwapMultiRouting, SwapRouting, WAOAll, WAOSpecificAmount, Withdraw,
-  WithdrawAmountOption, WithdrawImbalance, ZapOut,
+  SAOSpecificAmount, SortedValueList, StopLoss, SwapAmountOption, SwapExactIn,
+  SwapExactOut, SwapMultiRouting, SwapRouting, WAOAll, WAOSpecificAmount,
+  Withdraw, WithdrawAmountOption, WithdrawImbalance, ZapOut,
 }
 use amm_dex_v2/utils
 
+// Construct the value when order is cancelled by the batcher
+// Only batcher fee is deducted from the order value
 fn get_returnable_value(order_in_value: Value, used_batcher_fee: Int) -> Value {
   value.add(
     order_in_value,
@@ -26,6 +28,72 @@ fn get_returnable_value(order_in_value: Value, used_batcher_fee: Int) -> Value {
     ada_asset_name,
     used_batcher_fee * -1,
   )
+}
+
+// Ad hoc solution for predicting order output value.
+// This function only handles ADA pairs and has strict asset requirements in the value.
+fn get_optimized_swap_output_value(
+  order_in_value: Value,
+  used_batcher_fee: Int,
+  asset_a_policy_id: PolicyId,
+  asset_a_asset_name: AssetName,
+  asset_b_policy_id: PolicyId,
+  asset_b_asset_name: AssetName,
+  amount_in: Int,
+  amount_out: Int,
+  a_to_b: Bool,
+) -> Option<SortedValueList> {
+  // Ensure that asset A is ADA
+  if asset_a_policy_id == #"" && asset_a_asset_name == #"" {
+    let order_in_value_list = order_in_value |> utils.value_to_list
+    let ada_entry = builtin.head_list(order_in_value_list)
+    let rest_0 = builtin.tail_list(order_in_value_list)
+    let asset_a_amount =
+      builtin.snd_pair(builtin.head_list(builtin.snd_pair(ada_entry)))
+    when rest_0 is {
+      // If the input value contains only ADA and the swap direction is A To B, 
+      // subtract the batcher fee and swap amount of ADA, then add asset B to the output value.
+      [] ->
+        if a_to_b {
+          Some(
+            [
+              (#"", [(#"", asset_a_amount - ( used_batcher_fee + amount_in ))]),
+              (asset_b_policy_id, [(asset_b_asset_name, amount_out)]),
+            ],
+          )
+        } else {
+          fail
+        }
+      // If the input value contains ADA and one additional asset, with Asset B being swapped for Asset A,
+      // subtract the batcher fee and add the output amount to the ADA portion, then subtract the swap amount of Asset B.
+      [(asset_pid, [(asset_tn, asset_amount)])] ->
+        if
+        !a_to_b && asset_pid == asset_b_policy_id && asset_tn == asset_b_asset_name{
+        
+          // Asset B have change
+          if asset_amount > amount_in {
+            Some(
+              [
+                (#"", [(#"", asset_a_amount - used_batcher_fee + amount_out)]),
+                (asset_pid, [(asset_tn, asset_amount - amount_in)]),
+              ],
+            )
+          } else if asset_amount == amount_in {
+            // Asset B have no change
+            Some(
+              [(#"", [(#"", asset_a_amount - used_batcher_fee + amount_out)])],
+            )
+          } else {
+            fail
+          }
+        } else {
+          None
+        }
+      _ -> None
+    }
+  } else {
+    None
+  }
 }
 
 fn get_swap_output_value(
@@ -51,6 +119,59 @@ fn get_swap_output_value(
       |> value.add(ada_policy_id, ada_asset_name, -used_batcher_fee)
       |> value.add(asset_in_policy_id, asset_in_asset_name, -amount_in)
       |> value.add(asset_out_policy_id, asset_out_asset_name, amount_out)
+  }
+}
+
+fn compare_swap_output_value(
+  order_in_value: Value,
+  order_out_value: Value,
+  used_batcher_fee: Int,
+  asset_a: Asset,
+  asset_b: Asset,
+  a_to_b_direction: Bool,
+  amount_in: Int,
+  amount_out: Int,
+) -> Bool {
+  when
+    get_optimized_swap_output_value(
+      order_in_value: order_in_value,
+      used_batcher_fee: used_batcher_fee,
+      asset_a_policy_id: asset_a.policy_id,
+      asset_a_asset_name: asset_a.asset_name,
+      asset_b_policy_id: asset_b.policy_id,
+      asset_b_asset_name: asset_b.asset_name,
+      amount_in: amount_in,
+      amount_out: amount_out,
+      a_to_b: a_to_b_direction,
+    )
+  is {
+    Some(v) -> v == ( order_out_value |> utils.value_to_list )
+    None -> {
+      let (asset_in, asset_out) =
+        if a_to_b_direction {
+          (asset_a, asset_b)
+        } else {
+          (asset_b, asset_a)
+        }
+      let Asset {
+        policy_id: asset_in_policy_id,
+        asset_name: asset_in_asset_name,
+      } = asset_in
+      let Asset {
+        policy_id: asset_out_policy_id,
+        asset_name: asset_out_asset_name,
+      } = asset_out
+      order_out_value == get_swap_output_value(
+        order_in_value: order_in_value,
+        used_batcher_fee: used_batcher_fee,
+        asset_in_policy_id: asset_in_policy_id,
+        asset_in_asset_name: asset_in_asset_name,
+        asset_out_policy_id: asset_out_policy_id,
+        asset_out_asset_name: asset_out_asset_name,
+        amount_in: amount_in,
+        amount_out: amount_out,
+      )
+    }
   }
 }
 
@@ -80,7 +201,7 @@ fn validate_swap_exact_in(
     value_reserve_b,
     total_liquidity,
   ) = pool_state
-  let (asset_in, asset_out, reserve_in, reserve_out, trading_fee_numerator) =
+  let (asset_in, _asset_out, reserve_in, reserve_out, trading_fee_numerator) =
     if a_to_b_direction {
       (
         asset_a,
@@ -100,8 +221,6 @@ fn validate_swap_exact_in(
     }
   let Asset { policy_id: asset_in_policy_id, asset_name: asset_in_asset_name } =
     asset_in
-  let Asset { policy_id: asset_out_policy_id, asset_name: asset_out_asset_name } =
-    asset_out
 
   let swap_amount =
     when swap_amount_option is {
@@ -134,24 +253,23 @@ fn validate_swap_exact_in(
     )
   let slippage_satisfied = is_slippage_satisfied(amount_out)
   if slippage_satisfied {
-    let expect_order_value_out =
-      get_swap_output_value(
-        order_in_value: order_in_value,
-        used_batcher_fee: used_batcher_fee,
-        asset_in_policy_id: asset_in_policy_id,
-        asset_in_asset_name: asset_in_asset_name,
-        asset_out_policy_id: asset_out_policy_id,
-        asset_out_asset_name: asset_out_asset_name,
-        amount_in: swap_amount,
-        amount_out: amount_out,
-      )
-    expect
-      validate_order_output(
-        receiver: success_receiver,
-        receiver_datum: success_receiver_datum,
-        value: expect_order_value_out,
-        output: order_output,
-      )
+    expect and {
+        validate_order_output_except_value(
+          receiver: success_receiver,
+          receiver_datum: success_receiver_datum,
+          output: order_output,
+        ),
+        compare_swap_output_value(
+          order_in_value: order_in_value,
+          order_out_value: order_output.value,
+          used_batcher_fee: used_batcher_fee,
+          asset_a: asset_a,
+          asset_b: asset_b,
+          a_to_b_direction: a_to_b_direction,
+          amount_in: swap_amount,
+          amount_out: amount_out,
+        ),
+      }
     if a_to_b_direction {
       (
         datum_reserve_a + swap_amount - earned_fee_in,
@@ -1109,6 +1227,27 @@ fn validate_order_output(
   }
 }
 
+fn validate_order_output_except_value(
+  receiver: Address,
+  receiver_datum: ExtraOrderDatum,
+  output: Output,
+) -> Bool {
+  let Output { address: output_address, datum: raw_order_output_datum, .. } =
+    output
+
+  let Address { payment_credential: receiver_payment_cred, .. } = receiver
+  when receiver_payment_cred is {
+    VerificationKeyCredential(_) -> receiver == output_address
+    ScriptCredential(_) -> and {
+        receiver == output_address,
+        is_valid_datum(
+          raw_datum: raw_order_output_datum,
+          extra_order_datum: receiver_datum,
+        ),
+      }
+  }
+}
+
 pub fn apply_orders(
   datum_map: DatumMap,
   asset_a: Asset,
@@ -1117,7 +1256,7 @@ pub fn apply_orders(
   trading_fee_a_numerator: Int,
   trading_fee_b_numerator: Int,
   fee_sharing_numerator_opt: Option<Int>,
-  end_valid_time_range: Int,
+  current_time_approximation: Int,
   order_inputs: List<Input>,
   all_outputs: List<Output>,
   orders_fee: List<Int>,
@@ -1160,10 +1299,9 @@ pub fn apply_orders(
       // In case expired setting is turned on, the execution time must not exceed the expired_time
       when expiry_setting_opt is {
         None -> True
-        Some((expired_time, _)) -> end_valid_time_range <= expired_time
+        Some((expired_time, _)) -> current_time_approximation <= expired_time
       },
     }
-
   let (new_state, rest_outs) =
     when order_step is {
       SwapExactIn(
@@ -1544,7 +1682,7 @@ pub fn apply_orders(
         trading_fee_a_numerator: trading_fee_a_numerator,
         trading_fee_b_numerator: trading_fee_b_numerator,
         fee_sharing_numerator_opt: fee_sharing_numerator_opt,
-        end_valid_time_range: end_valid_time_range,
+        current_time_approximation: current_time_approximation,
         order_inputs: rest_inputs,
         all_outputs: rest_outs,
         orders_fee: rest_batcher_fees,

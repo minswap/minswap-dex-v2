@@ -3,9 +3,12 @@ use aiken/bytearray
 use aiken/dict
 use aiken/hash
 use aiken/interval.{Finite, Interval, IntervalBound}
+use aiken/list
 use aiken/transaction.{Datum, DatumHash, InlineDatum, NoDatum, ValidityRange}
-use aiken/transaction/value.{AssetName, PolicyId, ada_asset_name, ada_policy_id}
-use amm_dex_v2/types.{Asset, DatumMap}
+use aiken/transaction/value.{
+  AssetName, PolicyId, Value, ada_asset_name, ada_policy_id,
+}
+use amm_dex_v2/types.{Asset, DatumMap, SortedValueList}
 
 // the legitimate Pool TokenName
 pub const pool_auth_asset_name = #"4d5350"
@@ -295,28 +298,188 @@ test test_compare_list_length_3() {
   !compare_list_length(arr1, arr2)
 }
 
-fn contains_element(list: List<a>, elem: a) -> Bool {
-  when list is {
-    [] -> False
-    [x, ..xs] -> elem == x || contains_element(xs, elem)
+const empty_mark =
+  #[0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+  ]
+
+fn do_is_unique_bytearray_unsorted(
+  self: ByteArray,
+  acc: ByteArray,
+  index: Int,
+  length: Int,
+) {
+  if index >= length {
+    True
+  } else {
+    let value_as_index = builtin.index_bytearray(self, index)
+    let acc_value = builtin.index_bytearray(acc, value_as_index)
+    if acc_value == 1 {
+      False
+    } else {
+      let left_slice = builtin.slice_bytearray(0, value_as_index, acc)
+      let righ_slice = builtin.slice_bytearray(value_as_index + 1, 64, acc)
+      let new_acc =
+        builtin.append_bytearray(
+          left_slice,
+          builtin.cons_bytearray(1, righ_slice),
+        )
+      do_is_unique_bytearray_unsorted(self, new_acc, index + 1, length)
+    }
   }
 }
 
-pub fn is_list_unique(list: List<a>) -> Bool {
-  when list is {
-    [] -> True
-    [_] -> True
-    [x, ..xs] -> !contains_element(xs, x) && is_list_unique(xs)
+pub fn is_unique_bytearray_unsorted(array: ByteArray) -> Bool {
+  let length = builtin.length_of_bytearray(array)
+  if length > 0 {
+    do_is_unique_bytearray_unsorted(array, empty_mark, 0, length)
+  } else {
+    False
   }
 }
 
-pub fn must_get_finite_end_validity(validity_range: ValidityRange) -> Int {
+test test_unique_bytearray_unsorted_1() {
+  let array =
+    #[1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17,
+      18,
+      19,
+      20,
+      21,
+      22,
+      23,
+      24,
+      25,
+      26,
+      27,
+      28,
+      29,
+      30,
+      31,
+      32,
+      33,
+      34,
+      35,
+      36,
+      37,
+      38,
+      39,
+      40,
+    ]
+  is_unique_bytearray_unsorted(array)
+}
+
+test test_unique_bytearray_unsorted_2() {
+  let array = #[1, 2, 3, 4, 5, 6, 5]
+  !is_unique_bytearray_unsorted(array)
+}
+
+test test_unique_bytearray_unsorted_3() {
+  let array = #[0, 1, 2, 3, 4, 5, 6, 0]
+  !is_unique_bytearray_unsorted(array)
+}
+
+test test_unique_bytearray_unsorted_4() fail {
+  let array = #[0, 1, 2, 3, 4, 5, 64, 0]
+  !is_unique_bytearray_unsorted(array)
+}
+
+test test_unique_bytearray_unsorted_5() {
+  let array = #[]
+  !is_unique_bytearray_unsorted(array)
+}
+
+// Approximate the current time by obtaining the upper and lower bounds of the validity range. 
+// Ensure that the bounds do not exceed 10 minutes.
+pub fn must_get_current_time_approximation(validity_range: ValidityRange) -> Int {
   let Interval {
+    lower_bound: IntervalBound { bound_type: lower_bound_type, .. },
     upper_bound: IntervalBound { bound_type: upper_bound_type, .. },
-    ..
   } = validity_range
+  expect Finite(start_valid_time_range) = lower_bound_type
   expect Finite(end_valid_time_range) = upper_bound_type
-  end_valid_time_range
+  if end_valid_time_range - start_valid_time_range <= 10 * 60 * 1000 {
+    ( end_valid_time_range - start_valid_time_range ) / 2 + start_valid_time_range
+  } else {
+    fail
+  }
 }
 
 pub fn must_get_finite_start_validity(validity_range: ValidityRange) -> Int {
@@ -326,4 +489,16 @@ pub fn must_get_finite_start_validity(validity_range: ValidityRange) -> Int {
   } = validity_range
   expect Finite(start_valid_time_range) = lower_bound_type
   start_valid_time_range
+}
+
+pub fn value_to_list(val: Value) -> SortedValueList {
+  val
+    |> value.to_dict
+    |> dict.to_list
+    |> list.map(
+         fn(e) {
+           let (k, v) = e
+           (k, dict.to_list(v))
+         },
+       )
 }

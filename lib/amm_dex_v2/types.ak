@@ -14,6 +14,9 @@ pub type ValidatorHash =
 pub type PubKeyHash =
   Hash<Blake2b_224, VerificationKey>
 
+pub type SortedValueList =
+  List<(ByteArray, List<(ByteArray, Int)>)>
+
 pub type Asset {
   policy_id: PolicyId,
   asset_name: AssetName,
@@ -48,10 +51,10 @@ pub type PoolRedeemer {
 }
 
 pub type PoolBatchingRedeemer {
-  batcher_index: ByteArray,
+  batcher_index: Int,
   orders_fee: List<Int>,
-  input_indexes: List<Int>,
-  pool_input_indexes_opt: Option<List<Int>>,
+  input_indexes: ByteArray,
+  pool_input_indexes_opt: Option<ByteArray>,
   vol_fees: List<Option<Int>>,
 }
 
