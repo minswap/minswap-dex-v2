@@ -1,7 +1,7 @@
 use aiken/dict.{Dict}
 use aiken/hash.{Blake2b_224, Hash}
 use aiken/list
-use aiken/transaction.{Input, Output, Redeemer, ScriptPurpose, Spend}
+use aiken/transaction.{Input, Output}
 use aiken/transaction/credential.{
   Address, Inline, PaymentCredential, ScriptCredential, StakeCredential,
   VerificationKey, VerificationKeyCredential,
@@ -569,18 +569,39 @@ test test_get_trading_fee_numerator_fail_3() fail {
   ) == 2100
 }
 
-pub fn has_single_spending(redeemers: Dict<ScriptPurpose, Redeemer>) -> Bool {
+// Verify that the transaction spends only one Single Pool Script and does not contain any other scripts in its inputs, except for the Author, in cases where the Author is a script
+pub fn has_only_pool_and_author(
+  inputs: List<Input>,
+  pool_address: Address,
+  author_address: Address,
+) -> Bool {
+  let Address { payment_credential: pool_payment_cred, .. } = pool_address
+  // Having single pool input
   expect [_] =
-    redeemers
-      |> dict.to_list
+    inputs
       |> list.filter(
-           fn(r) {
-             let (p, _) = r
-             when p is {
-               Spend(_) -> True
-               _ -> False
-             }
+           fn(input) {
+             let Input {
+               output: Output {
+                 address: Address { payment_credential: payment_cred, .. },
+                 ..
+               },
+               ..
+             } = input
+             pool_payment_cred == payment_cred
            },
          )
-  True
+  // All inputs does not contain other scripts except for the Pool and Author 
+  inputs
+    |> list.all(
+         fn(input) {
+           let Input { output: Output { address: addr, .. }, .. } = input
+           let Address { payment_credential: payment_cred, .. } = addr
+           when payment_cred is {
+             ScriptCredential(_) ->
+               payment_cred == pool_payment_cred || addr == author_address
+             VerificationKeyCredential(_) -> True
+           }
+         },
+       )
 }

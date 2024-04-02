@@ -39,13 +39,14 @@ validator(
           inputs,
           reference_inputs,
           outputs,
-          redeemers,
           mint,
           withdrawals,
           extra_signatories,
           ..
         } = transaction
         expect Some(pool_input) = transaction.find_input(inputs, pool_input_ref)
+        let Input { output: Output { address: pool_address, .. }, .. } =
+          pool_input
         let global_setting =
           pool_validation.get_and_validate_global_setting(
             reference_inputs: reference_inputs,
@@ -71,9 +72,13 @@ validator(
             withdrawals: withdrawals,
             extra_signatories: extra_signatories,
           ),
-          // Transaction contain only 1 Spending Script (Pool Script). 
+          // Verify that the transaction spends only one Single Pool Script and does not contain any other scripts in its inputs, except for the Author, in cases where the Author is a script
           // It will avoid bad Admin can steal money from Order Contract.
-          pool_validation.has_single_spending(redeemers),
+          pool_validation.has_only_pool_and_author(
+            inputs: inputs,
+            pool_address: pool_address,
+            author_address: authorizer,
+          ),
           // This Redeemer won't mint anything 
           value.is_zero(value.from_minted_value(mint)),
           pool_validation.validate_update_pool_parameters(
@@ -90,13 +95,14 @@ validator(
           inputs,
           reference_inputs,
           outputs,
-          redeemers,
           mint,
           withdrawals,
           extra_signatories,
           ..
         } = transaction
         expect Some(pool_input) = transaction.find_input(inputs, pool_input_ref)
+        let Input { output: Output { address: pool_address, .. }, .. } =
+          pool_input
         let global_setting =
           pool_validation.get_and_validate_global_setting(
             reference_inputs: reference_inputs,
@@ -111,9 +117,13 @@ validator(
             withdrawals: withdrawals,
             extra_signatories: extra_signatories,
           ),
-          // Transaction contain only 1 Spending Script (Pool Script). 
+          // Verify that the transaction spends only one Single Pool Script and does not contain any other scripts in its inputs, except for the Author, in cases where the Author is a script
           // It will avoid bad Admin can steal money from Order Contract.
-          pool_validation.has_single_spending(redeemers),
+          pool_validation.has_only_pool_and_author(
+            inputs: inputs,
+            pool_address: pool_address,
+            author_address: fee_sharing_taker,
+          ),
           // This Redeemer won't mint anything 
           value.is_zero(value.from_minted_value(mint)),
           pool_validation.validate_withdraw_fee_sharing(
