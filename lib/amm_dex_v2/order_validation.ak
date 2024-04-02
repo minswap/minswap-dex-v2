@@ -201,23 +201,11 @@ fn validate_swap_exact_in(
     value_reserve_b,
     total_liquidity,
   ) = pool_state
-  let (asset_in, _asset_out, reserve_in, reserve_out, trading_fee_numerator) =
+  let (asset_in, reserve_in, reserve_out, trading_fee_numerator) =
     if a_to_b_direction {
-      (
-        asset_a,
-        asset_b,
-        datum_reserve_a,
-        datum_reserve_b,
-        trading_fee_a_numerator,
-      )
+      (asset_a, datum_reserve_a, datum_reserve_b, trading_fee_a_numerator)
     } else {
-      (
-        asset_b,
-        asset_a,
-        datum_reserve_b,
-        datum_reserve_a,
-        trading_fee_b_numerator,
-      )
+      (asset_b, datum_reserve_b, datum_reserve_a, trading_fee_b_numerator)
     }
   let Asset { policy_id: asset_in_policy_id, asset_name: asset_in_asset_name } =
     asset_in
