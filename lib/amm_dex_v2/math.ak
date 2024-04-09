@@ -49,6 +49,18 @@ pub fn calculate_initial_liquidity(out_a: Int, out_b: Int) -> Int {
   }
 }
 
+test test_calculate_initial_liquidity() {
+  let data =
+    [(1_000_000, 1_000_000, 1_000_000), (1_000, 1_000_000, 31_623)]
+  list.all(
+    data,
+    fn(item) {
+      let (a, b, lp) = item
+      calculate_initial_liquidity(a, b) == lp
+    },
+  )
+}
+
 // Minswap Fee Sharing takes a proportion of the Trading Fee as Protocol Revenue. 
 // This proportion is defined by the @fee_sharing_numerator_opt variable.
 pub fn calculate_earned_fee_in_fraction(
@@ -145,21 +157,16 @@ pub fn calculate_max_in_swap(
   max_in_swap
 }
 
-// Calculate the amount that traders receive after swapping @amount_in. 
-// Each swap incurs a Trading Fee based on the input amount.
-// Refer to "formula.md", section "1. Swap Exact In" for the detailed formula.
-pub fn calculate_amount_out_fraction(
-  reserve_in: Int,
-  reserve_out: Int,
-  amount_in_numerator: Int,
-  amount_in_denominator: Int,
-  trading_fee_numerator: Int,
-) -> (Int, Int) {
-  let diff = utils.default_fee_denominator - trading_fee_numerator
-  let numerator = amount_in_numerator * diff * reserve_out
-  let denominator =
-    utils.default_fee_denominator * amount_in_denominator * reserve_in + amount_in_numerator * diff
-  (numerator, denominator)
+test test_calculate_max_in_swap() {
+  let max_swap_amount =
+    calculate_max_in_swap(
+      reserve_in: 1_000_000_000,
+      reserve_out: 1_000_000_000,
+      trading_fee_numerator: 30,
+      io_ratio_numerator: 10,
+      io_ratio_denominator: 9,
+    )
+  max_swap_amount == 108102084
 }
 
 // Calculate the amount that traders need to swap to receive the exact @amount_out. 
@@ -178,12 +185,17 @@ pub fn calculate_amount_in(
   numerator / denominator + 1
 }
 
+test test_calculate_amount_in() {
+  let amount_in = calculate_amount_in(1_000_000_000, 1_000_000_000, 1_000, 30)
+  amount_in == 1004
+}
+
 // According to the constant product formula, depositing to the Liquidity Pool requires that the supplied amount of two tokens be equal to the ratio of the Pool's reserves. 
 // To accommodate both the Zap (depositing with a ratio of 1:0) and depositing with a custom ratio of two tokens, a portion of token A needs to be swapped for token B, and vice versa. 
 // Here is the final formula to calculate the necessary swap amount during the deposit:
 //    swap_amount ^ 2 * ( 1 - f ) * ( amount_out + reserve_out )
 //      + swap_amount * ( 2 - f ) * reserve_in * ( amount_out + reserve_out )
-//      + ( reserve_in ^ 2 * amount_out - reserve_in * reserve_out * amount_out )
+//      + ( reserve_in ^ 2 * amount_out - reserve_in * reserve_out * amount_in )
 //    = 0
 // Refer to "formula.md", section "3. Deposit" for the detailed formula.
 // The formula is inspired by Alpha Finance: https://blog.alphaventuredao.io/onesideduniswap/
@@ -209,6 +221,18 @@ pub fn calculate_deposit_swap_amount(
   let denominator =
     z * ( utils.default_fee_denominator - trading_fee_numerator )
   (numerator, denominator)
+}
+
+test test_calculate_deposit_swap_amount() {
+  let result =
+    calculate_deposit_swap_amount(
+      amount_in: 5000,
+      amount_out: 2000,
+      reserve_in: 1_000_000,
+      reserve_out: 1_000_000,
+      trading_fee_numerator: 30,
+    )
+  result == (29932544594688, 19979880000)
 }
 
 // Calculate LP Token that Liquidity Providers receives after supplying @amount_a and @amount_b
@@ -273,6 +297,34 @@ pub fn calculate_deposit_amount(
   }
 }
 
+test test_calculate_deposit_amount() {
+  //swap amount is(29932544594688 / 19979880000) ~ 1498
+  let result1 =
+    calculate_deposit_amount(
+      amount_a: 5000,
+      amount_b: 2000,
+      reserve_a: 1_000_000,
+      reserve_b: 1_000_000,
+      total_liquidity: 1_000_000,
+      trading_fee_a_numerator: 30,
+      trading_fee_b_numerator: 100,
+      fee_sharing_numerator_opt: Some(5000),
+    )
+  // swap amount is 29826937927508 / 19839600000 ~ 1503
+  let result2 =
+    calculate_deposit_amount(
+      amount_a: 2000,
+      amount_b: 5000,
+      reserve_a: 1_000_000,
+      reserve_b: 1_000_000,
+      total_liquidity: 1_000_000,
+      trading_fee_a_numerator: 30,
+      trading_fee_b_numerator: 100,
+      fee_sharing_numerator_opt: Some(5000),
+    )
+  result1 == (2, 0, 3496) && result2 == (0, 7, 3491)
+}
+
 // Calculate amount of Token A and Token B after Liquidity Providers withdraw @withdrawal_lp_amount of LP Token
 // Refer to "formula.md", section "4. Withdraw" for the detailed formula.
 pub fn calculate_withdraw(
@@ -284,6 +336,17 @@ pub fn calculate_withdraw(
   let amount_a = withdrawal_lp_amount * reserve_a / total_liquidity
   let amount_b = withdrawal_lp_amount * reserve_b / total_liquidity
   (amount_a, amount_b)
+}
+
+test test_calculate_withdraw() {
+  let result =
+    calculate_withdraw(
+      reserve_a: 1_000_000,
+      reserve_b: 213_231_211,
+      withdrawal_lp_amount: 123_456,
+      total_liquidity: 12_345_678,
+    )
+  result == (9999, 2132298)
 }
 
 // Determine the quantity of Token A or Token B remaining after Liquidity Providers withdraw @withdrawal_lp_amount of LP Tokens. 
@@ -341,6 +404,36 @@ pub fn calculate_zap_out(
   }
 }
 
+test test_calculate_zap_out() {
+  // amount out (9999, 2132298)
+  // 9999 A -> 2104508 B
+  let result1 =
+    calculate_zap_out(
+      reserve_a: 1_000_000,
+      reserve_b: 213_231_211,
+      withdrawal_lp_amount: 123_456,
+      total_liquidity: 12_345_678,
+      a_to_b_direction: True,
+      trading_fee_a_numerator: 30,
+      trading_fee_b_numerator: 100,
+      fee_sharing_numerator_opt: Some(5000),
+    )
+  // amount out (9999, 2132298)
+  // 2132298 B ->9801 A
+  let result2 =
+    calculate_zap_out(
+      reserve_a: 1_000_000,
+      reserve_b: 213_231_211,
+      withdrawal_lp_amount: 123_456,
+      total_liquidity: 12_345_678,
+      a_to_b_direction: False,
+      trading_fee_a_numerator: 30,
+      trading_fee_b_numerator: 100,
+      fee_sharing_numerator_opt: Some(5000),
+    )
+  result1 == (14, 0, 4236806) && result2 == (0, 10661, 19800)
+}
+
 // According to the constant product formula, withdrawing from the Liquidity Pool requires that the withdrawal amount of two tokens be equal to the ratio of the Pool's reserves. 
 // To satisfy the expected ratio between Token A and Token B after withdrawal, a portion of token A needs to be swapped for token B, and vice versa. 
 // Here is the final formula to calculate the necessary swap amount during the withdrawal:
@@ -377,6 +470,20 @@ fn calculate_withdraw_swap_amount(
   // x = (-b +sqrt(delta))/(2*a) or (-b - sqrt(delta))/(2*a)
   let delta = b * b - 4 * a * c
   ( calculate_sqrt(delta) - b ) / ( 2 * a )
+}
+
+test test_calculate_withdraw_swap_amount() {
+  let swap_amount =
+    calculate_withdraw_swap_amount(
+      amount_in: 1_000,
+      amount_out: 1_000,
+      reserve_in: 1_000_000,
+      reserve_out: 1_000_000,
+      expect_io_ratio_numerator: 2,
+      expect_io_ratio_denominator: 3,
+      trading_fee_numerator: 30,
+    )
+  swap_amount == 200
 }
 
 // return earning fee(a,b)+ amount out(a,b)
@@ -469,4 +576,33 @@ pub fn calculate_withdraw_imbalance(
   } else {
     (0, 0, withdrawal_asset_a_amount, withdrawal_asset_b_amount)
   }
+}
+
+test test_calculate_withdraw_imbalance() {
+  // swap amount is 2004
+  let result1 =
+    calculate_withdraw_imbalance(
+      expect_ab_ratio_numerator: 2,
+      expect_ab_ratio_denominator: 3,
+      reserve_a: 1_000_000,
+      reserve_b: 1_000_000,
+      trading_fee_a_numerator: 30,
+      trading_fee_b_numerator: 100,
+      withdrawal_lp_amount: 10_000,
+      total_liquidity: 1_000_000,
+      fee_sharing_numerator_opt: Some(5000),
+    )
+  let result2 =
+    calculate_withdraw_imbalance(
+      expect_ab_ratio_numerator: 2,
+      expect_ab_ratio_denominator: 3,
+      reserve_a: 1_000_000,
+      reserve_b: 1_000_000,
+      trading_fee_a_numerator: 100,
+      trading_fee_b_numerator: 30,
+      withdrawal_lp_amount: 10_000,
+      total_liquidity: 1_000_000,
+      fee_sharing_numerator_opt: Some(5000),
+    )
+  result1 == (3, 0, 7996, 11993) && result2 == (10, 0, 7991, 11984)
 }
