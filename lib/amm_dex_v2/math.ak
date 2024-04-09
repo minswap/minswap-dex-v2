@@ -145,21 +145,16 @@ pub fn calculate_max_in_swap(
   max_in_swap
 }
 
-// Calculate the amount that traders receive after swapping @amount_in. 
-// Each swap incurs a Trading Fee based on the input amount.
-// Refer to "formula.md", section "1. Swap Exact In" for the detailed formula.
-pub fn calculate_amount_out_fraction(
-  reserve_in: Int,
-  reserve_out: Int,
-  amount_in_numerator: Int,
-  amount_in_denominator: Int,
-  trading_fee_numerator: Int,
-) -> (Int, Int) {
-  let diff = utils.default_fee_denominator - trading_fee_numerator
-  let numerator = amount_in_numerator * diff * reserve_out
-  let denominator =
-    utils.default_fee_denominator * amount_in_denominator * reserve_in + amount_in_numerator * diff
-  (numerator, denominator)
+test test_calculate_max_in_swap() {
+  let max_swap_amount =
+    calculate_max_in_swap(
+      reserve_in: 1_000_000_000,
+      reserve_out: 1_000_000_000,
+      trading_fee_numerator: 30,
+      io_ratio_numerator: 10,
+      io_ratio_denominator: 9,
+    )
+  max_swap_amount == 108102084
 }
 
 // Calculate the amount that traders need to swap to receive the exact @amount_out. 
@@ -178,12 +173,17 @@ pub fn calculate_amount_in(
   numerator / denominator + 1
 }
 
+test test_calculate_amount_in() {
+  let amount_in = calculate_amount_in(1_000_000_000, 1_000_000_000, 1_000, 30)
+  amount_in == 1004
+}
+
 // According to the constant product formula, depositing to the Liquidity Pool requires that the supplied amount of two tokens be equal to the ratio of the Pool's reserves. 
 // To accommodate both the Zap (depositing with a ratio of 1:0) and depositing with a custom ratio of two tokens, a portion of token A needs to be swapped for token B, and vice versa. 
 // Here is the final formula to calculate the necessary swap amount during the deposit:
 //    swap_amount ^ 2 * ( 1 - f ) * ( amount_out + reserve_out )
 //      + swap_amount * ( 2 - f ) * reserve_in * ( amount_out + reserve_out )
-//      + ( reserve_in ^ 2 * amount_out - reserve_in * reserve_out * amount_out )
+//      + ( reserve_in ^ 2 * amount_out - reserve_in * reserve_out * amount_in )
 //    = 0
 // Refer to "formula.md", section "3. Deposit" for the detailed formula.
 // The formula is inspired by Alpha Finance: https://blog.alphaventuredao.io/onesideduniswap/
@@ -209,6 +209,18 @@ pub fn calculate_deposit_swap_amount(
   let denominator =
     z * ( utils.default_fee_denominator - trading_fee_numerator )
   (numerator, denominator)
+}
+
+test test_calculate_deposit_swap_amount() {
+  let (swap_amount_numerator, swap_amount_denominator) =
+    calculate_deposit_swap_amount(
+      amount_in: 50,
+      amount_out: 20,
+      reserve_in: 1_000_000,
+      reserve_out: 1_000_000,
+      trading_fee_numerator: 30,
+    )
+  swap_amount_numerator / swap_amount_denominator == 15
 }
 
 // Calculate LP Token that Liquidity Providers receives after supplying @amount_a and @amount_b
@@ -377,6 +389,20 @@ fn calculate_withdraw_swap_amount(
   // x = (-b +sqrt(delta))/(2*a) or (-b - sqrt(delta))/(2*a)
   let delta = b * b - 4 * a * c
   ( calculate_sqrt(delta) - b ) / ( 2 * a )
+}
+
+test test_calculate_withdraw_swap_amount() {
+  let swap_amount =
+    calculate_withdraw_swap_amount(
+      amount_in: 1_000,
+      amount_out: 1_000,
+      reserve_in: 1_000_000,
+      reserve_out: 1_000_000,
+      expect_io_ratio_numerator: 2,
+      expect_io_ratio_denominator: 3,
+      trading_fee_numerator: 30,
+    )
+  swap_amount == 200
 }
 
 // return earning fee(a,b)+ amount out(a,b)
