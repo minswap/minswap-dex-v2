@@ -106,10 +106,10 @@ Allow users swap only if price is exactly matched.
 
 In case users want to swap with price $A/B$
 We have 2 formulas: 
-$$\frac{\Delta x}{\Delta y} <= \frac{A}{B}  (1)$$
+$$\frac{\Delta x}{\Delta y} = \frac{A}{B}  (1)$$
 $$ \Delta y = \frac{(f_{d} - f_{n}) * \Delta x * y_{0}}{x_{0} * f_{d} + (f_{d} - f_{n}) * \Delta x} (2)$$
 
 We can calculate $\Delta x$: 
 
-$$\Delta x <= \frac{A * (f_{d} - f_{n}) * y_{0} - B * f_{d} * x_{0}}{(f_{d} - f_{n}) * B}$$
+$$\Delta x = \frac{A * (f_{d} - f_{n}) * y_{0} - B * f_{d} * x_{0}}{(f_{d} - f_{n}) * B}$$
 where $\Delta x$ is the maximum amount can be swapped to adapt $A/B$ ratio
