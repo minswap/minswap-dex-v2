@@ -182,8 +182,8 @@ pub fn get_batching_pool(
   let (value_reserve_a_in, value_reserve_a_out) =
     if utils.is_ada_asset(asset_a_policy_id, asset_a_asset_name) {
       (
-        estimate_value_reserve_a_in - 3000000,
-        estimate_value_reserve_a_out - 3000000,
+        estimate_value_reserve_a_in - utils.min_pool_ada,
+        estimate_value_reserve_a_out - utils.min_pool_ada,
       )
     } else {
       (estimate_value_reserve_a_in, estimate_value_reserve_a_out)
@@ -199,14 +199,14 @@ pub fn get_batching_pool(
     value.quantity_of(pool_out_value, authen_policy_id, lp_asset_name)
   let estimate_pool_in_value =
     value.zero()
-      |> value.add(ada_policy_id, ada_asset_name, 3000000)
+      |> value.add(ada_policy_id, ada_asset_name, utils.min_pool_ada)
       |> value.add(authen_policy_id, utils.pool_auth_asset_name, 1)
       |> value.add(asset_a_policy_id, asset_a_asset_name, value_reserve_a_in)
       |> value.add(asset_b_policy_id, asset_b_asset_name, value_reserve_b_in)
       |> value.add(authen_policy_id, lp_asset_name, remaining_liquidity_supply_in)
   let estimate_pool_out_value =
     value.zero()
-      |> value.add(ada_policy_id, ada_asset_name, 3000000)
+      |> value.add(ada_policy_id, ada_asset_name, utils.min_pool_ada)
       |> value.add(authen_policy_id, utils.pool_auth_asset_name, 1)
       |> value.add(asset_a_policy_id, asset_a_asset_name, value_reserve_a_out)
       |> value.add(asset_b_policy_id, asset_b_asset_name, value_reserve_b_out)
@@ -434,7 +434,7 @@ pub fn validate_withdraw_fee_sharing(
     value.quantity_of(pool_in_value, asset_a_policy_id, asset_a_asset_name)
   let value_reserve_a_in =
     if utils.is_ada_asset(asset_a_policy_id, asset_a_asset_name) {
-      temp_value_reserve_a_in - 3000000
+      temp_value_reserve_a_in - utils.min_pool_ada
     } else {
       temp_value_reserve_a_in
     }

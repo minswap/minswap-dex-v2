@@ -171,7 +171,7 @@ validator(
       )
     let amount_a =
       if utils.is_ada_asset(asset_a_policy_id, asset_a_asset_name) {
-        estimated_amount_a - 3000000
+        estimated_amount_a - utils.min_pool_ada
       } else {
         estimated_amount_a
       }
@@ -186,7 +186,7 @@ validator(
       9223372036854775807 - ( total_liquidity - utils.default_burn_liquidity )
     let expected_pool_out_value =
       value.zero()
-        |> value.add(ada_policy_id, ada_asset_name, 3000000)
+        |> value.add(ada_policy_id, ada_asset_name, utils.min_pool_ada)
         |> value.add(asset_a_policy_id, asset_a_asset_name, amount_a)
         |> value.add(asset_b_policy_id, asset_b_asset_name, amount_b)
         |> value.add(authen_policy_id, lp_asset_name, remaining_liquidity)

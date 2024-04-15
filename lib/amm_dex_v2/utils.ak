@@ -51,6 +51,8 @@ pub const max_fee_sharing_numerator = 5000
 // Min 16.66%
 pub const min_fee_sharing_numerator = 1666
 
+pub const min_pool_ada = 4500000
+
 pub fn sorted_asset(asset_a: Asset, asset_b: Asset) -> Bool {
   let Asset { policy_id: asset_a_policy_id, asset_name: asset_a_asset_name } =
     asset_a
