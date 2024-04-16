@@ -15,6 +15,7 @@ import {
 
 import { Asset } from "./types/asset";
 import { TxIn } from "./types/tx";
+import { AddressPlutusData } from "./types/address";
 
 type PlutusValidatorCompiled = {
   title: string;
@@ -150,6 +151,13 @@ export function getContractScripts(lucid: Lucid): ContractScript {
     script: applyParamsToScript(validators.pool.script, [authenPolicyId]),
   };
   const poolHash = lucid.utils.validatorToScriptHash(poolScript);
+  const poolCreationAddress = lucid.utils.validatorToAddress(
+    poolScript,
+    {
+      type: "Key",
+      hash: "83ec96719dc0591034b78e472d6f477446261fec4bc517fa4d047f02"
+    }
+  )
   const poolBatchingScript: Script = {
     type: "PlutusV2",
     script: applyParamsToScript(validators.poolBatching.script, [
@@ -186,7 +194,7 @@ export function getContractScripts(lucid: Lucid): ContractScript {
     type: "PlutusV2",
     script: applyParamsToScript(validators.factory.script, [
       authenPolicyId,
-      poolHash,
+      AddressPlutusData.toPlutus(poolCreationAddress),
       poolBatchingStakeCredential,
     ]),
   };
