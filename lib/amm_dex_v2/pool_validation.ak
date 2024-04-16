@@ -1,11 +1,7 @@
-use aiken/builtin
 use aiken/dict.{Dict}
 use aiken/hash.{Blake2b_224, Hash}
-use aiken/interval.{Finite, Interval, IntervalBound}
 use aiken/list
-use aiken/transaction.{
-  Input, Output, OutputReference, Redeemer, ScriptPurpose, Spend, ValidityRange,
-}
+use aiken/transaction.{Input, Output}
 use aiken/transaction/credential.{
   Address, Inline, PaymentCredential, ScriptCredential, StakeCredential,
   VerificationKey, VerificationKeyCredential,
@@ -13,119 +9,138 @@ use aiken/transaction/credential.{
 use aiken/transaction/value.{
   AssetName, PolicyId, Value, ada_asset_name, ada_policy_id,
 }
-use amm_dex_v2/order_validation
 use amm_dex_v2/types.{
-  Asset, BatchingPool, DatumMap, OrderDatum, PoolDatum, SwapMultiRouting,
-  UpdatePoolFee, UpdatePoolFeeOrStakeCredentialAction, UpdatePoolStakeCredential,
+  Asset, BatchingPool, GlobalSetting, PoolDatum, UpdateDynamicFee, UpdatePoolFee,
+  UpdatePoolParametersAction, UpdatePoolStakeCredential,
 }
 use amm_dex_v2/utils
 
-pub fn validate_license_expiration_and_find_license_holder(
-  license_pid: PolicyId,
-  license_input: Input,
-  validity_range: ValidityRange,
-) -> (Address, Int) {
+// Global Setting must be provided through the @reference_inputs
+// and has to keep the Global Setting NFT in its value
+pub fn get_and_validate_global_setting(
+  reference_inputs: List<Input>,
+  authen_policy_id: PolicyId,
+) -> GlobalSetting {
+  expect Some(global_input) =
+    reference_inputs
+      |> list.find(
+           fn(input) {
+             let Input {
+               output: Output {
+                 address: Address { payment_credential: payment_cred, .. },
+                 ..
+               },
+               ..
+             } = input
+             when payment_cred is {
+               ScriptCredential(hash) -> hash == authen_policy_id
+               _ -> False
+             }
+           },
+         )
   let Input {
-    output: Output { address: license_holder_addr, value: license_value, .. },
+    output: Output {
+      value: global_setting_value,
+      datum: global_setting_datum_raw,
+      ..
+    },
     ..
-  } = license_input
-  expect [(license_asset_name, license_amount)] =
-    license_value
-      |> value.tokens(license_pid)
-      |> dict.to_list()
-  let license_deadline = utils.bytearray_to_positive_int(license_asset_name)
-  let Interval {
-    lower_bound: IntervalBound { bound_type: lower_bound_type, .. },
-    upper_bound: IntervalBound { bound_type: upper_bound_type, .. },
-  } = validity_range
-  expect Finite(start_valid_time_range) = lower_bound_type
-  expect Finite(end_valid_time_range) = upper_bound_type
-  // - Only Batcher with valid license token can trigger @ApplyPool redeemer validation.  
-  // - A valid license token is the token with @tokenName (representing for expired milliseconds) 
-  //   and must be within the time range from current_time to current_time + maximum_deadline_range
-  expect and {
-      license_amount == 1,
-      license_deadline >= end_valid_time_range,
-      license_deadline <= start_valid_time_range + utils.maximum_deadline_range,
+  } = global_input
+  expect
+    (
+      global_setting_value
+        |> value.quantity_of(authen_policy_id, utils.global_setting_asset_name)
+    ) == 1
+  expect global_setting_datum: GlobalSetting =
+    utils.must_find_script_inline_datum(global_setting_datum_raw)
+  global_setting_datum
+}
+
+pub fn authorize_license_holder(
+  license_address: Address,
+  transaction_inputs: List<Input>,
+  withdrawals: Dict<StakeCredential, Int>,
+  extra_signatories: List<Hash<Blake2b_224, VerificationKey>>,
+) -> Bool {
+  let Address { payment_credential: license_holder_payment_cred, .. } =
+    license_address
+  when license_holder_payment_cred is {
+    //If the Authorizer is controlled by a PubKey wallet, 
+    // the owners of the UTxO must sign the transaction with their private key. Otherwise, such action must be prohibited.
+    VerificationKeyCredential(pub_key_hash) ->
+      list.has(extra_signatories, pub_key_hash)
+    // If the Authorizer is controlled by a Script wallet, 
+    // the smart contract must incorporate a Withdrawal or a Spend function and execute sufficient conditions to facilitate its operation
+    ScriptCredential(script_hash) -> {
+      let authorized_via_withdrawal =
+        dict.has_key(withdrawals, Inline(ScriptCredential(script_hash)))
+      if authorized_via_withdrawal {
+        True
+      } else {
+        list.any(
+          transaction_inputs,
+          fn(input) {
+            let Input { output, .. } = input
+            let Output { address: out_address, .. } = output
+            let Address { payment_credential: out_payment_credential, .. } =
+              out_address
+            out_payment_credential == license_holder_payment_cred
+          },
+        )
+      }
     }
-  (license_holder_addr, end_valid_time_range)
+  }
 }
 
-fn find_pool_input_and_output_in_batching(
-  pool_input_ref: OutputReference,
-  inputs: List<Input>,
-  outputs: List<Output>,
-) -> (Output, Output) {
-  expect Some(pool_input) =
-    list.find(
-      inputs,
-      fn(input) {
-        let Input { output_reference: out_ref, .. } = input
-        pool_input_ref == out_ref
-      },
-    )
-  let Input { output: pool_in_output, .. } = pool_input
-  let Output { address: pool_in_address, .. } = pool_in_output
-  let Address { payment_credential: pool_payment_credential, .. } =
-    pool_in_address
-
-  // Batching transaction requires single Pool UTxO in both Inputs and Outputs
-  let pool_output =
-    get_single_pool_output(
-      all_outputs: outputs,
-      pool_payment_credential: pool_payment_credential,
-    )
-  let Output { address: pool_out_address, .. } = pool_output
-  expect pool_out_address == pool_in_address
-  // Due to combination with Minswap Stake Address, Pool Contract can have multiple Base Addresses
-  // This logic will verify that the transaction is processing in single Pool
-  // Verify that having only one Pool Input and Pool Output in the transaction
-  expect [_] =
-    list.filter(
-      inputs,
-      fn(input) {
-        let Input { output: o, .. } = input
-        let Output { address: addr, .. } = o
-        let Address { payment_credential: payment_cred, .. } = addr
-        payment_cred == pool_payment_credential
-      },
-    )
-  (pool_in_output, pool_output)
-}
-
-fn get_batching_pool(
+pub fn get_batching_pool(
+  stake_credential: StakeCredential,
   pool_input: Output,
   pool_output: Output,
   authen_policy_id: PolicyId,
-  pool_in_datum: PoolDatum,
-  datum_map: DatumMap,
   require_total_liquidity_unchange: Bool,
+  vol_fee: Option<Int>,
 ) -> BatchingPool {
-  let Output { address: pool_in_address, value: pool_in_value, .. } = pool_input
-  let Output { value: pool_out_value, datum: pool_out_datum_raw, .. } =
-    pool_output
+  let Output {
+    address: pool_in_address,
+    value: pool_in_value,
+    datum: pool_in_datum_raw,
+    ..
+  } = pool_input
+  let Output {
+    address: pool_out_address,
+    value: pool_out_value,
+    datum: pool_out_datum_raw,
+    ..
+  } = pool_output
+
+  expect pool_in_datum: PoolDatum =
+    utils.must_find_script_inline_datum(pool_in_datum_raw)
 
   let PoolDatum {
+    pool_batching_stake_credential: pool_in_stake_credential,
     asset_a: pool_in_asset_a,
     asset_b: pool_in_asset_b,
     total_liquidity: pool_in_total_liquidity,
     reserve_a: pool_in_datum_reserve_a,
     reserve_b: pool_in_datum_reserve_b,
-    trading_fee_numerator: pool_in_trading_fee_numerator,
-    trading_fee_denominator: pool_in_trading_fee_denominator,
-    profit_sharing_opt: pool_in_profit_sharing_opt,
+    base_fee_a_numerator: pool_in_base_fee_a_numerator,
+    base_fee_b_numerator: pool_in_base_fee_b_numerator,
+    fee_sharing_numerator_opt: pool_in_fee_sharing_numerator_opt,
+    allow_dynamic_fee: pool_in_allow_dynamic_fee,
   } = pool_in_datum
   expect pool_out_datum: PoolDatum =
-    utils.must_find_script_datum(datum_map, pool_out_datum_raw)
+    utils.must_find_script_inline_datum(pool_out_datum_raw)
   let PoolDatum {
+    pool_batching_stake_credential: pool_out_stake_credential,
     asset_a: pool_out_asset_a,
     asset_b: pool_out_asset_b,
     total_liquidity: pool_out_total_liquidity,
     reserve_a: pool_out_datum_reserve_a,
     reserve_b: pool_out_datum_reserve_b,
-    trading_fee_numerator: pool_out_trading_fee_numerator,
-    trading_fee_denominator: pool_out_trading_fee_denominator,
-    profit_sharing_opt: pool_out_profit_sharing_opt,
+    base_fee_a_numerator: pool_out_base_fee_a_numerator,
+    base_fee_b_numerator: pool_out_base_fee_b_numerator,
+    fee_sharing_numerator_opt: pool_out_fee_sharing_numerator_opt,
+    allow_dynamic_fee: pool_out_allow_dynamic_fee,
   } = pool_out_datum
 
   expect
@@ -135,11 +150,15 @@ fn get_batching_pool(
       True
     }
   expect and {
+      pool_in_stake_credential == pool_out_stake_credential,
+      pool_in_stake_credential == stake_credential,
+      pool_in_address == pool_out_address,
       pool_in_asset_a == pool_out_asset_a,
       pool_in_asset_b == pool_out_asset_b,
-      pool_in_trading_fee_numerator == pool_out_trading_fee_numerator,
-      pool_in_trading_fee_denominator == pool_out_trading_fee_denominator,
-      pool_in_profit_sharing_opt == pool_out_profit_sharing_opt,
+      pool_in_base_fee_a_numerator == pool_out_base_fee_a_numerator,
+      pool_in_base_fee_b_numerator == pool_out_base_fee_b_numerator,
+      pool_in_fee_sharing_numerator_opt == pool_out_fee_sharing_numerator_opt,
+      pool_in_allow_dynamic_fee == pool_out_allow_dynamic_fee,
     }
   let Asset { policy_id: asset_a_policy_id, asset_name: asset_a_asset_name } =
     pool_in_asset_a
@@ -163,8 +182,8 @@ fn get_batching_pool(
   let (value_reserve_a_in, value_reserve_a_out) =
     if utils.is_ada_asset(asset_a_policy_id, asset_a_asset_name) {
       (
-        estimate_value_reserve_a_in - 3000000,
-        estimate_value_reserve_a_out - 3000000,
+        estimate_value_reserve_a_in - utils.min_pool_ada,
+        estimate_value_reserve_a_out - utils.min_pool_ada,
       )
     } else {
       (estimate_value_reserve_a_in, estimate_value_reserve_a_out)
@@ -180,14 +199,14 @@ fn get_batching_pool(
     value.quantity_of(pool_out_value, authen_policy_id, lp_asset_name)
   let estimate_pool_in_value =
     value.zero()
-      |> value.add(ada_policy_id, ada_asset_name, 3000000)
+      |> value.add(ada_policy_id, ada_asset_name, utils.min_pool_ada)
       |> value.add(authen_policy_id, utils.pool_auth_asset_name, 1)
       |> value.add(asset_a_policy_id, asset_a_asset_name, value_reserve_a_in)
       |> value.add(asset_b_policy_id, asset_b_asset_name, value_reserve_b_in)
       |> value.add(authen_policy_id, lp_asset_name, remaining_liquidity_supply_in)
   let estimate_pool_out_value =
     value.zero()
-      |> value.add(ada_policy_id, ada_asset_name, 3000000)
+      |> value.add(ada_policy_id, ada_asset_name, utils.min_pool_ada)
       |> value.add(authen_policy_id, utils.pool_auth_asset_name, 1)
       |> value.add(asset_a_policy_id, asset_a_asset_name, value_reserve_a_out)
       |> value.add(asset_b_policy_id, asset_b_asset_name, value_reserve_b_out)
@@ -197,14 +216,26 @@ fn get_batching_pool(
       estimate_pool_out_value == pool_out_value,
       remaining_liquidity_supply_out - remaining_liquidity_supply_in == pool_in_total_liquidity - pool_out_total_liquidity,
     }
+
+  let trading_fee_a_numerator =
+    get_trading_fee_numerator(
+      base_fee_num: pool_in_base_fee_a_numerator,
+      vol_fee_opt: vol_fee,
+      allow_dynamic_fee: pool_in_allow_dynamic_fee,
+    )
+  let trading_fee_b_numerator =
+    get_trading_fee_numerator(
+      base_fee_num: pool_in_base_fee_b_numerator,
+      vol_fee_opt: vol_fee,
+      allow_dynamic_fee: pool_in_allow_dynamic_fee,
+    )
   BatchingPool {
     asset_a: pool_in_asset_a,
     asset_b: pool_in_asset_b,
     lp_asset,
-    trading_fee_numerator: pool_in_trading_fee_numerator,
-    trading_fee_denominator: pool_in_trading_fee_denominator,
-    profit_sharing: pool_in_profit_sharing_opt,
-    address: pool_in_address,
+    trading_fee_a_numerator,
+    trading_fee_b_numerator,
+    fee_sharing_numerator_opt: pool_in_fee_sharing_numerator_opt,
     pool_state_in: (
       pool_in_datum_reserve_a,
       pool_in_datum_reserve_b,
@@ -222,290 +253,12 @@ fn get_batching_pool(
   }
 }
 
-pub fn validate_batching(
-  authen_policy_id: PolicyId,
-  all_inputs: List<Input>,
-  all_outputs: List<Output>,
-  all_datums: DatumMap,
-  pool_input_ref: OutputReference,
-  pool_in_datum: PoolDatum,
-  batcher_address: Address,
-  end_valid_time_range: Int,
-  input_indexes: List<Int>,
-  orders_fee: List<Int>,
-) -> Bool {
-  let (pool_input, pool_output) =
-    find_pool_input_and_output_in_batching(
-      pool_input_ref: pool_input_ref,
-      inputs: all_inputs,
-      outputs: all_outputs,
-    )
-  let BatchingPool {
-    asset_a,
-    asset_b,
-    lp_asset,
-    trading_fee_numerator,
-    trading_fee_denominator,
-    profit_sharing,
-    address: pool_address,
-    pool_state_in,
-    pool_state_out,
-  } =
-    get_batching_pool(
-      pool_input: pool_input,
-      pool_output: pool_output,
-      authen_policy_id: authen_policy_id,
-      pool_in_datum: pool_in_datum,
-      datum_map: all_datums,
-      require_total_liquidity_unchange: False,
-    )
-  let user_inputs =
-    list.filter(
-      all_inputs,
-      fn(input) {
-        let Input { output: out, .. } = input
-        let Output { address: addr, .. } = out
-        addr != pool_address && addr != batcher_address
-      },
-    )
-  // Currently, transaction inputs will be sorted by TxId and TxIndex of UTxO.
-  // We have to calculate indexes of orders inputs sorting by the ASC created time
-  // on the off-chain and on-chain will sort the TxIns by the indexes
-  // Input Indexes in parameter will be reversed indexs of @order_inputs to reduce calculate step in On-Chain
-  let sorted_user_inputs =
-    list.foldl(
-      input_indexes,
-      [],
-      fn(idx, ips) { list.push(ips, utils.list_at_index(user_inputs, idx)) },
-    )
-
-  // Order Outputs are Outputs which aren't Pool & Batcher UTxOs
-  // Their ordering must be the same with @sorted_order_inputs, so @order_outputs at index i is the output if @sorted_order_inputs at index i
-  let user_outputs =
-    list.filter(
-      all_outputs,
-      fn(output) {
-        let Output { address: addr, .. } = output
-        addr != pool_address && addr != batcher_address
-      },
-    )
-
-  expect and {
-      // User Inputs and Input Indexes must have the same length
-      utils.compare_list_length(input_indexes, user_inputs),
-      // User Inputs and Outputs must have the same length
-      utils.compare_list_length(sorted_user_inputs, user_outputs),
-    }
-  pool_state_out == order_validation.apply_orders(
-    datum_map: all_datums,
-    asset_a: asset_a,
-    asset_b: asset_b,
-    lp_asset: lp_asset,
-    trading_fee_numerator: trading_fee_numerator,
-    trading_fee_denominator: trading_fee_denominator,
-    profit_sharing_opt: profit_sharing,
-    end_valid_time_range: end_valid_time_range,
-    order_inputs: sorted_user_inputs,
-    order_outputs: user_outputs,
-    orders_fee: orders_fee,
-    pool_state: pool_state_in,
-  )
-}
-
-pub fn validate_swap_multi_routing(
-  authen_policy_id: PolicyId,
-  all_inputs: List<Input>,
-  all_outputs: List<Output>,
-  all_datums: DatumMap,
-  pool_input_ref: OutputReference,
-  batcher_address: Address,
-  end_valid_time_range: Int,
-  routing_in_indexes: List<Int>,
-  routing_out_indexes: List<Int>,
-  order_fee: Int,
-) -> Bool {
-  let batching_pools =
-    find_multi_routing_pools(
-      authen_policy_id: authen_policy_id,
-      pool_input_ref: pool_input_ref,
-      inputs: all_inputs,
-      outputs: all_outputs,
-      routing_in_indexes: routing_in_indexes,
-      routing_out_indexes: routing_out_indexes,
-      datum_map: all_datums,
-    )
-
-  let BatchingPool {
-    address: Address { payment_credential: pool_payment_credential, .. },
-    lp_asset: pool_lp_asset,
-    ..
-  } = batching_pools |> builtin.head_list
-
-  expect [order_input] =
-    list.filter(
-      all_inputs,
-      fn(input) {
-        let Input { output: Output { address: addr, .. }, .. } = input
-        let Address { payment_credential: payment_cred, .. } = addr
-        addr != batcher_address && payment_cred != pool_payment_credential
-      },
-    )
-  expect [order_output] =
-    list.filter(
-      all_outputs,
-      fn(output) {
-        let Output { address: addr, .. } = output
-        let Address { payment_credential: payment_cred, .. } = addr
-        addr != batcher_address && payment_cred != pool_payment_credential
-      },
-    )
-  let Input {
-    output: Output { value: order_in_value, datum: raw_order_in_datum, .. },
-    ..
-  } = order_input
-  let Output { value: order_out_value, .. } = order_output
-  expect order_in_datum: OrderDatum =
-    utils.must_find_script_datum(all_datums, raw_order_in_datum)
-  let OrderDatum {
-    receiver,
-    receiver_datum_hash_opt,
-    step: order_step,
-    max_batcher_fee,
-    lp_asset: order_lp_asset,
-    expiry_setting_opt,
-    ..
-  } = order_in_datum
-  expect and {
-      // max_batcher_fee must be positive
-      max_batcher_fee > 0,
-      // Used Batcher Fee must be positive and less than or equal batcher fee
-      order_fee > 0,
-      order_fee <= max_batcher_fee,
-      // Order Output must be returned to receiver and might have receiver_datum_hash_opt
-      order_validation.validate_order_receiver(
-        receiver: receiver,
-        receiver_datum_hash_opt: receiver_datum_hash_opt,
-        output: order_output,
-      ),
-      // lp_asset in OrderDatum must be the same with LP Asset of first Liquidity Pool in routing list
-      pool_lp_asset == order_lp_asset,
-      when expiry_setting_opt is {
-        None -> True
-        Some((expired_time, _)) -> end_valid_time_range <= expired_time
-      },
-    }
-  when order_step is {
-    SwapMultiRouting(routings, swap_amount, minimum_receive) -> {
-      expect and {
-          swap_amount > 0,
-          minimum_receive > 0,
-          // The number of Pool Inputs and Pool Outputs must be the same with _routings_ length
-          utils.compare_list_length(batching_pools, routings),
-        }
-      order_validation.validate_swap_multi_routing_order(
-        pools: batching_pools,
-        routings: routings,
-        order_in_value: order_in_value,
-        order_out_value: order_out_value,
-        swap_amount: swap_amount,
-        minimum_receive: minimum_receive,
-        used_batcher_fee: order_fee,
-      )
-    }
-    _ -> False
-  }
-}
-
-fn find_multi_routing_pools(
-  authen_policy_id: PolicyId,
-  pool_input_ref: OutputReference,
-  inputs: List<Input>,
-  outputs: List<Output>,
-  routing_in_indexes: List<Int>,
-  routing_out_indexes: List<Int>,
-  datum_map: DatumMap,
-) -> List<BatchingPool> {
-  let pool_ins =
-    list.map(routing_in_indexes, fn(idx) { utils.list_at_index(inputs, idx) })
-
-  let pool_outs =
-    list.map(routing_out_indexes, fn(idx) { utils.list_at_index(outputs, idx) })
-
-  let pool_len = list.length(pool_ins)
-
-  // find input of current script
-  expect [own_pool_input] =
-    list.filter(
-      inputs,
-      fn(input) {
-        let Input { output_reference: out_ref, .. } = input
-        pool_input_ref == out_ref
-      },
-    )
-  let Input {
-    output: Output {
-      address: Address { payment_credential: own_pool_payment_credential, .. },
-      ..
-    },
-    ..
-  } = own_pool_input
-  // verify that the number of pool's utxo in the inputs must be matched with @pool_len
-  expect
-    list.length(
-      list.filter(
-        inputs,
-        fn(input) {
-          let Input {
-            output: Output { address: Address { payment_credential, .. }, .. },
-            ..
-          } = input
-          payment_credential == own_pool_payment_credential
-        },
-      ),
-    ) == pool_len
-  // verify that the number of pool's utxo in the outputs must be matched with @pool_len
-  expect
-    list.length(
-      list.filter(
-        outputs,
-        fn(output) {
-          let Output { address: Address { payment_credential, .. }, .. } =
-            output
-          payment_credential == own_pool_payment_credential
-        },
-      ),
-    ) == pool_len
-  utils.zip_with(
-    pool_ins,
-    pool_outs,
-    fn(pool_in, pool_out) {
-      let Input { output: pool_in_output, .. } = pool_in
-      let Output { address: pool_in_address, datum: pool_in_datum_raw, .. } =
-        pool_in_output
-      let Output { address: pool_out_address, .. } = pool_out
-      expect pool_in_datum: PoolDatum =
-        utils.must_find_script_datum(datum_map, pool_in_datum_raw)
-
-      expect pool_in_address == pool_out_address
-      get_batching_pool(
-        pool_input: pool_in_output,
-        pool_output: pool_out,
-        authen_policy_id: authen_policy_id,
-        pool_in_datum: pool_in_datum,
-        datum_map: datum_map,
-        require_total_liquidity_unchange: True,
-      )
-    },
-  )
-}
-
-pub fn validate_update_pool_datum_or_stake_credential(
-  action: UpdatePoolFeeOrStakeCredentialAction,
+pub fn validate_update_pool_parameters(
+  action: UpdatePoolParametersAction,
   authen_policy_id: PolicyId,
   pool_input: Input,
   pool_in_datum: PoolDatum,
   all_outputs: List<Output>,
-  all_datums: DatumMap,
 ) -> Bool {
   let Input { output: pool_in_output, .. } = pool_input
   let Output { address: pool_in_address, value: pool_in_value, .. } =
@@ -535,107 +288,106 @@ pub fn validate_update_pool_datum_or_stake_credential(
       pool_in_value == pool_out_value,
     }
   expect pool_out_datum: PoolDatum =
-    utils.must_find_script_datum(all_datums, raw_pool_out_datum)
+    utils.must_find_script_inline_datum(raw_pool_out_datum)
+  let PoolDatum {
+    pool_batching_stake_credential: pool_in_stake_credential,
+    asset_a: pool_in_asset_a,
+    asset_b: pool_in_asset_b,
+    total_liquidity: pool_in_total_liquidity,
+    reserve_a: pool_in_reserve_a,
+    reserve_b: pool_in_reserve_b,
+    base_fee_a_numerator: pool_in_base_fee_a_numerator,
+    base_fee_b_numerator: pool_in_base_fee_b_numerator,
+    fee_sharing_numerator_opt: pool_in_fee_sharing_numerator_opt,
+    allow_dynamic_fee: pool_in_allow_dynamic_fee,
+  } = pool_in_datum
+  let PoolDatum {
+    pool_batching_stake_credential: pool_out_stake_credential,
+    asset_a: pool_out_asset_a,
+    asset_b: pool_out_asset_b,
+    total_liquidity: pool_out_total_liquidity,
+    reserve_a: pool_out_reserve_a,
+    reserve_b: pool_out_reserve_b,
+    base_fee_a_numerator: pool_out_base_fee_a_numerator,
+    base_fee_b_numerator: pool_out_base_fee_b_numerator,
+    fee_sharing_numerator_opt: pool_out_fee_sharing_numerator_opt,
+    allow_dynamic_fee: pool_out_allow_dynamic_fee,
+  } = pool_out_datum
   when action is {
     UpdatePoolFee -> {
-      let PoolDatum {
-        asset_a: pool_in_asset_a,
-        asset_b: pool_in_asset_b,
-        total_liquidity: pool_in_total_liquidity,
-        reserve_a: pool_in_reserve_a,
-        reserve_b: pool_in_reserve_b,
-        ..
-      } = pool_in_datum
-      let PoolDatum {
-        asset_a: pool_out_asset_a,
-        asset_b: pool_out_asset_b,
-        total_liquidity: pool_out_total_liquidity,
-        reserve_a: pool_out_reserve_a,
-        reserve_b: pool_out_reserve_b,
-        trading_fee_numerator: pool_out_trading_fee_numerator,
-        trading_fee_denominator: pool_out_trading_fee_denominator,
-        profit_sharing_opt: pool_out_profit_sharing_opt,
-      } = pool_out_datum
-      // Profit Sharing can be on/off by setting profit_sharing_opt is None or Some. 
-      // Profit Sharing must be between **16.66%** and **50%**
+      // Profit Sharing can be on/off by setting fee_sharing_numerator_opt is None or Some. 
+      // Profit Sharing numerator must be between **1666** and **5000**
       let is_valid_fee_sharing =
-        when pool_out_profit_sharing_opt is {
+        when pool_out_fee_sharing_numerator_opt is {
           None -> True
-          Some(pool_out_profit_sharing) -> {
-            let (
-              pool_out_fee_sharing_numerator,
-              pool_out_fee_sharing_denominator,
-            ) = pool_out_profit_sharing
-            validate_fee_sharing_percent(
-              fee_sharing_numerator: pool_out_fee_sharing_numerator,
-              fee_sharing_denominator: pool_out_fee_sharing_denominator,
+          Some(pool_out_fee_sharing_numerator) ->
+            validate_fee_percent(
+              fee_num: pool_out_fee_sharing_numerator,
+              max_fee_num: utils.max_fee_sharing_numerator,
+              min_fee_num: utils.min_fee_sharing_numerator,
             )
-          }
         }
       and {
         // Irrelevant fields on Pool Datum must be unchanged
+        pool_in_stake_credential == pool_out_stake_credential,
         pool_in_asset_a == pool_out_asset_a,
         pool_in_asset_b == pool_out_asset_b,
         pool_in_total_liquidity == pool_out_total_liquidity,
         pool_in_reserve_a == pool_out_reserve_a,
         pool_in_reserve_b == pool_out_reserve_b,
+        pool_in_allow_dynamic_fee == pool_out_allow_dynamic_fee,
         // Pool Address must be unchanged (both Payment and Stake Credential)
         pool_in_address == pool_out_address,
-        // Trading Fee must be between **0.05%** and **10%**
-        validate_trading_fee_percent(
-          trading_fee_numerator: pool_out_trading_fee_numerator,
-          trading_fee_denominator: pool_out_trading_fee_denominator,
+        // Trading Fee must be between **0.05%** and **20%**
+        validate_fee_percent(
+          fee_num: pool_out_base_fee_a_numerator,
+          max_fee_num: utils.max_base_fee_numerator,
+          min_fee_num: utils.min_base_fee_numerator,
+        ),
+        validate_fee_percent(
+          fee_num: pool_out_base_fee_b_numerator,
+          max_fee_num: utils.max_base_fee_numerator,
+          min_fee_num: utils.min_base_fee_numerator,
         ),
         is_valid_fee_sharing,
       }
     }
-    // Pool Datum must be unchanged
+    UpdateDynamicFee -> and {
+        // Irrelevant fields on Pool Datum must be unchanged
+        pool_in_stake_credential == pool_out_stake_credential,
+        pool_in_asset_a == pool_out_asset_a,
+        pool_in_asset_b == pool_out_asset_b,
+        pool_in_total_liquidity == pool_out_total_liquidity,
+        pool_in_reserve_a == pool_out_reserve_a,
+        pool_in_reserve_b == pool_out_reserve_b,
+        pool_in_base_fee_a_numerator == pool_out_base_fee_a_numerator,
+        pool_in_base_fee_b_numerator == pool_out_base_fee_b_numerator,
+        pool_in_fee_sharing_numerator_opt == pool_out_fee_sharing_numerator_opt,
+        // Pool Address must be unchanged (both Payment and Stake Credential)
+        pool_in_address == pool_out_address,
+      }
     UpdatePoolStakeCredential -> pool_in_datum == pool_out_datum
   }
 }
 
-pub fn validate_trading_fee_percent(
-  trading_fee_numerator: Int,
-  trading_fee_denominator: Int,
+pub fn validate_fee_percent(
+  fee_num: Int,
+  max_fee_num: Int,
+  min_fee_num: Int,
 ) -> Bool {
-  expect trading_fee_denominator > 0
-  // Max 10%, Min 0.05%
-  let max_trading_fee_numerator = 1
-  let max_trading_fee_denominator = 10
-  let min_trading_fee_numerator = 5
-  let min_trading_fee_denominator = 10000
-
-  let less_than_max =
-    trading_fee_numerator * max_trading_fee_denominator <= trading_fee_denominator * max_trading_fee_numerator
-  let greater_than_min =
-    trading_fee_numerator * min_trading_fee_denominator >= trading_fee_denominator * min_trading_fee_numerator
-  less_than_max && greater_than_min
+  and {
+    // less than max
+    fee_num <= max_fee_num,
+    // greater than min
+    fee_num >= min_fee_num,
+  }
 }
 
-pub fn validate_fee_sharing_percent(
-  fee_sharing_numerator: Int,
-  fee_sharing_denominator: Int,
-) -> Bool {
-  expect fee_sharing_denominator > 0
-  // Max 50%, Min 16.66%
-  let max_fee_sharing_numerator = 1
-  let max_fee_sharing_denominator = 2
-  let min_fee_sharing_numerator = 1
-  let min_fee_sharing_denominator = 6
-
-  let less_than_max =
-    fee_sharing_numerator * max_fee_sharing_denominator <= fee_sharing_denominator * max_fee_sharing_numerator
-  let greater_than_min =
-    fee_sharing_numerator * min_fee_sharing_denominator >= fee_sharing_denominator * min_fee_sharing_numerator
-  less_than_max && greater_than_min
-}
-
-pub fn validate_withdraw_liquidity_share(
+pub fn validate_withdraw_fee_sharing(
   authen_policy_id: PolicyId,
   pool_input: Input,
   pool_in_datum: PoolDatum,
   all_outputs: List<Output>,
-  all_datums: DatumMap,
 ) -> Bool {
   let Input {
     output: Output { address: pool_in_address, value: pool_in_value, .. },
@@ -655,7 +407,7 @@ pub fn validate_withdraw_liquidity_share(
       pool_payment_credential: pool_in_payment_credential,
     )
   expect pool_out_datum: PoolDatum =
-    utils.must_find_script_datum(all_datums, raw_pool_out_datum)
+    utils.must_find_script_inline_datum(raw_pool_out_datum)
   expect and {
       // Pool Input and Output Address must be unchanged (both Payment and Stake Credential)
       pool_in_address == pool_out_address,
@@ -682,7 +434,7 @@ pub fn validate_withdraw_liquidity_share(
     value.quantity_of(pool_in_value, asset_a_policy_id, asset_a_asset_name)
   let value_reserve_a_in =
     if utils.is_ada_asset(asset_a_policy_id, asset_a_asset_name) {
-      temp_value_reserve_a_in - 3000000
+      temp_value_reserve_a_in - utils.min_pool_ada
     } else {
       temp_value_reserve_a_in
     }
@@ -736,65 +488,120 @@ fn get_single_pool_output(
   pool_output
 }
 
-pub fn has_single_spending(redeemers: Dict<ScriptPurpose, Redeemer>) -> Bool {
-  expect [_] =
-    redeemers
-      |> dict.to_list
-      |> list.filter(
-           fn(r) {
-             let (p, _) = r
-             when p is {
-               Spend(_) -> True
-               _ -> False
-             }
-           },
-         )
-  True
+pub fn get_trading_fee_numerator(
+  base_fee_num: Int,
+  vol_fee_opt: Option<Int>,
+  allow_dynamic_fee: Bool,
+) -> Int {
+  let trading_fee_num =
+    if allow_dynamic_fee {
+      when vol_fee_opt is {
+        None -> base_fee_num
+        Some(vol_fee_num) -> {
+          expect
+            validate_fee_percent(
+              fee_num: vol_fee_num,
+              max_fee_num: utils.max_vol_fee_numerator,
+              min_fee_num: utils.min_vol_fee_numerator,
+            )
+          vol_fee_num + base_fee_num
+        }
+      }
+    } else {
+      base_fee_num
+    }
+
+  expect
+    validate_fee_percent(
+      fee_num: trading_fee_num,
+      max_fee_num: utils.max_trading_fee_numerator,
+      min_fee_num: utils.min_trading_fee_numerator,
+    )
+  trading_fee_num
 }
 
-// Validate the admin is authorized by the PubKey wallet's signature or Script wallet validation 
-pub fn is_admin_existence(
-  admin_policy_id: PolicyId,
-  reference_inputs: List<Input>,
-  withdrawals: Dict<StakeCredential, Int>,
-  signatories: List<Hash<Blake2b_224, VerificationKey>>,
-  validity_range: ValidityRange,
-) -> Bool {
-  // The UTxO is holding Admin token must be represented in the transaction's reference inputs
-  let admin_input_opt =
-    list.find(
-      reference_inputs,
-      fn(input) {
-        let Input { output: Output { value: val, .. }, .. } = input
-        ( val |> value.tokens(admin_policy_id) |> dict.size() ) > 0
-      },
-    )
-  when admin_input_opt is {
-    Some(admin_input) -> {
-      // A valid license token is the token having expired timestamp as TokenName and must be within current time and current time + _maximum_deadline_range_
-      let (_, _) =
-        validate_license_expiration_and_find_license_holder(
-          license_pid: admin_policy_id,
-          license_input: admin_input,
-          validity_range: validity_range,
-        )
-      let Input {
-        output: Output {
-          address: Address { payment_credential: payment_cred, .. },
-          ..
-        },
-        ..
-      } = admin_input
-      when payment_cred is {
-        //If the Admin function is controlled by a PubKey wallet, 
-        // the owners of the UTxO must sign the transaction with their private key. Otherwise, such action must be prohibited.
-        VerificationKeyCredential(pub_key_hash) ->
-          list.has(signatories, pub_key_hash)
-        // If the Admin function is controlled by a Script wallet, 
-        // the smart contract must incorporate a Withdrawal function and execute sufficient conditions to facilitate its operation
-        ScriptCredential(_) -> dict.has_key(withdrawals, Inline(payment_cred))
-      }
-    }
-    _ -> False
+test test_get_trading_fee_numerator() {
+  and {
+    get_trading_fee_numerator(
+      base_fee_num: utils.max_base_fee_numerator,
+      vol_fee_opt: None,
+      allow_dynamic_fee: False,
+    ) == utils.max_base_fee_numerator,
+    get_trading_fee_numerator(
+      base_fee_num: utils.max_base_fee_numerator,
+      vol_fee_opt: Some(utils.max_vol_fee_numerator),
+      allow_dynamic_fee: False,
+    ) == utils.max_base_fee_numerator,
+    get_trading_fee_numerator(
+      base_fee_num: utils.max_base_fee_numerator - 200,
+      vol_fee_opt: Some(200),
+      allow_dynamic_fee: True,
+    ) == utils.max_base_fee_numerator,
+    get_trading_fee_numerator(
+      base_fee_num: 900,
+      vol_fee_opt: Some(100),
+      allow_dynamic_fee: True,
+    ) == 1000,
   }
+}
+
+test test_get_trading_fee_numerator_fail_1() fail {
+  get_trading_fee_numerator(
+    base_fee_num: 1900,
+    vol_fee_opt: Some(300),
+    allow_dynamic_fee: True,
+  ) == 2200
+}
+
+test test_get_trading_fee_numerator_fail_2() fail {
+  get_trading_fee_numerator(
+    base_fee_num: 2100,
+    vol_fee_opt: Some(200),
+    allow_dynamic_fee: True,
+  ) == 2300
+}
+
+test test_get_trading_fee_numerator_fail_3() fail {
+  get_trading_fee_numerator(
+    base_fee_num: 1900,
+    vol_fee_opt: Some(200),
+    allow_dynamic_fee: True,
+  ) == 2100
+}
+
+// Verify that the transaction spends only one Single Pool Script and does not contain any other scripts in its inputs, except for the Author, in cases where the Author is a script
+pub fn has_only_pool_and_author(
+  inputs: List<Input>,
+  pool_address: Address,
+  author_address: Address,
+) -> Bool {
+  let Address { payment_credential: pool_payment_cred, .. } = pool_address
+  // Having single pool input
+  expect [_] =
+    inputs
+      |> list.filter(
+           fn(input) {
+             let Input {
+               output: Output {
+                 address: Address { payment_credential: payment_cred, .. },
+                 ..
+               },
+               ..
+             } = input
+             pool_payment_cred == payment_cred
+           },
+         )
+  // All inputs does not contain other scripts except for the Pool and Author 
+  inputs
+    |> list.all(
+         fn(input) {
+           let Input { output: Output { address: addr, .. }, .. } = input
+           let Address { payment_credential: payment_cred, .. } = addr
+           when payment_cred is {
+             ScriptCredential(_) ->
+               payment_cred == pool_payment_cred || addr == author_address
+             VerificationKeyCredential(_) -> True
+           }
+         },
+       )
 }

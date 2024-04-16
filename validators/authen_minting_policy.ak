@@ -1,15 +1,17 @@
+use aiken/builtin
 use aiken/dict
 use aiken/list
 use aiken/transaction.{
   Input, Mint, Output, OutputReference, ScriptContext, Spend, Transaction,
 }
+use aiken/transaction/credential.{Address, ScriptCredential}
 use aiken/transaction/value
 use amm_dex_v2/pool_validation
 use amm_dex_v2/types.{
-  Asset, AuthenRedeemer, CreatePool, FactoryDatum, FactoryRedeemer,
-  MintFactoryAuthen,
+  Asset, AuthenRedeemer, CreatePool, DexInitialization, FactoryDatum,
+  FactoryRedeemer, GlobalSetting,
 }
-use amm_dex_v2/utils.{factory_auth_asset_name}
+use amm_dex_v2/utils
 
 validator(
   // @out_ref is a Reference of an Unspent Transaction Output,
@@ -33,7 +35,7 @@ validator(
               value.quantity_of(
                 out_value,
                 authen_policy_id,
-                factory_auth_asset_name,
+                utils.factory_auth_asset_name,
               ) == 1
             },
           )
@@ -74,8 +76,8 @@ validator(
         )
       }
       // The redeemer can be called once to initialize the whole AMM V2 system
-      MintFactoryAuthen -> {
-        let Transaction { inputs, mint, outputs, datums, .. } = transaction
+      DexInitialization -> {
+        let Transaction { inputs, mint, outputs, .. } = transaction
 
         // validate that `out_ref` must be presented in the Transaction Inputs
         expect [_] =
@@ -87,17 +89,27 @@ validator(
             },
           )
 
-        // validate that the redeemer only mint a single Factory Token 
+        // there are two NFT tokens that are minted in this transaction
+        // - 1 Factory NFT that have the same policy id with the own script hash 
+        //        and token name is defined in @factory_auth_asset_name
+        // - 1 Global Setting NFT that have the same policy id with the own script hash 
+        //        and token name is defined in @global_setting_asset_name
         let mint_value = value.from_minted_value(mint)
-        expect [(minted_pid, minted_an, minted_amount)] =
-          value.flatten(mint_value)
         expect and {
-            minted_pid == authen_policy_id,
-            minted_an == factory_auth_asset_name,
-            minted_amount == 1,
+            list.length(value.flatten(mint_value)) == 2,
+            value.quantity_of(
+              mint_value,
+              authen_policy_id,
+              utils.global_setting_asset_name,
+            ) == 1,
+            value.quantity_of(
+              mint_value,
+              authen_policy_id,
+              utils.factory_auth_asset_name,
+            ) == 1,
           }
         // validate that there's only 1 Factory UTxO in the Transaction Outputs
-        // The Factory UTxO must contain Factory Token in the value
+        // The Factory UTxO must contain 1 Factory Token in the value
         expect [factory_output] =
           list.filter(
             outputs,
@@ -106,19 +118,126 @@ validator(
               value.quantity_of(
                 out_value,
                 authen_policy_id,
-                factory_auth_asset_name,
+                utils.factory_auth_asset_name,
               ) == 1
             },
           )
         let Output { datum: factory_raw_datum, .. } = factory_output
         expect factory_datum: FactoryDatum =
-          utils.must_find_script_datum(datums, factory_raw_datum)
+          utils.must_find_script_inline_datum(factory_raw_datum)
         let FactoryDatum { head, tail } = factory_datum
+
+        // validate that there's only 1 Global Setting UTxO in the Transaction Outputs
+        // The Global Setting UTxO must contain 1 Global Setting Token in the value
+        expect [global_setting_output] =
+          list.filter(
+            outputs,
+            fn(output) {
+              let Output {
+                address: Address { payment_credential: payment_cred, .. },
+                ..
+              } = output
+              when payment_cred is {
+                ScriptCredential(h) -> h == authen_policy_id
+                _ -> False
+              }
+            },
+          )
+        let Output {
+          value: global_setting_value,
+          datum: global_setting_datum_raw,
+          ..
+        } = global_setting_output
+        expect global_setting: GlobalSetting =
+          utils.must_find_script_inline_datum(global_setting_datum_raw)
+        let GlobalSetting { batchers, .. } = global_setting
         and {
           head == #"00",
           tail == #"ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff00",
+          // authorized batchers must not be empty
+          !builtin.null_list(batchers),
+          // The Global Setting UTxO must contain 1 Global Setting Token in the value
+          value.quantity_of(
+            global_setting_value,
+            authen_policy_id,
+            utils.global_setting_asset_name,
+          ) == 1,
         }
       }
+    }
+  }
+
+  fn validate_spend_global_setting(
+    datum: GlobalSetting,
+    _redeemer: Data,
+    context: ScriptContext,
+  ) {
+    let ScriptContext { transaction, purpose } = context
+    expect Spend(global_setting_input_ref) = purpose
+    let Transaction {
+      inputs,
+      outputs,
+      extra_signatories,
+      withdrawals,
+      mint,
+      ..
+    } = transaction
+    expect Some(global_setting_input) =
+      transaction.find_input(inputs, global_setting_input_ref)
+    let Input {
+      output: Output {
+        value: global_setting_value_input,
+        address: Address {
+          payment_credential: global_setting_payment_credential,
+          ..
+        },
+        ..
+      },
+      ..
+    } = global_setting_input
+    expect ScriptCredential(global_setting_script_hash) =
+      global_setting_payment_credential
+
+    let GlobalSetting { admin, .. } = datum
+    let global_setting_output = outputs |> builtin.head_list
+    let Output {
+      value: global_setting_value_out,
+      address: Address {
+        payment_credential: global_setting_payment_credential_out,
+        ..
+      },
+      datum: global_setting_out_raw_datum,
+      ..
+    } = global_setting_output
+    expect global_setting_out_datum: GlobalSetting =
+      utils.must_find_script_inline_datum(global_setting_out_raw_datum)
+    let GlobalSetting { batchers, .. } = global_setting_out_datum
+
+    and {
+      // Transaction must be executed by the correct admin
+      pool_validation.authorize_license_holder(
+        license_address: admin,
+        transaction_inputs: inputs,
+        withdrawals: withdrawals,
+        extra_signatories: extra_signatories,
+      ),
+      // Both Global Setting input and output must have the same payment credential 
+      // and keep the Global Setting Token
+      value.quantity_of(
+        global_setting_value_input,
+        global_setting_script_hash,
+        utils.global_setting_asset_name,
+      ) == 1,
+      value.quantity_of(
+        global_setting_value_out,
+        global_setting_script_hash,
+        utils.global_setting_asset_name,
+      ) == 1,
+      global_setting_payment_credential_out == global_setting_payment_credential,
+      // transaction won't mint anything 
+      value.is_zero(value.from_minted_value(mint)),
+      // validate authorized batchers must not be empty
+      !builtin.null_list(batchers),
     }
   }
 }

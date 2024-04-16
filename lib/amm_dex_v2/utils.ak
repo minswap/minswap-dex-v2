@@ -2,33 +2,56 @@ use aiken/builtin
 use aiken/bytearray
 use aiken/dict
 use aiken/hash
-use aiken/string
-use aiken/transaction.{Datum, DatumHash, InlineDatum, NoDatum}
-use aiken/transaction/value.{AssetName, PolicyId, ada_asset_name, ada_policy_id}
-use amm_dex_v2/types.{Asset, DatumMap}
-
-const zero_ascii_code = 48
-
-const nine_ascii_code = 57
-
-// Policy ID managed by the Minswap team, used for minting Batcher License
-pub const batcher_license_policy_id =
-  #"229013ad3a22d2d051a28e7f9214a32444ecf19998f7bdf0c2849862"
+use aiken/interval.{Finite, Interval, IntervalBound}
+use aiken/list
+use aiken/transaction.{Datum, DatumHash, InlineDatum, NoDatum, ValidityRange}
+use aiken/transaction/value.{
+  AssetName, PolicyId, Value, ada_asset_name, ada_policy_id,
+}
+use amm_dex_v2/types.{Asset, DatumMap, SortedValueList}
 
 // the legitimate Pool TokenName
 pub const pool_auth_asset_name = #"4d5350"
 
 // the legitimate Factory TokenName
-pub const factory_auth_asset_name = #"4d53"
+pub const factory_auth_asset_name = #"4d5346"
 
-// Policy ID managed by the Minswap team, used for minting Admin License assets
-pub const admin_policy_id =
-  #"f8c20eb8b2e773e21cf41ab6354cf09bd255ebed0bd8847c655e67b4"
-
-// Maximum expiration time of Batcher license from now (to prevent minting infinity license)
-pub const maximum_deadline_range = 77760000000
+// the legitimate Global Setting TokenName
+pub const global_setting_asset_name = #"4d534753"
 
 pub const default_burn_liquidity = 10
+
+pub const default_fee_denominator = 10000
+
+// Base Fee constraint
+// Max 20%
+pub const max_base_fee_numerator = 2000
+
+// Min 0.05%
+pub const min_base_fee_numerator = 5
+
+// Vol Fee constraint
+// Max 2%
+pub const max_vol_fee_numerator = 200
+
+// Min 0%
+pub const min_vol_fee_numerator = 0
+
+// Trading Fee constraint
+// Max 20%
+pub const max_trading_fee_numerator = 2000
+
+// Min 0.05%
+pub const min_trading_fee_numerator = 5
+
+// Fee Sharing constraint
+// Max 50%
+pub const max_fee_sharing_numerator = 5000
+
+// Min 16.66%
+pub const min_fee_sharing_numerator = 1666
+
+pub const min_pool_ada = 4500000
 
 pub fn sorted_asset(asset_a: Asset, asset_b: Asset) -> Bool {
   let Asset { policy_id: asset_a_policy_id, asset_name: asset_a_asset_name } =
@@ -90,31 +113,11 @@ test test_compute_lp_asset_name() {
   lp_asset_name == #"82e2b1fd27a7712a1a9cf750dfbea1a5778611b20e06dd6a611df7a643f8cb75"
 }
 
-pub fn bytearray_to_positive_int(byte_arr: ByteArray) -> Int {
-  let byte_len = builtin.length_of_bytearray(byte_arr)
-  do_bytearray_positive_int(byte_arr, byte_len - 1)
-}
-
-pub fn do_bytearray_positive_int(byte_arr: ByteArray, idx: Int) -> Int {
-  let byte = builtin.index_bytearray(byte_arr, idx)
-  if zero_ascii_code <= byte && byte <= nine_ascii_code {
-    if idx == 0 {
-      byte - zero_ascii_code
-    } else {
-      do_bytearray_positive_int(byte_arr, idx - 1) * 10 + (
-        byte - zero_ascii_code
-      )
-    }
-  } else {
-    fail
+pub fn must_find_script_inline_datum(datum: Datum) -> Data {
+  when datum is {
+    InlineDatum(dat) -> dat
+    _ -> fail
   }
-}
-
-test test_bytearray_to_positive_int() {
-  let r1 = bytearray_to_positive_int(string.to_bytearray(@"123"))
-  let r2 = bytearray_to_positive_int(string.to_bytearray(@"111"))
-  let r3 = bytearray_to_positive_int(string.to_bytearray(@"9013"))
-  r1 == 123 && r2 == 111 && r3 == 9013
 }
 
 pub fn must_find_script_datum(datums: DatumMap, datum: Datum) -> Data {
@@ -233,34 +236,21 @@ test test_list_at_index() {
 pub fn zip_with(
   arr1: List<a>,
   arr2: List<b>,
-  predicate: fn(a, b) -> result,
+  arr3: List<c>,
+  predicate: fn(a, b, c) -> result,
 ) -> List<result> {
   expect [x, ..xs] = arr1
   expect [y, ..ys] = arr2
+  expect [z, ..zs] = arr3
   if xs == [] {
-    expect [] = ys
-    [predicate(x, y)]
+    expect and {
+        [] == ys,
+        [] == zs,
+      }
+    [predicate(x, y, z)]
   } else {
-    [predicate(x, y), ..zip_with(xs, ys, predicate)]
+    [predicate(x, y, z), ..zip_with(xs, ys, zs, predicate)]
   }
-}
-
-test test_zip_with() {
-  let arr1 =
-    [1, 2, 3]
-  let arr2 =
-    [4, 5, 6]
-  let z1 = zip_with(arr1, arr2, fn(a1, a2) { a1 + a2 })
-  let z2 = zip_with(arr1, arr2, fn(a1, a2) { a1 * a2 })
-  z1 == [5, 7, 9] && z2 == [4, 10, 18]
-}
-
-test test_zip_with_throw_err() fail {
-  let arr1 =
-    [1, 2, 3]
-  let arr2 =
-    [4, 5, 6, 6]
-  zip_with(arr1, arr2, fn(a1, a2) { a1 + a2 }) == []
 }
 
 pub fn compare_list_length(arr1: List<a>, arr2: List<b>) -> Bool {
@@ -310,17 +300,207 @@ test test_compare_list_length_3() {
   !compare_list_length(arr1, arr2)
 }
 
-fn contains_element(list: List<a>, elem: a) -> Bool {
-  when list is {
-    [] -> False
-    [x, ..xs] -> elem == x || contains_element(xs, elem)
+const empty_mark =
+  #[0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+  ]
+
+fn do_is_unique_bytearray_unsorted(
+  self: ByteArray,
+  acc: ByteArray,
+  index: Int,
+  length: Int,
+) {
+  if index >= length {
+    True
+  } else {
+    let value_as_index = builtin.index_bytearray(self, index)
+    let acc_value = builtin.index_bytearray(acc, value_as_index)
+    if acc_value == 1 {
+      False
+    } else {
+      let left_slice = builtin.slice_bytearray(0, value_as_index, acc)
+      let righ_slice = builtin.slice_bytearray(value_as_index + 1, 64, acc)
+      let new_acc =
+        builtin.append_bytearray(
+          left_slice,
+          builtin.cons_bytearray(1, righ_slice),
+        )
+      do_is_unique_bytearray_unsorted(self, new_acc, index + 1, length)
+    }
   }
 }
 
-pub fn is_list_unique(list: List<a>) -> Bool {
-  when list is {
-    [] -> True
-    [_] -> True
-    [x, ..xs] -> !contains_element(xs, x) && is_list_unique(xs)
+pub fn is_unique_bytearray_unsorted(array: ByteArray) -> Bool {
+  let length = builtin.length_of_bytearray(array)
+  if length > 0 {
+    do_is_unique_bytearray_unsorted(array, empty_mark, 0, length)
+  } else {
+    False
   }
+}
+
+test test_unique_bytearray_unsorted_1() {
+  let array =
+    #[1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17,
+      18,
+      19,
+      20,
+      21,
+      22,
+      23,
+      24,
+      25,
+      26,
+      27,
+      28,
+      29,
+      30,
+      31,
+      32,
+      33,
+      34,
+      35,
+      36,
+      37,
+      38,
+      39,
+      40,
+    ]
+  is_unique_bytearray_unsorted(array)
+}
+
+test test_unique_bytearray_unsorted_2() {
+  let array = #[1, 2, 3, 4, 5, 6, 5]
+  !is_unique_bytearray_unsorted(array)
+}
+
+test test_unique_bytearray_unsorted_3() {
+  let array = #[0, 1, 2, 3, 4, 5, 6, 0]
+  !is_unique_bytearray_unsorted(array)
+}
+
+test test_unique_bytearray_unsorted_4() fail {
+  let array = #[0, 1, 2, 3, 4, 5, 64, 0]
+  !is_unique_bytearray_unsorted(array)
+}
+
+test test_unique_bytearray_unsorted_5() {
+  let array = #[]
+  !is_unique_bytearray_unsorted(array)
+}
+
+// Approximate the current time by obtaining the upper and lower bounds of the validity range. 
+// Ensure that the bounds do not exceed 10 minutes.
+pub fn must_get_current_time_approximation(validity_range: ValidityRange) -> Int {
+  let Interval {
+    lower_bound: IntervalBound { bound_type: lower_bound_type, .. },
+    upper_bound: IntervalBound { bound_type: upper_bound_type, .. },
+  } = validity_range
+  expect Finite(start_valid_time_range) = lower_bound_type
+  expect Finite(end_valid_time_range) = upper_bound_type
+  if end_valid_time_range - start_valid_time_range <= 10 * 60 * 1000 {
+    ( end_valid_time_range - start_valid_time_range ) / 2 + start_valid_time_range
+  } else {
+    fail
+  }
+}
+
+pub fn must_get_finite_start_validity(validity_range: ValidityRange) -> Int {
+  let Interval {
+    lower_bound: IntervalBound { bound_type: lower_bound_type, .. },
+    ..
+  } = validity_range
+  expect Finite(start_valid_time_range) = lower_bound_type
+  start_valid_time_range
+}
+
+pub fn value_to_list(val: Value) -> SortedValueList {
+  val
+    |> value.to_dict
+    |> dict.to_list
+    |> list.map(
+         fn(e) {
+           let (k, v) = e
+           (k, dict.to_list(v))
+         },
+       )
 }

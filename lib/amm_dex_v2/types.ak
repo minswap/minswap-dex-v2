@@ -1,6 +1,8 @@
 use aiken/dict.{Dict}
 use aiken/hash.{Blake2b_224, Blake2b_256, Hash}
-use aiken/transaction/credential.{Address, Script, VerificationKey}
+use aiken/transaction/credential.{
+  Address, Script, StakeCredential, VerificationKey,
+}
 use aiken/transaction/value.{AssetName, PolicyId}
 
 pub type CustomDatumHash =
@@ -12,6 +14,9 @@ pub type ValidatorHash =
 pub type PubKeyHash =
   Hash<Blake2b_224, VerificationKey>
 
+pub type SortedValueList =
+  List<(ByteArray, List<(ByteArray, Int)>)>
+
 pub type Asset {
   policy_id: PolicyId,
   asset_name: AssetName,
@@ -20,47 +25,72 @@ pub type Asset {
 pub type DatumMap =
   Dict<Hash<Blake2b_256, Data>, Data>
 
-// Profit Sharing Numerator & Denominator
-pub type ProfitSharing =
-  (Int, Int)
-
 pub type PoolDatum {
+  pool_batching_stake_credential: StakeCredential,
   asset_a: Asset,
   asset_b: Asset,
   total_liquidity: Int,
   reserve_a: Int,
   reserve_b: Int,
-  trading_fee_numerator: Int,
-  trading_fee_denominator: Int,
-  profit_sharing_opt: Option<ProfitSharing>,
+  base_fee_a_numerator: Int,
+  base_fee_b_numerator: Int,
+  fee_sharing_numerator_opt: Option<Int>,
+  allow_dynamic_fee: Bool,
 }
 
-pub type UpdatePoolFeeOrStakeCredentialAction {
+pub type UpdatePoolParametersAction {
   UpdatePoolFee
+  UpdateDynamicFee
   UpdatePoolStakeCredential
 }
 
 pub type PoolRedeemer {
-  Batching {
-    input_indexes: List<Int>,
-    orders_fee: List<Int>,
-    license_index: Int,
-  }
-  MultiRouting {
-    license_index: Int,
-    routing_in_indexes: List<Int>,
-    routing_out_indexes: List<Int>,
-    order_fee: Int,
-  }
-  UpdatePoolFeeOrStakeCredential {
-    action: UpdatePoolFeeOrStakeCredentialAction,
-  }
-  WithdrawLiquidityShare
+  Batching
+  UpdatePoolParameters { action: UpdatePoolParametersAction }
+  WithdrawFeeSharing
+}
+
+pub type PoolBatchingRedeemer {
+  batcher_index: Int,
+  orders_fee: List<Int>,
+  input_indexes: ByteArray,
+  pool_input_indexes_opt: Option<ByteArray>,
+  vol_fees: List<Option<Int>>,
 }
 
 pub type SwapRouting {
   lp_asset: Asset,
   a_to_b_direction: Bool,
+}
+
+// Option when someone want to swap a token
+pub type SwapAmountOption {
+  // Swap a specific amount of token
+  SAOSpecificAmount { swap_amount: Int }
+  // Swap a all amount of the token that is available on the order's value
+  // @deducted_amount will be subtract from the amount
+  // This option is useful for integration where the creator doesn't know the exact amount that will be swapped
+  SAOAll { deducted_amount: Int }
+}
+
+// Option when someone want to deposit tokens
+pub type DepositAmountOption {
+  // Deposit specific amount of tokens
+  DAOSpecificAmount { deposit_amount_a: Int, deposit_amount_b: Int }
+  // Deposit all amount of the tokens that are available on the order's value
+  // @deducted_amount_a and @deducted_amount_b will be subtract from the amount
+  // This option is useful for integration where the creator doesn't know the exact amount that will be deposited
+  DAOAll { deducted_amount_a: Int, deducted_amount_b: Int }
+}
+
+// Option when someone want to withdraw tokens
+pub type WithdrawAmountOption {
+  // Withdraw specific amount of LP Token
+  WAOSpecificAmount { withdrawal_lp_amount: Int }
+  // Withdrawl all amount of the LP token that is available on the order's value
+  // @deducted_amount_lp will be subtract from the amount
+  // This option is useful for integration where the creator doesn't know the exact amount that will be withdrawn
+  WAOAll { deducted_amount_lp: Int }
 }
 
 pub type OrderStep {
@@ -70,7 +100,7 @@ pub type OrderStep {
     // The AToB direction of swap request. True for A -> B and False for B -> A
     a_to_b_direction: Bool,
     // Amount of Asset In which users want to exchange
-    swap_amount: Int,
+    swap_amount_option: SwapAmountOption,
     // Minimum amount of Asset Out which users want to receive after exchanging
     minimum_receive: Int,
     // Decide the Order behavior in case Order is not meet the slippage tolerance
@@ -82,11 +112,9 @@ pub type OrderStep {
     // The AToB direction of swap request. True for A -> B and False for B -> A
     a_to_b_direction: Bool,
     // Amount of Asset In which users want to exchange
-    swap_amount: Int,
+    swap_amount_option: SwapAmountOption,
     // Maximum amount of Asset Out which users want to receive after exchanging
     stop_loss_receive: Int,
-    // Decide the Order behavior in case Order is not meet the slippage tolerance
-    killable: Bool,
   }
   // OCO is used for exchanging specific amount of single asset in the liquidity pool.
   // The order will be executed if the received amount is less than or equal to `stop_loss_receive` 
@@ -95,13 +123,11 @@ pub type OrderStep {
     // The AToB direction of swap request. True for A -> B and False for B -> A
     a_to_b_direction: Bool,
     // Amount of Asset In which users want to exchange
-    swap_amount: Int,
+    swap_amount_option: SwapAmountOption,
     // Minimum amount of Asset Out which users want to receive after exchanging
     minimum_receive: Int,
     // Maximum amount of Asset Out which users want to receive after exchanging
     stop_loss_receive: Int,
-    // Decide the Order behavior in case Order is not meet the slippage tolerance
-    killable: Bool,
   }
   // SwapExactOut is used for exchanging single asset in the liquidity pool and receiving the exact amout of other asset.
   // The order will be executed if the received amount is equal to `expected_receive`
@@ -109,7 +135,7 @@ pub type OrderStep {
     // The AToB direction of swap request. True for A -> B and False for B -> A 
     a_to_b_direction: Bool,
     // Maximum amount of Asset In which users want to exchange
-    maximum_swap_amount: Int,
+    maximum_swap_amount_option: SwapAmountOption,
     // The exact amount of Asset Out which users want to receive after exchanging
     expected_receive: Int,
     // Decide the Order behavior in case Order is not meet the slippage tolerance
@@ -117,10 +143,8 @@ pub type OrderStep {
   }
   // Deposit is used for depositing pool's assets and receiving LP Token
   Deposit {
-    // Amount of Asset A which users want to deposit
-    deposit_amount_a: Int,
-    // Amount of Asset B which users want to deposit
-    deposit_amount_b: Int,
+    // Amount of Asset A and B which users want to deposit
+    deposit_amount_option: DepositAmountOption,
     // The minimum amount of LP Token which users want to receive after depositing
     minimum_lp: Int,
     // Decide the Order behavior in case Order is not meet the slippage tolerance
@@ -129,7 +153,7 @@ pub type OrderStep {
   // Withdraw is used for withdrawing pool's asset with the exact assets ratio of the liquidity pool at that time
   Withdraw {
     // Amount of LP Asset which users want to withdraw
-    withdrawal_lp_amount: Int,
+    withdrawal_amount_option: WithdrawAmountOption,
     // minimum received amounts of Asset A
     minimum_asset_a: Int,
     // minimum received amounts of Asset B
@@ -142,7 +166,7 @@ pub type OrderStep {
     // The AToB direction of ZapOut request. `True` in case Asset Out is B and vice versa
     a_to_b_direction: Bool,
     // Amount of LP Asset which users want to withdraw
-    withdrawal_lp_amount: Int,
+    withdrawal_amount_option: WithdrawAmountOption,
     // Minimum amount of Asset Out which users want to receive after withdrawing
     minimum_receive: Int,
     // Decide the Order behavior in case Order is not meet the slippage tolerance
@@ -169,7 +193,7 @@ pub type OrderStep {
   // WithdrawImbalance is used for withdrawing custom amount of assets.
   WithdrawImbalance {
     // Amount of LP Asset which users want to withdraw
-    withdrawal_lp_amount: Int,
+    withdrawal_amount_option: WithdrawAmountOption,
     //  The ratio of Asset A and Asset B users want to receive after withdrawing
     ratio_asset_a: Int,
     ratio_asset_b: Int,
@@ -186,21 +210,37 @@ pub type OrderStep {
     // which is defined Liquidity Pools the swap is routing through
     routings: List<SwapRouting>,
     // Amount of Asset In which users want to exchange
-    swap_amount: Int,
+    swap_amount_option: SwapAmountOption,
     // Minimum amount of Asset Out which users want to receive after exchanging
     minimum_receive: Int,
   }
+  Donation
+}
+
+pub type ExtraOrderDatum {
+  EODNoDatum
+  EODDatumHash { hash: CustomDatumHash }
+  EODInlineDatum { hash: CustomDatumHash }
+}
+
+pub type OrderAuthorizationMethod {
+  OAMSignature { pub_key_hash: PubKeyHash }
+  OAMSpendScript { script_hash: ValidatorHash }
+  OAMWithdrawScript { script_hash: ValidatorHash }
+  OAMMintScript { script_hash: ValidatorHash }
 }
 
 pub type OrderDatum {
-  // The address of order's creator, only sender can cancel the order immediately
-  sender: Address,
+  // The address's payment credential that can cancel the order, can by PubKey or Script
+  canceller: OrderAuthorizationMethod,
+  // The address of the output after being killed by Batcher or cancelled by bots (order is expired)
+  refund_receiver: Address,
   // The datum hash of the output after being killed by Batcher or cancelled by bots (order is expired)
-  sender_datum_hash_opt: Option<CustomDatumHash>,
+  refund_receiver_datum: ExtraOrderDatum,
   // The address which receives the funds after order is processed
-  receiver: Address,
+  success_receiver: Address,
   // The datum hash of the output after order is processed.
-  receiver_datum_hash_opt: Option<CustomDatumHash>,
+  success_receiver_datum: ExtraOrderDatum,
   // The Liquidity Pool's LP Asset that the order will be applied to
   lp_asset: Asset,
   // The information about Order Type
@@ -231,23 +271,17 @@ pub type FactoryRedeemer {
 }
 
 pub type AuthenRedeemer {
-  MintFactoryAuthen
+  DexInitialization
   CreatePool
-}
-
-pub type OrderSpendingRedeemer {
-  // it's used for finding Pool Input faster
-  pool_input_index: Int,
 }
 
 pub type BatchingPool {
   asset_a: Asset,
   asset_b: Asset,
   lp_asset: Asset,
-  trading_fee_numerator: Int,
-  trading_fee_denominator: Int,
-  profit_sharing: Option<(Int, Int)>,
-  address: Address,
+  trading_fee_a_numerator: Int,
+  trading_fee_b_numerator: Int,
+  fee_sharing_numerator_opt: Option<Int>,
   pool_state_in: PoolState,
   pool_state_out: PoolState,
 }
@@ -259,3 +293,20 @@ pub type BatchingPool {
 // Total Liquidity
 pub type PoolState =
   (Int, Int, Int, Int, Int)
+
+// This setting grants permissions to authorized actors who can interact with Liquidity Pool features.
+pub type GlobalSetting {
+  // List of authorized batchers who can process orders.
+  batchers: List<Address>,
+  // The actor who can update the Pool's base fee and fee sharing.
+  pool_fee_updater: Address,
+  // The actor who can withdraw the Pool's fee sharing.
+  fee_sharing_taker: Address,
+  // The actor who can change the Pool's stake key.
+  pool_stake_key_updater: Address,
+  // The actor who can update the Pool's dynamic fee.
+  pool_dynamic_fee_updater: Address,
+  // The actor who can update the addresses mentioned above.
+  // This admin can be transferred to another wallet and should be stored in the most secure location.
+  admin: Address,
+}
