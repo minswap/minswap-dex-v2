@@ -5,16 +5,15 @@ use aiken/transaction/credential.{Address, ScriptCredential, StakeCredential}
 use aiken/transaction/value.{PolicyId, ada_asset_name, ada_policy_id}
 use amm_dex_v2/math
 use amm_dex_v2/pool_validation
-use amm_dex_v2/types.{
-  Asset, FactoryDatum, FactoryRedeemer, PoolDatum, ValidatorHash,
-}
+use amm_dex_v2/types.{Asset, FactoryDatum, FactoryRedeemer, PoolDatum}
 use amm_dex_v2/utils
 
 validator(
   // The PolicyID of Authen Minting Policy
   authen_policy_id: PolicyId,
-  // ValidatorHash of Pool Contract
-  pool_hash: ValidatorHash,
+  // Address of Pool Contract
+  // This address has Pool Validator Hash as Payment Credential and Stake Credential is controlled by Minswap Labs
+  pool_address: Address,
   // Stake Credential of Pool Batching Contract
   pool_batching_stake_credential: StakeCredential,
 ) {
@@ -135,8 +134,8 @@ validator(
           let Address { payment_credential: out_addr_payment_credential, .. } =
             out_addr
           when out_addr_payment_credential is {
-            ScriptCredential(hash) -> and {
-                pool_hash == hash,
+            ScriptCredential(_) -> and {
+                pool_address == out_addr,
                 value.quantity_of(
                   out_value,
                   authen_policy_id,
