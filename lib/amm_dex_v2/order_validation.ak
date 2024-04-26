@@ -44,7 +44,7 @@ fn get_optimized_swap_output_value(
   a_to_b: Bool,
 ) -> Option<SortedValueList> {
   // Ensure that asset A is ADA
-  if asset_a_policy_id == #"" && asset_a_asset_name == #"" {
+  if utils.is_ada_asset(asset_a_policy_id, asset_a_asset_name) {
     let order_in_value_list = order_in_value |> utils.value_to_list
     let ada_entry = builtin.head_list(order_in_value_list)
     let rest_0 = builtin.tail_list(order_in_value_list)
@@ -57,7 +57,15 @@ fn get_optimized_swap_output_value(
         if a_to_b {
           Some(
             [
-              (#"", [(#"", asset_a_amount - ( used_batcher_fee + amount_in ))]),
+              (
+                ada_policy_id,
+                [
+                  (
+                    ada_asset_name,
+                    asset_a_amount - ( used_batcher_fee + amount_in ),
+                  ),
+                ],
+              ),
               (asset_b_policy_id, [(asset_b_asset_name, amount_out)]),
             ],
           )
@@ -74,14 +82,32 @@ fn get_optimized_swap_output_value(
           if asset_amount > amount_in {
             Some(
               [
-                (#"", [(#"", asset_a_amount - used_batcher_fee + amount_out)]),
+                (
+                  ada_policy_id,
+                  [
+                    (
+                      ada_asset_name,
+                      asset_a_amount - used_batcher_fee + amount_out,
+                    ),
+                  ],
+                ),
                 (asset_pid, [(asset_tn, asset_amount - amount_in)]),
               ],
             )
           } else if asset_amount == amount_in {
             // Asset B have no change
             Some(
-              [(#"", [(#"", asset_a_amount - used_batcher_fee + amount_out)])],
+              [
+                (
+                  ada_policy_id,
+                  [
+                    (
+                      ada_asset_name,
+                      asset_a_amount - used_batcher_fee + amount_out,
+                    ),
+                  ],
+                ),
+              ],
             )
           } else {
             fail
@@ -968,6 +994,9 @@ fn validate_donation(
     if utils.is_ada_asset(asset_a_policy_id, asset_a_asset_name) {
       temp_amount_a - used_batcher_fee
     } else {
+      let ada_amount =
+        order_in_value |> value.quantity_of(ada_policy_id, ada_asset_name)
+      expect ada_amount >= used_batcher_fee
       temp_amount_a
     }
   let amount_b =
