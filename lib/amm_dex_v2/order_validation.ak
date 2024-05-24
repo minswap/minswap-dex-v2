@@ -1304,6 +1304,7 @@ pub fn apply_orders(
     max_batcher_fee,
     lp_asset: order_lp_asset,
     expiry_setting_opt,
+    extra_data,
   } = order_in_datum
   expect and {
       // max_batcher_fee must be positive
@@ -1612,6 +1613,7 @@ pub fn apply_orders(
                 },
                 max_batcher_fee: max_batcher_fee - used_batcher_fee,
                 expiry_setting_opt,
+                extra_data,
               }
             and {
               expected_order_out_datum == order_out_datum,

@@ -252,6 +252,10 @@ pub type OrderDatum {
   // - Order Expired time: If the order is not executed after Expired Time, anyone can help the owner cancel it
   // - Max tip for cancelling expired order
   expiry_setting_opt: Option<(Int, Int)>,
+  // The extra data of the order contract
+  // Its scope is not defined yet but it will be used on the future features of Order contract
+  // Pool contract can safely ignore this field. It will only be used by future Order contracts and external contracts that are integrated with future Order contract.
+  extra_data: Option<Data>,
 }
 
 pub type OrderRedeemer {

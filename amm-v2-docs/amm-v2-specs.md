@@ -167,6 +167,7 @@ An Order Datum keeps information about Order Type and some other informations:
 - _step_: The information about Order Type which we mentioned above
 - _max_batcher_fee_: The maximum fee users have to pay to Batcher to execute batching transaction. The actual fee Batcher will take might be less than the maximum fee
 - _expired_setting_opt_: contain Order Expired time and max tip for cancelling expired order. If the order is not executed after Expired Time, anyone can help the owner cancel it
+- _extra_data_: The extra data of the order contract. Its scope is not defined yet but it will be used on the future features of Order contract. Pool contract can safely ignore this field. It will only be used by future Order contracts and external contracts that are integrated with future Order contract.
 
 
 #### 3.3.2.3 Redeemer

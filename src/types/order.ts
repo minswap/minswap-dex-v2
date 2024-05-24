@@ -145,6 +145,7 @@ export type OrderDatum = {
     step: OrderSwapExactInStep;
     maxBatcherFee: bigint;
     expiredOptions?: OrderExpiry;
+    extraData?: Data
 }
 
 export namespace OrderDatum {
@@ -161,7 +162,8 @@ export namespace OrderDatum {
             dat.expiredOptions ? new Constr(0, [
                 dat.expiredOptions.expiredTime,
                 dat.expiredOptions.maxCancellingTip
-            ]) : new Constr(1, [])
+            ]) : new Constr(1, []),
+            new Constr(1, [])
         ])
     }
 }
