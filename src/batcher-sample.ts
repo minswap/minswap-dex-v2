@@ -13,6 +13,7 @@ import { EmulatorProvider } from "./provider";
 import { getContractScripts } from "./script";
 import { ADA, Asset } from "./types/asset";
 import { GlobalSetting } from "./types/global-setting";
+import { NetworkId } from "./types/network";
 import {
   AuthorizationMethodType,
   OrderAmountType,
@@ -26,9 +27,10 @@ import { TxIn } from "./types/tx";
 
 const DEFAULT_BATCHER_FEE = 2_000000n;
 const DEFAULT_DEPOSIT_ADA = 2_000000n;
-const DEFAULT_INIT_POOL_ADA = 3_000000n;
+const DEFAULT_INIT_POOL_ADA = 4_500000n;
 
 const DEFAULT_FEE_DENOMINATOR = 10000n;
+const DEFAULT_NETWORK_ID = NetworkId.TESTNET;
 
 function computeLPAssetName(assetA: Asset, assetB: Asset): string {
   const k1 = sha3(assetA.policyId + assetA.tokenName);
@@ -160,11 +162,80 @@ function calculateOrderIndexes(txIns: TxIn[]): Uint8Array {
   return new Uint8Array(ret.reverse());
 }
 
+type ContractReferences = {
+  poolRef: UTxO;
+  orderRef: UTxO;
+  lpRef: UTxO;
+  factoryRef: UTxO;
+  expiredOrderCancelRef: UTxO;
+  poolBatchingRef: UTxO;
+};
+
+function getDummyContractReferences(lucid: Lucid): ContractReferences {
+  const referencesAddr =
+    "addr_test1vzztre5epvtj5p72sh28nvrs3e6s4xxn95f66cvg0sqsk7qd3mah0";
+  const testReferenceTxHash =
+    "eb5d5d3cf842b171b09a1878fc8c16cf7a5ad6a0d18e3122feb31078e224680a";
+  const {
+    poolScript,
+    orderScript,
+    authenScript,
+    factoryScript,
+    expiredOrderCancelScript,
+    poolBatchingScript,
+  } = getContractScripts(lucid, DEFAULT_NETWORK_ID);
+
+  return {
+    poolRef: {
+      txHash: testReferenceTxHash,
+      outputIndex: 1,
+      address: referencesAddr,
+      scriptRef: poolScript,
+      assets: {},
+    },
+    orderRef: {
+      txHash: testReferenceTxHash,
+      outputIndex: 2,
+      address: referencesAddr,
+      scriptRef: orderScript,
+      assets: {},
+    },
+    lpRef: {
+      txHash: testReferenceTxHash,
+      outputIndex: 3,
+      address: referencesAddr,
+      scriptRef: authenScript,
+      assets: {},
+    },
+    factoryRef: {
+      txHash: testReferenceTxHash,
+      outputIndex: 4,
+      address: referencesAddr,
+      scriptRef: factoryScript,
+      assets: {},
+    },
+    expiredOrderCancelRef: {
+      txHash: testReferenceTxHash,
+      outputIndex: 5,
+      address: referencesAddr,
+      scriptRef: expiredOrderCancelScript,
+      assets: {},
+    },
+    poolBatchingRef: {
+      txHash: testReferenceTxHash,
+      outputIndex: 6,
+      address: referencesAddr,
+      scriptRef: poolBatchingScript,
+      assets: {},
+    },
+  };
+}
+
 function getGlobalSetting(lucid: Lucid): {
   globalSetting: GlobalSetting;
   globalSettingUtxo: UTxO;
 } {
-  const script = getContractScripts(lucid);
+  const script = getContractScripts(lucid, DEFAULT_NETWORK_ID);
   const pubkeyBatcher = getPubKeyBatcher();
   const scriptBatcher = getScriptBatcher(lucid);
   const globalSetting: GlobalSetting = {
@@ -286,7 +357,8 @@ async function buildTxByPubKeyBatcher({
     };
   }[];
 }): Promise<void> {
-  const scripts = getContractScripts(lucid);
+  const scripts = getContractScripts(lucid, DEFAULT_NETWORK_ID);
+  const referenceScripts = getDummyContractReferences(lucid);
   const globalSetting = getGlobalSetting(lucid);
   const { batcherAddr, licenseUtxo, skey } = getPubKeyBatcher();
 
@@ -316,9 +388,9 @@ async function buildTxByPubKeyBatcher({
     .newTx()
     .readFrom([
       globalSetting.globalSettingUtxo,
-      scripts.references.poolRef,
-      scripts.references.orderRef,
-      scripts.references.poolBatchingRef,
+      referenceScripts.poolRef,
+      referenceScripts.orderRef,
+      referenceScripts.poolBatchingRef,
     ])
     .collectFrom([pool.poolIn], Data.to(new Constr(0, [])))
     .collectFrom(
@@ -373,7 +445,8 @@ async function buildTxByScriptBatcher({
     };
   }[];
 }): Promise<void> {
-  const scripts = getContractScripts(lucid);
+  const scripts = getContractScripts(lucid, DEFAULT_NETWORK_ID);
+  const referenceScripts = getDummyContractReferences(lucid);
   const globalSetting = getGlobalSetting(lucid);
   const { batcherAddr, licenseUtxo, batcherRef, collateral, collateralSkey } =
     getScriptBatcher(lucid);
@@ -405,9 +478,9 @@ async function buildTxByScriptBatcher({
     .readFrom([
       globalSetting.globalSettingUtxo,
       batcherRef,
-      scripts.references.poolRef,
-      scripts.references.orderRef,
-      scripts.references.poolBatchingRef,
+      referenceScripts.poolRef,
+      referenceScripts.orderRef,
+      referenceScripts.poolBatchingRef,
     ])
     .collectFrom([pool.poolIn], Data.to(new Constr(0, [])))
     .collectFrom(
@@ -449,7 +522,7 @@ async function buildTxByScriptBatcher({
 
 async function main(): Promise<void> {
   const lucid = await Lucid.new(new EmulatorProvider(), "Preprod");
-  const scripts = getContractScripts(lucid);
+  const scripts = getContractScripts(lucid, DEFAULT_NETWORK_ID);
   const assetA: Asset = ADA;
   const assetB: Asset = {
     policyId: "e16c2dc8ae937e8d3790c7fd7168d7b994621ba14ca11415f39fed72",

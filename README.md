@@ -1,55 +1,40 @@
-# amm_dex_v2
+# 😻 Minswap DEX V2 Contract
 
-Write validators in the `validators` folder, and supporting functions in the `lib` folder using `.ak` as a file extension.
-
-For example, as `validators/always_true.ak`
-
-```gleam
-validator {
-  fn spend(_datum: Data, _redeemer: Data, _context: Data) -> Bool {
-    True
-  }
-}
-```
+## Structure
+- Main contracts:
+  - [Authen Minting Policy](/validators/authen_minting_policy.ak)
+  - [Pool Factory Validator](/validators/factory_validator.ak)
+  - [Liquidity Pool Validator](/validators/pool_validator.ak)
+  - [Order Validator](/validators/order_validator.ak)
+- Library: under [library](/lib/amm_dex_v2) package
 
 ## Building
 
-```sh
-aiken build
-```
+### Prerequisites
+- Install [npm](https://docs.npmjs.com/downloading-and-installing-node-js-and-npm)
+- Install [Aiken v1.0.24-alpha](https://aiken-lang.org/installation-instructions)
+- Run `aiken build` to double check scripts bytecode in `plutus.json` file 
+- Run `npm install` to install necessary dependencies 
+- Run `npm run exec src/build-plutus.ts` to build scripts with initial parameters. The result is `script.json` file
 
 ## Testing
 
-You can write tests in any module using the `test` keyword. For example:
+- Run `aiken check` to run all unit tests of the contract
 
-```gleam
-test foo() {
-  1 + 1 == 2
-}
-```
 
-To run all tests, simply do:
+## Deployment
 
-```sh
-aiken check
-```
+### Testnet Preprod
+The smart contract has already been deployed on Testnet Preprod.
 
-To run only tests matching the string `foo`, do:
+The detailed information on the deployment is located in [References](/deployed/preprod/references.json)
 
-```sh
-aiken check -m foo
-```
+## Audit Report
 
-## Documentation
+The contract audit has been conducted by Certik and Anastasia Labs
+The Audit report is available under [Audit Report](/audit-report) folder
 
-If you're writing a library, you might want to generate an HTML documentation for it.
+## References
 
-Use:
-
-```sh
-aiken docs
-```
-
-## Resources
-
-Find more on the [Aiken's user manual](https://aiken-lang.org).
+1. [Specification](/amm-v2-docs/amm-v2-specs.md)
+2. [Formula](/amm-v2-docs/formula.md)

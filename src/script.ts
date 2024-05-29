@@ -3,19 +3,18 @@ import {
   applyParamsToScript,
   Constr,
   Credential,
-  fromHex,
   fromText,
   Lucid,
   MintingPolicy,
   Script,
   SpendingValidator,
-  UTxO,
   WithdrawalValidator,
 } from "lucid-cardano";
 
-import { Asset } from "./types/asset";
-import { TxIn } from "./types/tx";
 import { AddressPlutusData } from "./types/address";
+import { Asset } from "./types/asset";
+import { NetworkId } from "./types/network";
+import { TxIn } from "./types/tx";
 
 type PlutusValidatorCompiled = {
   title: string;
@@ -25,22 +24,46 @@ type PlutusCompiled = {
   validators: PlutusValidatorCompiled[];
 };
 
-function getInitialParameters(): {
+type ContractParameters = {
   seedTxIn: TxIn;
   factoryNFTName: string;
   poolNFTName: string;
   globalSettingNFTName: string;
-} {
-  return {
+  poolDefaultStakeKey: Credential;
+};
+
+export const INITIAL_CONTRACT_PARAMETERS: Record<
+  NetworkId,
+  ContractParameters
+> = {
+  [NetworkId.TESTNET]: {
     seedTxIn: {
-      txId: "2cc240daa819b2ec18a9fc9a8c86c6f2145328a64debd14ead32c589a6bfb22d",
-      index: 1,
+      txId: "70ffe718f52cee723f88861ea85ff61f80b628210a8728659ed08c11eedba7fe",
+      index: 2,
     },
     factoryNFTName: "MSF",
     poolNFTName: "MSP",
     globalSettingNFTName: "MSGS",
-  };
-}
+    poolDefaultStakeKey: {
+      type: "Key",
+      hash: "83ec96719dc0591034b78e472d6f477446261fec4bc517fa4d047f02",
+    },
+  },
+  // Not decided yet
+  [NetworkId.MAINNET]: {
+    seedTxIn: {
+      txId: "70ffe718f52cee723f88861ea85ff61f80b628210a8728659ed08c11eedba7fe",
+      index: 2,
+    },
+    factoryNFTName: "MSF",
+    poolNFTName: "MSP",
+    globalSettingNFTName: "MSGS",
+    poolDefaultStakeKey: {
+      type: "Key",
+      hash: "83ec96719dc0591034b78e472d6f477446261fec4bc517fa4d047f02",
+    },
+  },
+};
 
 function readValidator(): {
   order: SpendingValidator;
@@ -121,28 +144,36 @@ type ContractScript = {
   poolAuthAsset: Asset;
   factoryAuthAsset: Asset;
   globalSettingAsset: Asset;
-  references: {
-    poolRef: UTxO;
-    orderRef: UTxO;
-    lpRef: UTxO;
-    factoryRef: UTxO;
-    expiredOrderCancelRef: UTxO;
-    poolBatchingRef: UTxO;
-  };
+
+  poolScript: Script;
+  orderScript: Script;
+  authenScript: Script;
+  factoryScript: Script;
+  expiredOrderCancelScript: Script;
+  poolBatchingScript: Script;
 };
 
 let contractScript: ContractScript | undefined = undefined;
 
-export function getContractScripts(lucid: Lucid): ContractScript {
+export function getContractScripts(
+  lucid: Lucid,
+  networkId: NetworkId
+): ContractScript {
   if (contractScript) {
     return contractScript;
   }
   const validators = readValidator();
-  const initialParameters = getInitialParameters();
+  const {
+    seedTxIn,
+    factoryNFTName,
+    poolNFTName,
+    globalSettingNFTName,
+    poolDefaultStakeKey,
+  } = INITIAL_CONTRACT_PARAMETERS[networkId];
   const authenMintingScript: Script = {
     type: "PlutusV2",
     script: applyParamsToScript(validators.authen.script, [
-      TxIn.toPlutus(initialParameters.seedTxIn),
+      TxIn.toPlutus(seedTxIn),
     ]),
   };
   const authenPolicyId = lucid.utils.mintingPolicyToId(authenMintingScript);
@@ -153,11 +184,8 @@ export function getContractScripts(lucid: Lucid): ContractScript {
   const poolHash = lucid.utils.validatorToScriptHash(poolScript);
   const poolCreationAddress = lucid.utils.validatorToAddress(
     poolScript,
-    {
-      type: "Key",
-      hash: "83ec96719dc0591034b78e472d6f477446261fec4bc517fa4d047f02"
-    }
-  )
+    poolDefaultStakeKey
+  );
   const poolBatchingScript: Script = {
     type: "PlutusV2",
     script: applyParamsToScript(validators.poolBatching.script, [
@@ -209,28 +237,6 @@ export function getContractScripts(lucid: Lucid): ContractScript {
   const poolBatchingAddress =
     lucid.utils.validatorToRewardAddress(poolBatchingScript);
 
-  const referencesAddr =
-    "addr_test1vzztre5epvtj5p72sh28nvrs3e6s4xxn95f66cvg0sqsk7qd3mah0";
-  const testReferenceTxHash =
-    "eb5d5d3cf842b171b09a1878fc8c16cf7a5ad6a0d18e3122feb31078e224680a";
-
-  const authenSize = fromHex(authenMintingScript.script).length;
-  const orderSize = fromHex(orderScript.script).length;
-  const poolSize = fromHex(poolScript.script).length;
-  const factorySize = fromHex(factoryScript.script).length;
-  const expiredOrderSize = fromHex(
-    expiredOrderCancellationScript.script
-  ).length;
-  const poolBatchingSize = fromHex(poolBatchingScript.script).length;
-
-  console.log(`
-    - Authen size: ${authenSize} bytes
-    - Order size: ${orderSize} bytes
-    - Pool size: ${poolSize} bytes
-    - Factory size: ${factorySize} bytes
-    - Expired Order Cancel size: ${expiredOrderSize} bytes
-    - Pool batching size: ${poolBatchingSize} bytes
-  `);
   contractScript = {
     authenPolicyId,
     authenAddress,
@@ -245,60 +251,22 @@ export function getContractScripts(lucid: Lucid): ContractScript {
     },
     poolAuthAsset: {
       policyId: authenPolicyId,
-      tokenName: fromText(initialParameters.poolNFTName),
+      tokenName: fromText(poolNFTName),
     },
     factoryAuthAsset: {
       policyId: authenPolicyId,
-      tokenName: fromText(initialParameters.factoryNFTName),
+      tokenName: fromText(factoryNFTName),
     },
     globalSettingAsset: {
       policyId: authenPolicyId,
-      tokenName: fromText(initialParameters.globalSettingNFTName),
+      tokenName: fromText(globalSettingNFTName),
     },
-    references: {
-      poolRef: {
-        txHash: testReferenceTxHash,
-        outputIndex: 1,
-        address: referencesAddr,
-        scriptRef: poolScript,
-        assets: {},
-      },
-      orderRef: {
-        txHash: testReferenceTxHash,
-        outputIndex: 2,
-        address: referencesAddr,
-        scriptRef: orderScript,
-        assets: {},
-      },
-      lpRef: {
-        txHash: testReferenceTxHash,
-        outputIndex: 3,
-        address: referencesAddr,
-        scriptRef: authenMintingScript,
-        assets: {},
-      },
-      factoryRef: {
-        txHash: testReferenceTxHash,
-        outputIndex: 4,
-        address: referencesAddr,
-        scriptRef: factoryScript,
-        assets: {},
-      },
-      expiredOrderCancelRef: {
-        txHash: testReferenceTxHash,
-        outputIndex: 5,
-        address: referencesAddr,
-        scriptRef: expiredOrderCancellationScript,
-        assets: {},
-      },
-      poolBatchingRef: {
-        txHash: testReferenceTxHash,
-        outputIndex: 6,
-        address: referencesAddr,
-        scriptRef: poolBatchingScript,
-        assets: {},
-      },
-    },
+    poolScript: poolScript,
+    orderScript: orderScript,
+    authenScript: authenMintingScript,
+    factoryScript: factoryScript,
+    expiredOrderCancelScript: expiredOrderCancellationScript,
+    poolBatchingScript: poolBatchingScript,
   };
 
   return contractScript;
