@@ -162,18 +162,18 @@ pub fn get_batching_pool(
     value.quantity_of(pool_out_value, authen_policy_id, lp_asset_name)
   let estimate_pool_in_value =
     value.zero()
-      |> value.add(ada_policy_id, ada_asset_name, utils.min_pool_ada)
       |> value.add(authen_policy_id, utils.pool_auth_asset_name, 1)
       |> value.add(asset_a_policy_id, asset_a_asset_name, value_reserve_a_in)
       |> value.add(asset_b_policy_id, asset_b_asset_name, value_reserve_b_in)
       |> value.add(authen_policy_id, lp_asset_name, remaining_liquidity_supply_in)
+      |> value.add(ada_policy_id, ada_asset_name, utils.min_pool_ada)
   let estimate_pool_out_value =
     value.zero()
-      |> value.add(ada_policy_id, ada_asset_name, utils.min_pool_ada)
       |> value.add(authen_policy_id, utils.pool_auth_asset_name, 1)
       |> value.add(asset_a_policy_id, asset_a_asset_name, value_reserve_a_out)
       |> value.add(asset_b_policy_id, asset_b_asset_name, value_reserve_b_out)
       |> value.add(authen_policy_id, lp_asset_name, remaining_liquidity_supply_out)
+      |> value.add(ada_policy_id, ada_asset_name, utils.min_pool_ada)
   expect and {
       estimate_pool_in_value == pool_in_value,
       estimate_pool_out_value == pool_out_value,
