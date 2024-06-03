@@ -115,20 +115,20 @@ export namespace OrderStep {
     }
 }
 
-export enum AuthorizationMethodType {
+export enum OrderAuthorizationMethodType {
     SIGNATURE = 0,
     SPEND_SCRIPT,
     WITHDRAW_SCRIPT,
     MINT_SCRIPT
 }
 
-export type AuthorizationMethod = {
-    type: AuthorizationMethodType,
+export type OrderAuthorizationMethod = {
+    type: OrderAuthorizationMethodType,
     hash: string;
 }
 
-export namespace AuthorizationMethod {
-    export function toPlutus(m: AuthorizationMethod): Constr<Data> {
+export namespace OrderAuthorizationMethod {
+    export function toPlutus(m: OrderAuthorizationMethod): Constr<Data> {
         return new Constr(m.type, [
             m.hash
         ])
@@ -136,7 +136,7 @@ export namespace AuthorizationMethod {
 }
 
 export type OrderDatum = {
-    canceller: AuthorizationMethod,
+    canceller: OrderAuthorizationMethod,
     refundReceiver: string;
     refundReceiverDatum: OrderExtraDatum;
     successReceiver: string;
@@ -150,7 +150,7 @@ export type OrderDatum = {
 export namespace OrderDatum {
     export function toPlutus(dat: OrderDatum): Constr<Data>{
         return new Constr(0, [
-            AuthorizationMethod.toPlutus(dat.canceller),
+            OrderAuthorizationMethod.toPlutus(dat.canceller),
             AddressPlutusData.toPlutus(dat.refundReceiver),
             OrderExtraDatum.toPlutus(dat.refundReceiverDatum),
             AddressPlutusData.toPlutus(dat.successReceiver),

@@ -77,11 +77,11 @@ validator(
 
     // Transaction must have a Factory Asset in the Spending Script
     expect
-      value.quantity_of(
-        factory_input_value,
+      value.without_lovelace(factory_input_value) == value.from_asset(
         authen_policy_id,
         utils.factory_auth_asset_name,
-      ) == 1
+        1,
+      )
     // validate that there are only 2 Factory UTxOs in Transaction Outputs, 
     // they must contain single legitimate Factory NFT Token. 
     expect [factory_output_1, factory_output_2] =
@@ -95,11 +95,11 @@ validator(
           } = output
           and {
             factory_payment_credential == payment_cred,
-            value.quantity_of(
-              out_value,
+            value.without_lovelace(out_value) == value.from_asset(
               authen_policy_id,
               utils.factory_auth_asset_name,
-            ) == 1,
+              1,
+            ),
           }
         },
       )

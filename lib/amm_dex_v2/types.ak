@@ -275,6 +275,12 @@ pub type AuthenRedeemer {
   CreatePool
 }
 
+pub type PoolAuthorizationMethod {
+  PAMSignature { pub_key_hash: PubKeyHash }
+  PAMSpendScript { script_hash: ValidatorHash }
+  PAMWithdrawScript { script_hash: ValidatorHash }
+}
+
 pub type BatchingPool {
   asset_a: Asset,
   asset_b: Asset,
@@ -297,16 +303,16 @@ pub type PoolState =
 // This setting grants permissions to authorized actors who can interact with Liquidity Pool features.
 pub type GlobalSetting {
   // List of authorized batchers who can process orders.
-  batchers: List<Address>,
+  batchers: List<PoolAuthorizationMethod>,
   // The actor who can update the Pool's base fee and fee sharing.
-  pool_fee_updater: Address,
+  pool_fee_updater: PoolAuthorizationMethod,
   // The actor who can withdraw the Pool's fee sharing.
-  fee_sharing_taker: Address,
+  fee_sharing_taker: PoolAuthorizationMethod,
   // The actor who can change the Pool's stake key.
-  pool_stake_key_updater: Address,
+  pool_stake_key_updater: PoolAuthorizationMethod,
   // The actor who can update the Pool's dynamic fee.
-  pool_dynamic_fee_updater: Address,
+  pool_dynamic_fee_updater: PoolAuthorizationMethod,
   // The actor who can update the addresses mentioned above.
   // This admin can be transferred to another wallet and should be stored in the most secure location.
-  admin: Address,
+  admin: PoolAuthorizationMethod,
 }
