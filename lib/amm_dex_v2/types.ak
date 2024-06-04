@@ -26,15 +26,26 @@ pub type DatumMap =
   Dict<Hash<Blake2b_256, Data>, Data>
 
 pub type PoolDatum {
+  // Stake Credential of `Pool Batching` validator
   pool_batching_stake_credential: StakeCredential,
+  // The Pool's Asset A
   asset_a: Asset,
+  // The Pool's Asset B
   asset_b: Asset,
+  // Total Share of Liquidity Providers
   total_liquidity: Int,
+  // Asset A's balance of Liquidity Providers
   reserve_a: Int,
+  // Asset B's balance of Liquidity Providers
   reserve_b: Int,
+  // Numerator of Trading Fee on Asset A side
   base_fee_a_numerator: Int,
+  // Numerator of Trading Fee on Asset B side
   base_fee_b_numerator: Int,
+  // (Optional) Numerator of Fee Sharing percentage.
+  // This is the percentage of Trading Fee. (eg, Trading Fee is 3%, Profit Sharing is 1/6 -> Profit Sharing = 1/6 * 3%)
   fee_sharing_numerator_opt: Option<Int>,
+  // Allow Batcher can decide volatility fee for each batch transaction
   allow_dynamic_fee: Bool,
 }
 
@@ -51,10 +62,15 @@ pub type PoolRedeemer {
 }
 
 pub type PoolBatchingRedeemer {
+  // Index of the the batcher in authorized batchers list
   batcher_index: Int,
+  // Batcher fee will be deducted from orders' fund. Batcher can decide the amount of fee for each order. The Batcher Fee can not exceed the maximum batcher fee.
   orders_fee: List<Int>,
+  // The Indexes of Orders are processing
   input_indexes: ByteArray,
+  // The Indexes of Pools are processing
   pool_input_indexes_opt: Option<ByteArray>,
+  // The Volatility Fee for each Pool. Batcher can charge more fee to each batch through off-chain calculation and it's only affected if Pool enables `allow_dynamic_fee`
   vol_fees: List<Option<Int>>,
 }
 
@@ -223,10 +239,15 @@ pub type ExtraOrderDatum {
   EODInlineDatum { hash: CustomDatumHash }
 }
 
+// Authorization methods for an Order owner to unlock funds from the Order's Utxo
 pub type OrderAuthorizationMethod {
+  // Requires a signature from a PubKey wallet.
   OAMSignature { pub_key_hash: PubKeyHash }
+  // For a Script-based wallet with a Spend method, the associated Utxo must be present in the transaction inputs.
   OAMSpendScript { script_hash: ValidatorHash }
+  // For a Script-based wallet with a Withdrawal method, a corresponding withdrawal must be present in the transaction.
   OAMWithdrawScript { script_hash: ValidatorHash }
+  // For a Script-based wallet with a Minting method, it must mint tokens with a defined policy ID, included in the transaction minting, with a non-zero quantity.
   OAMMintScript { script_hash: ValidatorHash }
 }
 
@@ -275,9 +296,13 @@ pub type AuthenRedeemer {
   CreatePool
 }
 
+// Defines authorization methods for interacting with Liquidity Pool settings and operations.
 pub type PoolAuthorizationMethod {
+  // Requires a signature from a PubKey wallet.
   PAMSignature { pub_key_hash: PubKeyHash }
+  // For a Script-based wallet with a Spend method, the associated Utxo must be present in the transaction inputs.
   PAMSpendScript { script_hash: ValidatorHash }
+  // For a Script-based wallet with a Withdrawal method, a corresponding withdrawal must be present in the transaction.
   PAMWithdrawScript { script_hash: ValidatorHash }
 }
 

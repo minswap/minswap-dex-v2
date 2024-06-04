@@ -399,7 +399,6 @@ Pool Batching validator is the sub logic of `Pool Validator`, it will ensure Bat
 #### 3.3.6.2 Redeemer
 
 - _batcher_index_: Index of the the batcher in authorized batchers list.
-- _license_index_: Index of the UTxO holding Batcher License Token in the Transaction Inputs.
 - _orders_fee_: Batcher fee will be deducted from orders' fund. Batcher can decide the amount of fee for each order. The Batcher Fee can not exceed the maximum batcher fee.
 - _input_indexes_: The Indexes of Orders are processing (it will be explained below)
 - _pool_input_indexes_opt_: The Indexes of Pools are processing (it will be explained below)

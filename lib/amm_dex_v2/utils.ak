@@ -522,12 +522,11 @@ pub fn authorize_pool_license(
   extra_signatories: List<Hash<Blake2b_224, VerificationKey>>,
 ) -> Bool {
   when author is {
-    // In case the wallet is a PubKey, its signature is required 
+    // If the authorization method is PubKey, validate using the provided signature.
     PAMSignature(pub_key_hash) -> list.has(extra_signatories, pub_key_hash)
-    // In case the wallet is a Script and offer Spend method
-    // its Utxo has to present in the transaction inputs
+    // If the authorization method is SpendScript, ensure the Utxo is present in the transaction inputs.
     PAMSpendScript(script_hash) -> {
-      let canceller_credential = ScriptCredential(script_hash)
+      let auth_cred = ScriptCredential(script_hash)
       !builtin.null_list(
         list.filter(
           transaction_inputs,
@@ -536,13 +535,12 @@ pub fn authorize_pool_license(
             let Output { address: out_address, .. } = output
             let Address { payment_credential: out_payment_credential, .. } =
               out_address
-            out_payment_credential == canceller_credential
+            out_payment_credential == auth_cred
           },
         ),
       )
     }
-    // In case the wallet is a Script and offer Withdrawal method
-    // it has to make a withdrawal and present in transaction withdrawals
+    // If the authorization method is WithdrawScript, validate the presence of a withdrawal in the transaction.
     PAMWithdrawScript(script_hash) -> {
       let credential = Inline(ScriptCredential(script_hash))
       dict.has_key(withdrawals, credential)
@@ -550,7 +548,7 @@ pub fn authorize_pool_license(
   }
 }
 
-// Canceller can be one of 4 authorization methods
+// Validates an order based on the specified authorization method.
 pub fn authorize_order_license(
   author: OrderAuthorizationMethod,
   transaction_inputs: List<Input>,
@@ -559,12 +557,11 @@ pub fn authorize_order_license(
   transaction_mint: MintedValue,
 ) -> Bool {
   when author is {
-    // In case the wallet is a PubKey, its signature is required 
+    // If the authorization method is PubKey, validate using the provided signature.
     OAMSignature(pub_key_hash) -> list.has(extra_signatories, pub_key_hash)
-    // In case the wallet is a Script and offer Spend method
-    // its Utxo has to present in the transaction inputs
+    // If the authorization method is SpendScript, ensure the Utxo is present in the transaction inputs.
     OAMSpendScript(script_hash) -> {
-      let canceller_credential = ScriptCredential(script_hash)
+      let auth_cred = ScriptCredential(script_hash)
       !builtin.null_list(
         list.filter(
           transaction_inputs,
@@ -573,20 +570,17 @@ pub fn authorize_order_license(
             let Output { address: out_address, .. } = output
             let Address { payment_credential: out_payment_credential, .. } =
               out_address
-            out_payment_credential == canceller_credential
+            out_payment_credential == auth_cred
           },
         ),
       )
     }
-    // In case the wallet is a Script and offer Withdrawal method
-    // it has to make a withdrawal and present in transaction withdrawals
+    // If the authorization method is WithdrawScript, validate the presence of a withdrawal in the transaction.
     OAMWithdrawScript(script_hash) -> {
       let credential = Inline(ScriptCredential(script_hash))
       dict.has_key(withdrawals, credential)
     }
-    // In case the wallet is a Script and offer Minting method
-    // it has to mint tokens that has defined policy id and present in transaction minting
-    // Token's quantity must not be zero
+    // If the authorization method is MintScript, ensure the minted tokens meet the policy ID requirements and have a non-zero quantity.
     OAMMintScript(script_hash) -> {
       let fst_token_quantity =
         transaction_mint
