@@ -1,14 +1,23 @@
 use aiken/builtin
 use aiken/bytearray
-use aiken/dict
-use aiken/hash
+use aiken/dict.{Dict}
+use aiken/hash.{Blake2b_224, Hash}
 use aiken/interval.{Finite, Interval, IntervalBound}
 use aiken/list
-use aiken/transaction.{Datum, DatumHash, InlineDatum, NoDatum, ValidityRange}
-use aiken/transaction/value.{
-  AssetName, PolicyId, Value, ada_asset_name, ada_policy_id,
+use aiken/transaction.{
+  Datum, DatumHash, InlineDatum, Input, NoDatum, Output, ValidityRange,
 }
-use amm_dex_v2/types.{Asset, DatumMap, SortedValueList}
+use aiken/transaction/credential.{
+  Address, Inline, ScriptCredential, StakeCredential, VerificationKey,
+}
+use aiken/transaction/value.{
+  AssetName, MintedValue, PolicyId, Value, ada_asset_name, ada_policy_id,
+}
+use amm_dex_v2/types.{
+  Asset, DatumMap, OAMMintScript, OAMSignature, OAMSpendScript,
+  OAMWithdrawScript, OrderAuthorizationMethod, PAMSignature, PAMSpendScript,
+  PAMWithdrawScript, PoolAuthorizationMethod, SortedValueList,
+}
 
 // the legitimate Pool TokenName
 pub const pool_auth_asset_name = #"4d5350"
@@ -503,4 +512,80 @@ pub fn value_to_list(val: Value) -> SortedValueList {
            (k, dict.to_list(v))
          },
        )
+}
+
+// Pool Author can be one of 3 authorization methods
+pub fn authorize_pool_license(
+  author: PoolAuthorizationMethod,
+  transaction_inputs: List<Input>,
+  withdrawals: Dict<StakeCredential, Int>,
+  extra_signatories: List<Hash<Blake2b_224, VerificationKey>>,
+) -> Bool {
+  when author is {
+    // If the authorization method is PubKey, validate using the provided signature.
+    PAMSignature(pub_key_hash) -> list.has(extra_signatories, pub_key_hash)
+    // If the authorization method is SpendScript, ensure the Utxo is present in the transaction inputs.
+    PAMSpendScript(script_hash) -> {
+      let auth_cred = ScriptCredential(script_hash)
+      list.any(
+        transaction_inputs,
+        fn(input) {
+          let Input { output, .. } = input
+          let Output { address: out_address, .. } = output
+          let Address { payment_credential: out_payment_credential, .. } =
+            out_address
+          out_payment_credential == auth_cred
+        },
+      )
+    }
+    // If the authorization method is WithdrawScript, validate the presence of a withdrawal in the transaction.
+    PAMWithdrawScript(script_hash) -> {
+      let credential = Inline(ScriptCredential(script_hash))
+      dict.has_key(withdrawals, credential)
+    }
+  }
+}
+
+// Validates an order based on the specified authorization method.
+pub fn authorize_order_license(
+  author: OrderAuthorizationMethod,
+  transaction_inputs: List<Input>,
+  withdrawals: Dict<StakeCredential, Int>,
+  extra_signatories: List<Hash<Blake2b_224, VerificationKey>>,
+  transaction_mint: MintedValue,
+) -> Bool {
+  when author is {
+    // If the authorization method is PubKey, validate using the provided signature.
+    OAMSignature(pub_key_hash) -> list.has(extra_signatories, pub_key_hash)
+    // If the authorization method is SpendScript, ensure the Utxo is present in the transaction inputs.
+    OAMSpendScript(script_hash) -> {
+      let auth_cred = ScriptCredential(script_hash)
+      list.any(
+        transaction_inputs,
+        fn(input) {
+          let Input { output, .. } = input
+          let Output { address: out_address, .. } = output
+          let Address { payment_credential: out_payment_credential, .. } =
+            out_address
+          out_payment_credential == auth_cred
+        },
+      )
+    }
+    // If the authorization method is WithdrawScript, validate the presence of a withdrawal in the transaction.
+    OAMWithdrawScript(script_hash) -> {
+      let credential = Inline(ScriptCredential(script_hash))
+      dict.has_key(withdrawals, credential)
+    }
+    // If the authorization method is MintScript, ensure the minted tokens meet the policy ID requirements and have a non-zero quantity.
+    OAMMintScript(script_hash) -> {
+      let fst_token_quantity =
+        transaction_mint
+          |> value.from_minted_value()
+          |> value.tokens(script_hash)
+          |> dict.to_list()
+          |> builtin.head_list
+          |> builtin.snd_pair
+      fst_token_quantity != 0
+    }
+  }
 }

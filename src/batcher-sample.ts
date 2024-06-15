@@ -12,10 +12,10 @@ import { sha3 } from "./hash";
 import { EmulatorProvider } from "./provider";
 import { getContractScripts } from "./script";
 import { ADA, Asset } from "./types/asset";
-import { GlobalSetting } from "./types/global-setting";
+import { GlobalSetting, PoolAuthorizationMethodType } from "./types/global-setting";
 import { NetworkId } from "./types/network";
 import {
-  AuthorizationMethodType,
+  OrderAuthorizationMethodType,
   OrderAmountType,
   OrderDatum,
   OrderDirection,
@@ -239,16 +239,36 @@ function getGlobalSetting(lucid: Lucid): {
   const pubkeyBatcher = getPubKeyBatcher();
   const scriptBatcher = getScriptBatcher(lucid);
   const globalSetting: GlobalSetting = {
-    batchers: [pubkeyBatcher.batcherAddr, scriptBatcher.batcherAddr],
-    admin: "addr_test1vqe2eyupqj8e0jr8uumakm2zuhh2ucrcevy7hw8vztjaragvljjnc",
-    feeSharingTaker:
-      "addr_test1vqe2eyupqj8e0jr8uumakm2zuhh2ucrcevy7hw8vztjaragvljjnc",
-    poolDynamicFeeUpdater:
-      "addr_test1vqe2eyupqj8e0jr8uumakm2zuhh2ucrcevy7hw8vztjaragvljjnc",
-    poolFeeUpdater:
-      "addr_test1vqe2eyupqj8e0jr8uumakm2zuhh2ucrcevy7hw8vztjaragvljjnc",
-    poolStakeKeyUpdater:
-      "addr_test1vqe2eyupqj8e0jr8uumakm2zuhh2ucrcevy7hw8vztjaragvljjnc",
+    batchers: [
+      {
+        type: PoolAuthorizationMethodType.SIGNATURE,
+        hash: lucid.utils.paymentCredentialOf(pubkeyBatcher.batcherAddr).hash
+      },
+      {
+        type: PoolAuthorizationMethodType.SPEND_SCRIPT,
+        hash: lucid.utils.paymentCredentialOf(scriptBatcher.batcherAddr).hash
+      }
+    ],
+    admin: {
+      type: PoolAuthorizationMethodType.SIGNATURE,
+      hash: lucid.utils.paymentCredentialOf("addr_test1vqe2eyupqj8e0jr8uumakm2zuhh2ucrcevy7hw8vztjaragvljjnc").hash
+    },
+    feeSharingTaker: {
+      type: PoolAuthorizationMethodType.SIGNATURE,
+      hash: lucid.utils.paymentCredentialOf("addr_test1vqe2eyupqj8e0jr8uumakm2zuhh2ucrcevy7hw8vztjaragvljjnc").hash
+    },
+    poolDynamicFeeUpdater: {
+      type: PoolAuthorizationMethodType.SIGNATURE,
+      hash: lucid.utils.paymentCredentialOf("addr_test1vqe2eyupqj8e0jr8uumakm2zuhh2ucrcevy7hw8vztjaragvljjnc").hash
+    },
+    poolFeeUpdater: {
+      type: PoolAuthorizationMethodType.SIGNATURE,
+      hash: lucid.utils.paymentCredentialOf("addr_test1vqe2eyupqj8e0jr8uumakm2zuhh2ucrcevy7hw8vztjaragvljjnc").hash
+    },
+    poolStakeKeyUpdater: {
+      type: PoolAuthorizationMethodType.SIGNATURE,
+      hash: lucid.utils.paymentCredentialOf("addr_test1vqe2eyupqj8e0jr8uumakm2zuhh2ucrcevy7hw8vztjaragvljjnc").hash
+    },
   };
   return {
     globalSetting: globalSetting,
@@ -577,7 +597,7 @@ async function main(): Promise<void> {
   const swapDirection = OrderDirection.A_TO_B;
   const orderDatum: OrderDatum = {
     canceller: {
-      type: AuthorizationMethodType.SIGNATURE,
+      type: OrderAuthorizationMethodType.SIGNATURE,
       hash: cancellerPubKeyHash,
     },
     refundReceiver: testUserAddr,

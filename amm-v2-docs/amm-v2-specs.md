@@ -361,7 +361,7 @@ Pool validator is the most important part in the system. It's responsible for gu
    - validate there is a single Pool UTxO in Transaction Inputs and single Pool UTxO in Transaction Outputs and:
      - Pool Input contains 1 valid Pool NFT Token
      - Pool Input and Output Value must be unchanged
-     - Transaction contain only 1 Spending Script (Pool Script). It will avoid bad Admin stealing money from Order Contract.
+     - Transaction spends only one Single Pool Script and does not contain any other scripts in its inputs, except for the Author, in cases where the Author is a script
    -  validate Transaction won't mint any assets
    -  Each **UpdatePoolParameters** action has limited power to change some of Pool's parameters and stake address. Otherwise, it's not allowed  
       -  _UpdatePoolFee_:
@@ -380,7 +380,7 @@ Pool validator is the most important part in the system. It's responsible for gu
      - Pool Input contains 1 valid Pool NFT Token
      - Pool Input and Output Address must be unchanged (both Payment and Stake Credential)
      - Pool Datum must be unchanged
-     - Transaction contain only 1 Spending Script (Pool Script). It will avoid bad Admin stealing money from Order Contract.
+     - Transaction spends only one Single Pool Script and does not contain any other scripts in its inputs, except for the Author, in cases where the Author is a script
    - validate Transaction won't mint any assets
    - validate Admin withdraws the exact earned Fee Sharing amount:
      - Earned Asset A: Reserve A in Value - Reserve A in Datum
@@ -399,7 +399,6 @@ Pool Batching validator is the sub logic of `Pool Validator`, it will ensure Bat
 #### 3.3.6.2 Redeemer
 
 - _batcher_index_: Index of the the batcher in authorized batchers list.
-- _license_index_: Index of the UTxO holding Batcher License Token in the Transaction Inputs.
 - _orders_fee_: Batcher fee will be deducted from orders' fund. Batcher can decide the amount of fee for each order. The Batcher Fee can not exceed the maximum batcher fee.
 - _input_indexes_: The Indexes of Orders are processing (it will be explained below)
 - _pool_input_indexes_opt_: The Indexes of Pools are processing (it will be explained below)

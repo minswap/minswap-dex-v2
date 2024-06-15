@@ -5,15 +5,17 @@ use aiken/list
 use aiken/transaction.{
   Input, Output, ScriptContext, Spend, Transaction, WithdrawFrom,
 }
-use aiken/transaction/credential.{Address, Credential}
+use aiken/transaction/credential.{
+  Address, Credential, ScriptCredential, VerificationKeyCredential,
+}
 use aiken/transaction/value.{PolicyId}
 use amm_dex_v2/order_validation
 use amm_dex_v2/pool_validation
 use amm_dex_v2/types.{
-  Batching, BatchingPool, GlobalSetting, OrderDatum, PoolBatchingRedeemer,
-  PoolDatum, PoolRedeemer, SwapMultiRouting, SwapRouting, UpdateDynamicFee,
-  UpdatePoolFee, UpdatePoolParameters, UpdatePoolStakeCredential,
-  WithdrawFeeSharing,
+  Batching, BatchingPool, GlobalSetting, OrderDatum, PAMSignature,
+  PAMSpendScript, PAMWithdrawScript, PoolBatchingRedeemer, PoolDatum,
+  PoolRedeemer, SwapMultiRouting, SwapRouting, UpdateDynamicFee, UpdatePoolFee,
+  UpdatePoolParameters, UpdatePoolStakeCredential, WithdrawFeeSharing,
 }
 use amm_dex_v2/utils
 
@@ -66,18 +68,17 @@ validator(
           }
         and {
           // Transaction must be executed by the correct authorizer
-          pool_validation.authorize_license_holder(
-            license_address: authorizer,
+          utils.authorize_pool_license(
+            author: authorizer,
             transaction_inputs: inputs,
             withdrawals: withdrawals,
             extra_signatories: extra_signatories,
           ),
           // Verify that the transaction spends only one Single Pool Script and does not contain any other scripts in its inputs, except for the Author, in cases where the Author is a script
-          // It will avoid bad Admin can steal money from Order Contract.
           pool_validation.has_only_pool_and_author(
             inputs: inputs,
             pool_address: pool_address,
-            author_address: authorizer,
+            pool_author: authorizer,
           ),
           // This Redeemer won't mint anything 
           value.is_zero(value.from_minted_value(mint)),
@@ -111,18 +112,17 @@ validator(
         let GlobalSetting { fee_sharing_taker, .. } = global_setting
         and {
           // Transaction must be executed by the correct authorizer
-          pool_validation.authorize_license_holder(
-            license_address: fee_sharing_taker,
+          utils.authorize_pool_license(
+            author: fee_sharing_taker,
             transaction_inputs: inputs,
             withdrawals: withdrawals,
             extra_signatories: extra_signatories,
           ),
           // Verify that the transaction spends only one Single Pool Script and does not contain any other scripts in its inputs, except for the Author, in cases where the Author is a script
-          // It will avoid bad Admin can steal money from Order Contract.
           pool_validation.has_only_pool_and_author(
             inputs: inputs,
             pool_address: pool_address,
-            author_address: fee_sharing_taker,
+            pool_author: fee_sharing_taker,
           ),
           // This Redeemer won't mint anything 
           value.is_zero(value.from_minted_value(mint)),
@@ -184,8 +184,8 @@ validator(
     let batcher_address = utils.list_at_index(batchers, batcher_index)
     expect and {
         // Transaction must be executed by the authorized batchers
-        pool_validation.authorize_license_holder(
-          license_address: batcher_address,
+        utils.authorize_pool_license(
+          author: batcher_address,
           transaction_inputs: inputs,
           withdrawals: withdrawals,
           extra_signatories: extra_signatories,
@@ -225,7 +225,15 @@ validator(
           let Input { output: out, .. } = input
           let Output { address: addr, .. } = out
           let Address { payment_credential: payment_cred, .. } = addr
-          addr != batcher_address && payment_cred != pool_payment_cred
+          and {
+            payment_cred != pool_payment_cred,
+            when batcher_address is {
+              PAMSignature(pkh) ->
+                payment_cred != VerificationKeyCredential(pkh)
+              PAMSpendScript(sh) -> payment_cred != ScriptCredential(sh)
+              PAMWithdrawScript(sh) -> payment_cred != ScriptCredential(sh)
+            },
+          }
         },
       )
     // Currently, transaction inputs will be sorted by TxId and TxIndex of UTxO.

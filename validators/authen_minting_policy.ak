@@ -9,7 +9,8 @@ use aiken/transaction/value
 use amm_dex_v2/pool_validation
 use amm_dex_v2/types.{
   Asset, AuthenRedeemer, CreatePool, DexInitialization, FactoryDatum,
-  FactoryRedeemer, GlobalSetting,
+  FactoryRedeemer, GlobalSetting, PAMSignature, PAMSpendScript,
+  PAMWithdrawScript, PoolAuthorizationMethod,
 }
 use amm_dex_v2/utils
 
@@ -115,11 +116,11 @@ validator(
             outputs,
             fn(output) {
               let Output { value: out_value, .. } = output
-              value.quantity_of(
-                out_value,
+              value.without_lovelace(out_value) == value.from_asset(
                 authen_policy_id,
                 utils.factory_auth_asset_name,
-              ) == 1
+                1,
+              )
             },
           )
         let Output { datum: factory_raw_datum, .. } = factory_output
@@ -150,18 +151,16 @@ validator(
         } = global_setting_output
         expect global_setting: GlobalSetting =
           utils.must_find_script_inline_datum(global_setting_datum_raw)
-        let GlobalSetting { batchers, .. } = global_setting
         and {
           head == #"00",
           tail == #"ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff00",
-          // authorized batchers must not be empty
-          !builtin.null_list(batchers),
+          validate_global_setting(global_setting),
           // The Global Setting UTxO must contain 1 Global Setting Token in the value
-          value.quantity_of(
-            global_setting_value,
+          value.without_lovelace(global_setting_value) == value.from_asset(
             authen_policy_id,
             utils.global_setting_asset_name,
-          ) == 1,
+            1,
+          ),
         }
       }
     }
@@ -211,12 +210,11 @@ validator(
     } = global_setting_output
     expect global_setting_out_datum: GlobalSetting =
       utils.must_find_script_inline_datum(global_setting_out_raw_datum)
-    let GlobalSetting { batchers, .. } = global_setting_out_datum
 
     and {
       // Transaction must be executed by the correct admin
-      pool_validation.authorize_license_holder(
-        license_address: admin,
+      utils.authorize_pool_license(
+        author: admin,
         transaction_inputs: inputs,
         withdrawals: withdrawals,
         extra_signatories: extra_signatories,
@@ -228,16 +226,48 @@ validator(
         global_setting_script_hash,
         utils.global_setting_asset_name,
       ) == 1,
-      value.quantity_of(
-        global_setting_value_out,
+      value.without_lovelace(global_setting_value_out) == value.from_asset(
         global_setting_script_hash,
         utils.global_setting_asset_name,
-      ) == 1,
+        1,
+      ),
       global_setting_payment_credential_out == global_setting_payment_credential,
       // transaction won't mint anything 
       value.is_zero(value.from_minted_value(mint)),
-      // validate authorized batchers must not be empty
-      !builtin.null_list(batchers),
+      validate_global_setting(global_setting_out_datum),
     }
   }
+}
+
+fn validate_global_setting(global_setting: GlobalSetting) -> Bool {
+  let GlobalSetting {
+    batchers,
+    pool_fee_updater,
+    fee_sharing_taker,
+    pool_stake_key_updater,
+    pool_dynamic_fee_updater,
+    admin,
+  } = global_setting
+  and {
+    validate_pool_authorization_method(pool_fee_updater),
+    validate_pool_authorization_method(fee_sharing_taker),
+    validate_pool_authorization_method(pool_stake_key_updater),
+    validate_pool_authorization_method(pool_dynamic_fee_updater),
+    validate_pool_authorization_method(admin),
+    !builtin.null_list(batchers),
+    list.all(
+      batchers,
+      fn(batcher) { validate_pool_authorization_method(batcher) },
+    ),
+  }
+}
+
+fn validate_pool_authorization_method(method: PoolAuthorizationMethod) -> Bool {
+  let hash =
+    when method is {
+      PAMSignature(h) -> h
+      PAMSpendScript(h) -> h
+      PAMWithdrawScript(h) -> h
+    }
+  builtin.length_of_bytearray(hash) == 28
 }

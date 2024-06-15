@@ -1,17 +1,13 @@
-use aiken/builtin
 use aiken/dict
 use aiken/list
 use aiken/transaction.{
   Input, Output, ScriptContext, Spend, Transaction, WithdrawFrom,
 }
-use aiken/transaction/credential.{
-  Address, Inline, ScriptCredential, StakeCredential,
-}
-use aiken/transaction/value
+use aiken/transaction/credential.{Address, ScriptCredential, StakeCredential}
 use amm_dex_v2/order_validation
 use amm_dex_v2/types.{
-  ApplyOrder, CancelExpiredOrderByAnyone, CancelOrderByOwner, OAMMintScript,
-  OAMSignature, OAMSpendScript, OAMWithdrawScript, OrderDatum, OrderRedeemer,
+  ApplyOrder, CancelExpiredOrderByAnyone, CancelOrderByOwner, OrderDatum,
+  OrderRedeemer,
 }
 use amm_dex_v2/utils
 
@@ -37,47 +33,13 @@ validator(
         expect order_datum: OrderDatum = raw_datum
         let OrderDatum { canceller, .. } = order_datum
         // Canceller can be one of 4 authorization methods
-        when canceller is {
-          // In case the wallet is a PubKey, its signature is required 
-          OAMSignature(pub_key_hash) ->
-            list.has(extra_signatories, pub_key_hash)
-          // In case the wallet is a Script and offer Spend method
-          // its Utxo has to present in the transaction inputs
-          OAMSpendScript(script_hash) -> {
-            let canceller_credential = ScriptCredential(script_hash)
-            !builtin.null_list(
-              list.filter(
-                inputs,
-                fn(input) {
-                  let Input { output, .. } = input
-                  let Output { address: out_address, .. } = output
-                  let Address { payment_credential: out_payment_credential, .. } =
-                    out_address
-                  out_payment_credential == canceller_credential
-                },
-              ),
-            )
-          }
-          // In case the wallet is a Script and offer Withdrawal method
-          // it has to make a withdrawal and present in transaction withdrawals
-          OAMWithdrawScript(script_hash) -> {
-            let credential = Inline(ScriptCredential(script_hash))
-            dict.has_key(withdrawals, credential)
-          }
-          // In case the wallet is a Script and offer Minting method
-          // it has to mint tokens that has defined policy id and present in transaction minting
-          // Token's quantity must not be zero
-          OAMMintScript(script_hash) -> {
-            let fst_token_quantity =
-              mint
-                |> value.from_minted_value()
-                |> value.tokens(script_hash)
-                |> dict.to_list()
-                |> builtin.head_list
-                |> builtin.snd_pair
-            fst_token_quantity != 0
-          }
-        }
+        utils.authorize_order_license(
+          author: canceller,
+          transaction_inputs: inputs,
+          withdrawals: withdrawals,
+          extra_signatories: extra_signatories,
+          transaction_mint: mint,
+        )
       }
       CancelExpiredOrderByAnyone -> {
         let Transaction { withdrawals, .. } = transaction

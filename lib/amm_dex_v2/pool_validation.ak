@@ -1,16 +1,15 @@
-use aiken/dict.{Dict}
-use aiken/hash.{Blake2b_224, Hash}
 use aiken/list
 use aiken/transaction.{Input, Output}
 use aiken/transaction/credential.{
-  Address, Inline, PaymentCredential, ScriptCredential, StakeCredential,
-  VerificationKey, VerificationKeyCredential,
+  Address, PaymentCredential, ScriptCredential, StakeCredential,
+  VerificationKeyCredential,
 }
 use aiken/transaction/value.{
   AssetName, PolicyId, Value, ada_asset_name, ada_policy_id,
 }
 use amm_dex_v2/types.{
-  Asset, BatchingPool, GlobalSetting, PoolDatum, UpdateDynamicFee, UpdatePoolFee,
+  Asset, BatchingPool, GlobalSetting, PAMSpendScript, PAMWithdrawScript,
+  PoolAuthorizationMethod, PoolDatum, UpdateDynamicFee, UpdatePoolFee,
   UpdatePoolParametersAction, UpdatePoolStakeCredential,
 }
 use amm_dex_v2/utils
@@ -54,42 +53,6 @@ pub fn get_and_validate_global_setting(
   expect global_setting_datum: GlobalSetting =
     utils.must_find_script_inline_datum(global_setting_datum_raw)
   global_setting_datum
-}
-
-pub fn authorize_license_holder(
-  license_address: Address,
-  transaction_inputs: List<Input>,
-  withdrawals: Dict<StakeCredential, Int>,
-  extra_signatories: List<Hash<Blake2b_224, VerificationKey>>,
-) -> Bool {
-  let Address { payment_credential: license_holder_payment_cred, .. } =
-    license_address
-  when license_holder_payment_cred is {
-    //If the Authorizer is controlled by a PubKey wallet, 
-    // the owners of the UTxO must sign the transaction with their private key. Otherwise, such action must be prohibited.
-    VerificationKeyCredential(pub_key_hash) ->
-      list.has(extra_signatories, pub_key_hash)
-    // If the Authorizer is controlled by a Script wallet, 
-    // the smart contract must incorporate a Withdrawal or a Spend function and execute sufficient conditions to facilitate its operation
-    ScriptCredential(script_hash) -> {
-      let authorized_via_withdrawal =
-        dict.has_key(withdrawals, Inline(ScriptCredential(script_hash)))
-      if authorized_via_withdrawal {
-        True
-      } else {
-        list.any(
-          transaction_inputs,
-          fn(input) {
-            let Input { output, .. } = input
-            let Output { address: out_address, .. } = output
-            let Address { payment_credential: out_payment_credential, .. } =
-              out_address
-            out_payment_credential == license_holder_payment_cred
-          },
-        )
-      }
-    }
-  }
 }
 
 pub fn get_batching_pool(
@@ -199,18 +162,18 @@ pub fn get_batching_pool(
     value.quantity_of(pool_out_value, authen_policy_id, lp_asset_name)
   let estimate_pool_in_value =
     value.zero()
-      |> value.add(ada_policy_id, ada_asset_name, utils.min_pool_ada)
       |> value.add(authen_policy_id, utils.pool_auth_asset_name, 1)
       |> value.add(asset_a_policy_id, asset_a_asset_name, value_reserve_a_in)
       |> value.add(asset_b_policy_id, asset_b_asset_name, value_reserve_b_in)
       |> value.add(authen_policy_id, lp_asset_name, remaining_liquidity_supply_in)
+      |> value.add(ada_policy_id, ada_asset_name, utils.min_pool_ada)
   let estimate_pool_out_value =
     value.zero()
-      |> value.add(ada_policy_id, ada_asset_name, utils.min_pool_ada)
       |> value.add(authen_policy_id, utils.pool_auth_asset_name, 1)
       |> value.add(asset_a_policy_id, asset_a_asset_name, value_reserve_a_out)
       |> value.add(asset_b_policy_id, asset_b_asset_name, value_reserve_b_out)
       |> value.add(authen_policy_id, lp_asset_name, remaining_liquidity_supply_out)
+      |> value.add(ada_policy_id, ada_asset_name, utils.min_pool_ada)
   expect and {
       estimate_pool_in_value == pool_in_value,
       estimate_pool_out_value == pool_out_value,
@@ -573,7 +536,7 @@ test test_get_trading_fee_numerator_fail_3() fail {
 pub fn has_only_pool_and_author(
   inputs: List<Input>,
   pool_address: Address,
-  author_address: Address,
+  pool_author: PoolAuthorizationMethod,
 ) -> Bool {
   let Address { payment_credential: pool_payment_cred, .. } = pool_address
   // Having single pool input
@@ -598,8 +561,14 @@ pub fn has_only_pool_and_author(
            let Input { output: Output { address: addr, .. }, .. } = input
            let Address { payment_credential: payment_cred, .. } = addr
            when payment_cred is {
-             ScriptCredential(_) ->
-               payment_cred == pool_payment_cred || addr == author_address
+             ScriptCredential(sh) -> or {
+                 payment_cred == pool_payment_cred,
+                 when pool_author is {
+                   PAMSpendScript(author_hash) -> sh == author_hash
+                   PAMWithdrawScript(author_hash) -> sh == author_hash
+                   _ -> False
+                 },
+               }
              VerificationKeyCredential(_) -> True
            }
          },
