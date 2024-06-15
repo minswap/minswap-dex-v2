@@ -75,7 +75,6 @@ validator(
             extra_signatories: extra_signatories,
           ),
           // Verify that the transaction spends only one Single Pool Script and does not contain any other scripts in its inputs, except for the Author, in cases where the Author is a script
-          // It will avoid bad Admin can steal money from Order Contract.
           pool_validation.has_only_pool_and_author(
             inputs: inputs,
             pool_address: pool_address,
@@ -120,7 +119,6 @@ validator(
             extra_signatories: extra_signatories,
           ),
           // Verify that the transaction spends only one Single Pool Script and does not contain any other scripts in its inputs, except for the Author, in cases where the Author is a script
-          // It will avoid bad Admin can steal money from Order Contract.
           pool_validation.has_only_pool_and_author(
             inputs: inputs,
             pool_address: pool_address,

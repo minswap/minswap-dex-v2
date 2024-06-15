@@ -361,7 +361,7 @@ Pool validator is the most important part in the system. It's responsible for gu
    - validate there is a single Pool UTxO in Transaction Inputs and single Pool UTxO in Transaction Outputs and:
      - Pool Input contains 1 valid Pool NFT Token
      - Pool Input and Output Value must be unchanged
-     - Transaction contain only 1 Spending Script (Pool Script). It will avoid bad Admin stealing money from Order Contract.
+     - Transaction spends only one Single Pool Script and does not contain any other scripts in its inputs, except for the Author, in cases where the Author is a script
    -  validate Transaction won't mint any assets
    -  Each **UpdatePoolParameters** action has limited power to change some of Pool's parameters and stake address. Otherwise, it's not allowed  
       -  _UpdatePoolFee_:
@@ -380,7 +380,7 @@ Pool validator is the most important part in the system. It's responsible for gu
      - Pool Input contains 1 valid Pool NFT Token
      - Pool Input and Output Address must be unchanged (both Payment and Stake Credential)
      - Pool Datum must be unchanged
-     - Transaction contain only 1 Spending Script (Pool Script). It will avoid bad Admin stealing money from Order Contract.
+     - Transaction spends only one Single Pool Script and does not contain any other scripts in its inputs, except for the Author, in cases where the Author is a script
    - validate Transaction won't mint any assets
    - validate Admin withdraws the exact earned Fee Sharing amount:
      - Earned Asset A: Reserve A in Value - Reserve A in Datum

@@ -527,17 +527,15 @@ pub fn authorize_pool_license(
     // If the authorization method is SpendScript, ensure the Utxo is present in the transaction inputs.
     PAMSpendScript(script_hash) -> {
       let auth_cred = ScriptCredential(script_hash)
-      !builtin.null_list(
-        list.filter(
-          transaction_inputs,
-          fn(input) {
-            let Input { output, .. } = input
-            let Output { address: out_address, .. } = output
-            let Address { payment_credential: out_payment_credential, .. } =
-              out_address
-            out_payment_credential == auth_cred
-          },
-        ),
+      list.any(
+        transaction_inputs,
+        fn(input) {
+          let Input { output, .. } = input
+          let Output { address: out_address, .. } = output
+          let Address { payment_credential: out_payment_credential, .. } =
+            out_address
+          out_payment_credential == auth_cred
+        },
       )
     }
     // If the authorization method is WithdrawScript, validate the presence of a withdrawal in the transaction.
@@ -562,17 +560,15 @@ pub fn authorize_order_license(
     // If the authorization method is SpendScript, ensure the Utxo is present in the transaction inputs.
     OAMSpendScript(script_hash) -> {
       let auth_cred = ScriptCredential(script_hash)
-      !builtin.null_list(
-        list.filter(
-          transaction_inputs,
-          fn(input) {
-            let Input { output, .. } = input
-            let Output { address: out_address, .. } = output
-            let Address { payment_credential: out_payment_credential, .. } =
-              out_address
-            out_payment_credential == auth_cred
-          },
-        ),
+      list.any(
+        transaction_inputs,
+        fn(input) {
+          let Input { output, .. } = input
+          let Output { address: out_address, .. } = output
+          let Address { payment_credential: out_payment_credential, .. } =
+            out_address
+          out_payment_credential == auth_cred
+        },
       )
     }
     // If the authorization method is WithdrawScript, validate the presence of a withdrawal in the transaction.
