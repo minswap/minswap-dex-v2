@@ -32,37 +32,24 @@ type ContractParameters = {
   poolDefaultStakeKey: Credential;
 };
 
-export const INITIAL_CONTRACT_PARAMETERS: Record<
-  NetworkId,
-  ContractParameters
-> = {
-  [NetworkId.TESTNET]: {
+export function getContractParameters(networkId: NetworkId): ContractParameters {
+  const cases: Record<string, string> = {
+    [NetworkId.TESTNET]: "deployed/preprod/params.json",
+    [NetworkId.MAINNET]: "deployed/mainnet/params.json", // Not decided yet
+  };
+  const path = cases[networkId];
+  let params = JSON.parse(fs.readFileSync(path, 'utf-8'));
+  let seedTxInParts = params.seedTxIn.split("#");
+  return {
     seedTxIn: {
-      txId: "70ffe718f52cee723f88861ea85ff61f80b628210a8728659ed08c11eedba7fe",
-      index: 2,
+      txId: seedTxInParts[0],
+      index: Number(seedTxInParts[1]),
     },
-    factoryNFTName: "MSF",
-    poolNFTName: "MSP",
-    globalSettingNFTName: "MSGS",
-    poolDefaultStakeKey: {
-      type: "Key",
-      hash: "83ec96719dc0591034b78e472d6f477446261fec4bc517fa4d047f02",
-    },
-  },
-  // Not decided yet
-  [NetworkId.MAINNET]: {
-    seedTxIn: {
-      txId: "70ffe718f52cee723f88861ea85ff61f80b628210a8728659ed08c11eedba7fe",
-      index: 2,
-    },
-    factoryNFTName: "MSF",
-    poolNFTName: "MSP",
-    globalSettingNFTName: "MSGS",
-    poolDefaultStakeKey: {
-      type: "Key",
-      hash: "83ec96719dc0591034b78e472d6f477446261fec4bc517fa4d047f02",
-    },
-  },
+    factoryNFTName: params.factoryNFTName,
+    poolNFTName: params.poolNFTName,
+    globalSettingNFTName: params.globalSettingNFTName,
+    poolDefaultStakeKey: params.poolStakeCredential,
+  };
 };
 
 function readValidator(): {
@@ -169,7 +156,7 @@ export function getContractScripts(
     poolNFTName,
     globalSettingNFTName,
     poolDefaultStakeKey,
-  } = INITIAL_CONTRACT_PARAMETERS[networkId];
+  } = getContractParameters(networkId);
   const authenMintingScript: Script = {
     type: "PlutusV2",
     script: applyParamsToScript(validators.authen.script, [
