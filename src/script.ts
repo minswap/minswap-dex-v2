@@ -32,14 +32,16 @@ type ContractParameters = {
   poolDefaultStakeKey: Credential;
 };
 
-export function getContractParameters(networkId: NetworkId): ContractParameters {
+export function getContractParameters(
+  networkId: NetworkId
+): ContractParameters {
   const cases: Record<string, string> = {
     [NetworkId.TESTNET]: "deployed/preprod/params.json",
-    [NetworkId.MAINNET]: "deployed/mainnet/params.json", // Not decided yet
+    [NetworkId.MAINNET]: "deployed/mainnet/params.json",
   };
   const path = cases[networkId];
-  let params = JSON.parse(fs.readFileSync(path, 'utf-8'));
-  let seedTxInParts = params.seedTxIn.split("#");
+  const params = JSON.parse(fs.readFileSync(path, "utf-8"));
+  const seedTxInParts = params.seedTxIn.split("#");
   return {
     seedTxIn: {
       txId: seedTxInParts[0],
@@ -50,7 +52,7 @@ export function getContractParameters(networkId: NetworkId): ContractParameters 
     globalSettingNFTName: params.globalSettingNFTName,
     poolDefaultStakeKey: params.poolStakeCredential,
   };
-};
+}
 
 function readValidator(): {
   order: SpendingValidator;
@@ -120,35 +122,37 @@ function readValidator(): {
 }
 
 type ContractScript = {
-  authenPolicyId: string;
-  authenAddress: string;
-  poolAddress: string;
-  orderAddress: string;
-  factoryAddress: string;
-  expiredOrderCancellationAddress: string;
-  poolBatchingAddress: string;
-  poolBatchingCredential: Credential;
-  poolAuthAsset: Asset;
-  factoryAuthAsset: Asset;
+  // Authentication asset
+  factoryAsset: Asset;
+  poolAuthenAsset: Asset;
   globalSettingAsset: Asset;
 
+  // LP PolicyID
+  lpPolicyId: string;
+
+  // Smart contract address
+  globalSettingEnterpriseAddress: string;
+  orderEnterpriseAddress: string;
+  poolEnterpriseAddress: string;
+  poolCreationAddress: string;
+  factoryEnterpriseAddress: string;
+  expiredOrderCancelAddress: string;
+  poolBatchingAddress: string;
+  poolBatchingCredential: Credential;
+
+  // Smart contract script
+  authenScript: Script;
   poolScript: Script;
   orderScript: Script;
-  authenScript: Script;
   factoryScript: Script;
   expiredOrderCancelScript: Script;
   poolBatchingScript: Script;
 };
 
-let contractScript: ContractScript | undefined = undefined;
-
 export function getContractScripts(
   lucid: Lucid,
   networkId: NetworkId
 ): ContractScript {
-  if (contractScript) {
-    return contractScript;
-  }
   const validators = readValidator();
   const {
     seedTxIn,
@@ -214,47 +218,48 @@ export function getContractScripts(
     ]),
   };
 
-  const authenAddress = lucid.utils.validatorToAddress(authenMintingScript);
-  const poolAddress = lucid.utils.validatorToAddress(poolScript);
-  const orderAddress = lucid.utils.validatorToAddress(orderScript);
-  const factoryAddress = lucid.utils.validatorToAddress(factoryScript);
+  const globalSettingAddress =
+    lucid.utils.validatorToAddress(authenMintingScript);
+  const poolEnterpriseAddress = lucid.utils.validatorToAddress(poolScript);
+  const orderEnterpriseAddress = lucid.utils.validatorToAddress(orderScript);
+  const factoryEnterpriseAddress =
+    lucid.utils.validatorToAddress(factoryScript);
   const expiredOrderCancellationAddress = lucid.utils.validatorToRewardAddress(
     expiredOrderCancellationScript
   );
   const poolBatchingAddress =
     lucid.utils.validatorToRewardAddress(poolBatchingScript);
 
-  contractScript = {
-    authenPolicyId,
-    authenAddress,
-    orderAddress,
-    poolAddress,
-    factoryAddress,
-    expiredOrderCancellationAddress,
-    poolBatchingAddress,
-    poolBatchingCredential: {
-      type: "Script",
-      hash: poolBatchingHash,
-    },
-    poolAuthAsset: {
-      policyId: authenPolicyId,
-      tokenName: fromText(poolNFTName),
-    },
-    factoryAuthAsset: {
+  return {
+    factoryAsset: {
       policyId: authenPolicyId,
       tokenName: fromText(factoryNFTName),
+    },
+    poolAuthenAsset: {
+      policyId: authenPolicyId,
+      tokenName: fromText(poolNFTName),
     },
     globalSettingAsset: {
       policyId: authenPolicyId,
       tokenName: fromText(globalSettingNFTName),
     },
+    lpPolicyId: authenPolicyId,
+    globalSettingEnterpriseAddress: globalSettingAddress,
+    orderEnterpriseAddress: orderEnterpriseAddress,
+    poolEnterpriseAddress: poolEnterpriseAddress,
+    poolCreationAddress: poolCreationAddress,
+    factoryEnterpriseAddress: factoryEnterpriseAddress,
+    expiredOrderCancelAddress: expiredOrderCancellationAddress,
+    poolBatchingAddress: poolBatchingAddress,
+    poolBatchingCredential: {
+      type: "Script",
+      hash: poolBatchingHash,
+    },
+    authenScript: authenMintingScript,
     poolScript: poolScript,
     orderScript: orderScript,
-    authenScript: authenMintingScript,
     factoryScript: factoryScript,
     expiredOrderCancelScript: expiredOrderCancellationScript,
     poolBatchingScript: poolBatchingScript,
   };
-
-  return contractScript;
 }

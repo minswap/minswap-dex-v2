@@ -1,6 +1,5 @@
 import { Constr, Data } from "lucid-cardano";
 
-import { AddressPlutusData } from "./address";
 
 export enum PoolAuthorizationMethodType {
     SIGNATURE = 0,

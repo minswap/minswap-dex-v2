@@ -1,0 +1,10 @@
+{
+    "seedTxIn": "1510c33ecb621e61f3c0568ac10ebd08fe4fce35f130db859f28e4db4c7d7a1f#0",
+    "factoryNFTName": "MSF",
+    "poolNFTName": "MSP",
+    "globalSettingNFTName": "MSGS",
+    "poolStakeCredential": {
+        "type": "Key",
+        "hash": "52563c5410bff6a0d43ccebb7c37e1f69f5eb260552521adff33b9c2"
+    }
+}
