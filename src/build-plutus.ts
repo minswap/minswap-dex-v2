@@ -6,12 +6,20 @@ import { getContractScripts } from "./script";
 import { NetworkId } from "./types/network";
 
 async function main() {
-  const lucid = await Lucid.new(new EmulatorProvider(), "Preprod");
+  const lucidTestnet = await Lucid.new(new EmulatorProvider(), "Preprod");
 
-  const scripts = getContractScripts(lucid, NetworkId.TESTNET);
+  const testnetScripts = getContractScripts(lucidTestnet, NetworkId.TESTNET);
   fs.writeFileSync(
     `deployed/preprod/script.json`,
-    JSON.stringify(scripts, null, 4)
+    JSON.stringify(testnetScripts, null, 4)
+  );
+
+  const lucidMainnet = await Lucid.new(new EmulatorProvider(), "Mainnet");
+
+  const mainnetScripts = getContractScripts(lucidMainnet, NetworkId.MAINNET);
+  fs.writeFileSync(
+    `deployed/mainnet/script.json`,
+    JSON.stringify(mainnetScripts, null, 4)
   );
 }
 

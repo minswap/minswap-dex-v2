@@ -12,11 +12,14 @@ import { sha3 } from "./hash";
 import { EmulatorProvider } from "./provider";
 import { getContractScripts } from "./script";
 import { ADA, Asset } from "./types/asset";
-import { GlobalSetting, PoolAuthorizationMethodType } from "./types/global-setting";
+import {
+  GlobalSetting,
+  PoolAuthorizationMethodType,
+} from "./types/global-setting";
 import { NetworkId } from "./types/network";
 import {
-  OrderAuthorizationMethodType,
   OrderAmountType,
+  OrderAuthorizationMethodType,
   OrderDatum,
   OrderDirection,
   OrderExtraDatumType,
@@ -242,32 +245,42 @@ function getGlobalSetting(lucid: Lucid): {
     batchers: [
       {
         type: PoolAuthorizationMethodType.SIGNATURE,
-        hash: lucid.utils.paymentCredentialOf(pubkeyBatcher.batcherAddr).hash
+        hash: lucid.utils.paymentCredentialOf(pubkeyBatcher.batcherAddr).hash,
       },
       {
         type: PoolAuthorizationMethodType.SPEND_SCRIPT,
-        hash: lucid.utils.paymentCredentialOf(scriptBatcher.batcherAddr).hash
-      }
+        hash: lucid.utils.paymentCredentialOf(scriptBatcher.batcherAddr).hash,
+      },
     ],
     admin: {
       type: PoolAuthorizationMethodType.SIGNATURE,
-      hash: lucid.utils.paymentCredentialOf("addr_test1vqe2eyupqj8e0jr8uumakm2zuhh2ucrcevy7hw8vztjaragvljjnc").hash
+      hash: lucid.utils.paymentCredentialOf(
+        "addr_test1vqe2eyupqj8e0jr8uumakm2zuhh2ucrcevy7hw8vztjaragvljjnc"
+      ).hash,
     },
     feeSharingTaker: {
       type: PoolAuthorizationMethodType.SIGNATURE,
-      hash: lucid.utils.paymentCredentialOf("addr_test1vqe2eyupqj8e0jr8uumakm2zuhh2ucrcevy7hw8vztjaragvljjnc").hash
+      hash: lucid.utils.paymentCredentialOf(
+        "addr_test1vqe2eyupqj8e0jr8uumakm2zuhh2ucrcevy7hw8vztjaragvljjnc"
+      ).hash,
     },
     poolDynamicFeeUpdater: {
       type: PoolAuthorizationMethodType.SIGNATURE,
-      hash: lucid.utils.paymentCredentialOf("addr_test1vqe2eyupqj8e0jr8uumakm2zuhh2ucrcevy7hw8vztjaragvljjnc").hash
+      hash: lucid.utils.paymentCredentialOf(
+        "addr_test1vqe2eyupqj8e0jr8uumakm2zuhh2ucrcevy7hw8vztjaragvljjnc"
+      ).hash,
     },
     poolFeeUpdater: {
       type: PoolAuthorizationMethodType.SIGNATURE,
-      hash: lucid.utils.paymentCredentialOf("addr_test1vqe2eyupqj8e0jr8uumakm2zuhh2ucrcevy7hw8vztjaragvljjnc").hash
+      hash: lucid.utils.paymentCredentialOf(
+        "addr_test1vqe2eyupqj8e0jr8uumakm2zuhh2ucrcevy7hw8vztjaragvljjnc"
+      ).hash,
     },
     poolStakeKeyUpdater: {
       type: PoolAuthorizationMethodType.SIGNATURE,
-      hash: lucid.utils.paymentCredentialOf("addr_test1vqe2eyupqj8e0jr8uumakm2zuhh2ucrcevy7hw8vztjaragvljjnc").hash
+      hash: lucid.utils.paymentCredentialOf(
+        "addr_test1vqe2eyupqj8e0jr8uumakm2zuhh2ucrcevy7hw8vztjaragvljjnc"
+      ).hash,
     },
   };
   return {
