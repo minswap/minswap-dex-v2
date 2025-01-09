@@ -11,9 +11,9 @@ use amm_dex_v2/types.{
   UpdatePoolParameters, UpdatePoolStakeCredential, WithdrawFeeSharing,
 }
 use amm_dex_v2/utils
-use cardano/address.{Address, Credential, Script, VerificationKey}
+use cardano/address.{Address, Credential, Script, VerificationKey, Inline}
 use cardano/assets.{PolicyId}
-use cardano/transaction.{Input, Output, OutputReference, Transaction}
+use cardano/transaction.{Input, Output, OutputReference, Transaction, find_input}
 
 validator pool_validator(
   // The PolicyID of Authen Minting Policy
@@ -21,12 +21,26 @@ validator pool_validator(
 ) {
   // fn validate_pool
   spend(
-    datum: Option<PoolDatum>,
-    redeemer: PoolRedeemer,
+    _datum: Option<PoolDatum>,
+    _redeemer: PoolRedeemer,
     pool_input_ref: OutputReference,
     transaction: Transaction,
   ) {
-    expect Some(datum) = datum
+    let Transaction { inputs, withdrawals, .. } = transaction
+    expect Some(own_input) = inputs |> find_input(pool_input_ref)
+    expect Some(Inline(own_cred)) = own_input.output.address.stake_credential
+    withdrawals |> pairs.has_key(own_cred)
+  }
+
+  withdraw(redeemer: PoolRedeemer, account: Credential, transaction: Transaction) {
+    let Transaction { inputs, datums, .. } = transaction
+
+    expect Script(own_hash) = account
+    expect Some(own_input) = inputs |> list.find(fn(input) {
+      Script(own_hash) == input.output.address.payment_credential
+    })
+    let Input { output_reference: pool_input_ref, output: Output { datum: own_input_datum, .. } } = own_input
+    expect datum: PoolDatum = utils.must_find_script_datum(datums, own_input_datum)
 
     when redeemer is {
       Batching -> {

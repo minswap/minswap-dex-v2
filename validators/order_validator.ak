@@ -6,8 +6,9 @@ use amm_dex_v2/types.{
   OrderRedeemer,
 }
 use amm_dex_v2/utils
-use cardano/address.{Address, Credential, Script}
-use cardano/transaction.{Input, Output, OutputReference, Transaction}
+use cardano/address.{Address, Credential, Inline, Script}
+use cardano/transaction.{Input,
+  Output, OutputReference, Transaction, find_input}
 
 validator order_validator(
   // the Stake Credential of Pool Batching Validator
@@ -17,44 +18,25 @@ validator order_validator(
 ) {
   // fn validate_order
   spend(
-    raw_datum: Option<OrderDatum>,
-    _o: OutputReference,
-    raw_redeemer: Data,
+    _raw_datum: Option<OrderDatum>,
+    _raw_redeemer: Data,
+    own_ref: OutputReference,
     transaction: Transaction,
   ) {
-    expect redeemer: OrderRedeemer = raw_redeemer
-    when redeemer is {
-      ApplyOrder -> {
-        let Transaction { withdrawals, .. } = transaction
-        // validate that an Order can be spent if there's a `Order Batching` validator in the `withdrawals`
-        pairs.has_key(withdrawals, pool_batching_credential)
-      }
-      CancelOrderByOwner -> {
-        let Transaction { inputs, extra_signatories, withdrawals, mint, .. } =
-          transaction
-        expect Some(order_datum) = raw_datum
-        let OrderDatum { canceller, .. } = order_datum
-        // Canceller can be one of 4 authorization methods
-        utils.authorize_order_license(
-          author: canceller,
-          transaction_inputs: inputs,
-          withdrawals: withdrawals,
-          extra_signatories: extra_signatories,
-          transaction_mint: mint,
-        )
-      }
-      CancelExpiredOrderByAnyone -> {
-        let Transaction { withdrawals, .. } = transaction
-        // validate that an Order can be spent if there's a `Order Batching` validator in the `withdrawals`
-        pairs.has_key(withdrawals, expired_order_cancel_credential)
-      }
-    }
+    let Transaction { inputs, withdrawals, .. } = transaction
+    expect Some(own_input) = find_input(inputs, own_ref)
+    expect Some(own_stake_cred) = own_input.output.address.stake_credential
+    expect Inline(own_cred) = own_stake_cred
+    withdrawals |> pairs.has_key(own_cred)
   }
 
-  // fn validate_expired_order_cancel
-  withdraw(_redeemer: Data, _account: Credential, transaction: Transaction) {
+  // fn validate_order & validate_expired_order_cancel
+  withdraw(raw_redeemer: Data, account: Credential, transaction: Transaction) {
     let Transaction { inputs, outputs, validity_range, datums, .. } =
       transaction
+    expect redeemer: OrderRedeemer = raw_redeemer
+    expect Script(own_hash) = account
+
     // Assume all script inputs are order scripts.
     // All scripts that have the same Order Datum structure will be accepted in this transaction.
     let order_inputs =
@@ -66,7 +48,7 @@ validator order_validator(
             ..
           } = input
           when payment_credential is {
-            Script(_) -> True
+            Script(the_hash) -> the_hash == own_hash
             _ -> False
           }
         },
@@ -74,12 +56,64 @@ validator order_validator(
 
     let start_valid_time_range =
       utils.must_get_finite_start_validity(validity_range)
-    order_validation.validate_cancel_expired_orders(
+    let cancel_expired_orders_validation = order_validation.validate_cancel_expired_orders(
       order_inputs: order_inputs,
       all_outputs: outputs,
       datum_map: datums,
       start_valid_time_range: start_valid_time_range,
     )
+
+    when redeemer is {
+      ApplyOrder -> {
+        let Transaction { withdrawals, .. } = transaction
+        and {
+          // validate that an Order can be spent if there's a `Order Batching` validator in the `withdrawals`
+          pairs.has_key(withdrawals, pool_batching_credential),
+          cancel_expired_orders_validation,
+        }
+      }
+      CancelOrderByOwner -> {
+        let Transaction {
+          inputs,
+          extra_signatories,
+          withdrawals,
+          mint,
+          datums,
+          ..
+        } = transaction
+        // Get order datum from the own script input
+        expect Some(own_input) =
+          inputs
+            |> list.find(
+                fn(input) {
+                  Script(own_hash) == input.output.address.payment_credential
+                },
+              )
+        let Input { output: Output { datum: own_input_datum, .. }, .. } =
+          own_input
+        let order_datum = utils.must_find_script_datum(datums, own_input_datum)
+        expect OrderDatum { canceller, .. } = order_datum
+        and {
+          // Canceller can be one of 4 authorization methods
+          utils.authorize_order_license(
+            author: canceller,
+            transaction_inputs: inputs,
+            withdrawals: withdrawals,
+            extra_signatories: extra_signatories,
+            transaction_mint: mint,
+          ),
+          cancel_expired_orders_validation,
+        }
+      }
+      CancelExpiredOrderByAnyone -> {
+        let Transaction { withdrawals, .. } = transaction
+        and {
+          // validate that an Order can be spent if there's a `Order Batching` validator in the `withdrawals`
+          pairs.has_key(withdrawals, expired_order_cancel_credential),
+          cancel_expired_orders_validation,
+        }
+      }
+    }
   }
 
   else(_) {
