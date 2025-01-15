@@ -44,24 +44,28 @@ validator order_validator(
         inputs,
         fn(input) {
           let Input {
-            output: Output { address: Address { payment_credential, .. }, .. },
+            output: Output {
+              address: Address { payment_credential, stake_credential },
+              ..
+            },
             ..
           } = input
-          when payment_credential is {
-            Script(the_hash) -> the_hash == own_hash
-            _ -> False
+          or {
+            Script(own_hash) == payment_credential,
+            Some(Inline(Script(own_hash))) == stake_credential,
           }
         },
       )
 
     let start_valid_time_range =
       utils.must_get_finite_start_validity(validity_range)
-    let cancel_expired_orders_validation = order_validation.validate_cancel_expired_orders(
-      order_inputs: order_inputs,
-      all_outputs: outputs,
-      datum_map: datums,
-      start_valid_time_range: start_valid_time_range,
-    )
+    let cancel_expired_orders_validation =
+      order_validation.validate_cancel_expired_orders(
+        order_inputs: order_inputs,
+        all_outputs: outputs,
+        datum_map: datums,
+        start_valid_time_range: start_valid_time_range,
+      )
 
     when redeemer is {
       ApplyOrder -> {
@@ -81,29 +85,28 @@ validator order_validator(
           datums,
           ..
         } = transaction
-        // Get order datum from the own script input
-        expect Some(own_input) =
-          inputs
-            |> list.find(
-                fn(input) {
-                  Script(own_hash) == input.output.address.payment_credential
-                },
-              )
-        let Input { output: Output { datum: own_input_datum, .. }, .. } =
-          own_input
-        let order_datum = utils.must_find_script_datum(datums, own_input_datum)
-        expect OrderDatum { canceller, .. } = order_datum
-        and {
-          // Canceller can be one of 4 authorization methods
-          utils.authorize_order_license(
-            author: canceller,
-            transaction_inputs: inputs,
-            withdrawals: withdrawals,
-            extra_signatories: extra_signatories,
-            transaction_mint: mint,
-          ),
-          cancel_expired_orders_validation,
-        }
+        // Check all order inputs for the condition below
+        order_inputs
+          |> list.all(
+              fn(own_input) {
+                let Input { output: Output { datum: own_input_datum, .. }, .. } =
+                  own_input
+                let order_datum =
+                  utils.must_find_script_datum(datums, own_input_datum)
+                expect OrderDatum { canceller, .. } = order_datum
+                and {
+                  // Canceller can be one of 4 authorization methods
+                  utils.authorize_order_license(
+                    author: canceller,
+                    transaction_inputs: inputs,
+                    withdrawals: withdrawals,
+                    extra_signatories: extra_signatories,
+                    transaction_mint: mint,
+                  ),
+                  cancel_expired_orders_validation,
+                }
+              },
+            )
       }
       CancelExpiredOrderByAnyone -> {
         let Transaction { withdrawals, .. } = transaction

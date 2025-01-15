@@ -11,9 +11,10 @@ use amm_dex_v2/types.{
   UpdatePoolParameters, UpdatePoolStakeCredential, WithdrawFeeSharing,
 }
 use amm_dex_v2/utils
-use cardano/address.{Address, Credential, Script, VerificationKey, Inline}
+use cardano/address.{Address, Credential, Inline, Script, VerificationKey}
 use cardano/assets.{PolicyId}
-use cardano/transaction.{Input, Output, OutputReference, Transaction, find_input}
+use cardano/transaction.{Input,
+  Output, OutputReference, Transaction, find_input}
 
 validator pool_validator(
   // The PolicyID of Authen Minting Policy
@@ -32,15 +33,30 @@ validator pool_validator(
     withdrawals |> pairs.has_key(own_cred)
   }
 
-  withdraw(redeemer: PoolRedeemer, account: Credential, transaction: Transaction) {
+  withdraw(
+    redeemer: PoolRedeemer,
+    account: Credential,
+    transaction: Transaction,
+  ) {
     let Transaction { inputs, datums, .. } = transaction
 
     expect Script(own_hash) = account
-    expect Some(own_input) = inputs |> list.find(fn(input) {
-      Script(own_hash) == input.output.address.payment_credential
-    })
-    let Input { output_reference: pool_input_ref, output: Output { datum: own_input_datum, .. } } = own_input
-    expect datum: PoolDatum = utils.must_find_script_datum(datums, own_input_datum)
+    expect Some(own_input) =
+      inputs
+        |> list.find(
+            fn(input) {
+              or {
+                Script(own_hash) == input.output.address.payment_credential,
+                Some(Inline(Script(own_hash))) == input.output.address.stake_credential,
+              }
+            },
+          )
+    let Input {
+      output_reference: pool_input_ref,
+      output: Output { datum: own_input_datum, .. },
+    } = own_input
+    expect datum: PoolDatum =
+      utils.must_find_script_datum(datums, own_input_datum)
 
     when redeemer is {
       Batching -> {
@@ -166,6 +182,8 @@ validator pool_batching_validator(
     stake_credential: Credential,
     transaction: Transaction,
   ) {
+    expect Script(own_cred) = stake_credential
+
     let Transaction {
       inputs,
       outputs,
@@ -215,8 +233,14 @@ validator pool_batching_validator(
         inputs,
         fn(input) {
           let Input { output: Output { address: addr, .. }, .. } = input
-          let Address { payment_credential: payment_cred, .. } = addr
-          payment_cred == pool_payment_cred
+          let Address {
+            payment_credential: payment_cred,
+            stake_credential: stake_cred,
+          } = addr
+          or {
+            payment_cred == pool_payment_cred,
+            stake_cred == Some(Inline(Script(own_cred))),
+          }
         },
       )
     let pool_outputs =
@@ -224,8 +248,14 @@ validator pool_batching_validator(
         outputs,
         fn(output) {
           let Output { address: addr, .. } = output
-          let Address { payment_credential: payment_cred, .. } = addr
-          payment_cred == pool_payment_cred
+          let Address {
+            payment_credential: payment_cred,
+            stake_credential: stake_cred,
+          } = addr
+          or {
+            payment_cred == pool_payment_cred,
+            stake_cred == Some(Inline(Script(own_cred))),
+          }
         },
       )
 
@@ -238,9 +268,13 @@ validator pool_batching_validator(
         fn(input) {
           let Input { output: out, .. } = input
           let Output { address: addr, .. } = out
-          let Address { payment_credential: payment_cred, .. } = addr
+          let Address {
+            payment_credential: payment_cred,
+            stake_credential: stake_cred,
+          } = addr
           and {
             payment_cred != pool_payment_cred,
+            stake_cred != Some(Inline(Script(own_cred))),
             when batcher_address is {
               PAMSignature(pkh) -> payment_cred != VerificationKey(pkh)
               PAMSpendScript(sh) -> payment_cred != Script(sh)
