@@ -89,10 +89,9 @@ validator order_validator(
 
 // fn validate_expired_order_cancel
 validator validate_expired_order_cancel {
-  withdraw(_redeemer: Data, account: Credential, transaction: Transaction) {
+  withdraw(_redeemer: Data, _account: Credential, transaction: Transaction) {
     let Transaction { inputs, outputs, validity_range, datums, .. } =
       transaction
-    expect Script(own_hash) = account
 
     // Assume all script inputs are order scripts.
     // All scripts that have the same Order Datum structure will be accepted in this transaction.
@@ -108,8 +107,14 @@ validator validate_expired_order_cancel {
             ..
           } = input
           or {
-            Script(own_hash) == payment_credential,
-            Some(Inline(Script(own_hash))) == stake_credential,
+            when payment_credential is {
+              Script(_) -> True
+              _ -> False
+            },
+            when stake_credential is {
+              Some(Inline(Script(_))) -> True
+              _ -> False
+            }
           }
         },
       )
