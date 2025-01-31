@@ -1,0 +1,18 @@
+{
+  "name": "tests",
+  "version": "1.0.0",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "dependencies": {
+    "@meshsdk/core": "^1.9.0-beta.0",
+    "@meshsdk/core-csl": "^1.9.0-beta.0",
+    "dotenv": "^16.4.7",
+    "typescript": "^5.7.3"
+  }
+}

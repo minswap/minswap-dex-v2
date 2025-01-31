@@ -9,3 +9,5 @@ build
 build-tsc
 coverage
 .idea
+# enviroment variables
+*.env*
