@@ -182,8 +182,6 @@ validator pool_batching_validator(
     stake_credential: Credential,
     transaction: Transaction,
   ) {
-    expect Script(own_cred) = stake_credential
-
     let Transaction {
       inputs,
       outputs,
@@ -239,7 +237,7 @@ validator pool_batching_validator(
           } = addr
           or {
             payment_cred == pool_payment_cred,
-            stake_cred == Some(Inline(Script(own_cred))),
+            stake_cred == Some(Inline(pool_payment_cred)),
           }
         },
       )
@@ -254,7 +252,7 @@ validator pool_batching_validator(
           } = addr
           or {
             payment_cred == pool_payment_cred,
-            stake_cred == Some(Inline(Script(own_cred))),
+            stake_cred == Some(Inline(pool_payment_cred)),
           }
         },
       )
@@ -274,7 +272,7 @@ validator pool_batching_validator(
           } = addr
           and {
             payment_cred != pool_payment_cred,
-            stake_cred != Some(Inline(Script(own_cred))),
+            stake_cred != Some(Inline(pool_payment_cred)),
             when batcher_address is {
               PAMSignature(pkh) -> payment_cred != VerificationKey(pkh)
               PAMSpendScript(sh) -> payment_cred != Script(sh)
