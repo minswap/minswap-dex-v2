@@ -32,8 +32,8 @@ const factoryRedeemer = mConStr0([
     assetB,
 ]);
 
-console.log("Asset A unit:", alwaysSuccessMintValidatorHash + tokenA);
-console.log("Asset B unit:", alwaysSuccessMintValidatorHash + tokenB);
+console.log("Asset A unit:", alwaysSuccessMintValidatorHash, tokenA);
+console.log("Asset B unit:", alwaysSuccessMintValidatorHash, tokenB);
 
 // compute lp asset name
 // const assetASha256 = crypto.createHash('sha3-256').update(alwaysSuccessMintValidatorHash + tokenA).digest('hex');
