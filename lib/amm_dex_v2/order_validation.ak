@@ -1734,21 +1734,23 @@ pub fn validate_cancel_expired_orders(
   expect Some((expired_time, max_tip)) = expiry_setting_opt
   expect and {
       // the transaction must be created after expired time
-      expired_time < start_valid_time_range,
+      (expired_time < start_valid_time_range)?,
+      trace @"expired_time": expired_time
+      trace @"start_valid_time_range": start_valid_time_range
       // the output have to paid back to sender
-      refund_receiver == order_out_address,
+      (refund_receiver == order_out_address)?,
       // ADA in the order might be deducted for tipping a canceller
       // The tip must not exceed the maximum tip
       // Other tokens must be returned to sender
-      assets.lovelace_of(order_out_value) >= assets.lovelace_of(order_in_value) - max_tip,
-      assets.without_lovelace(order_out_value) == assets.without_lovelace(
+      (assets.lovelace_of(order_out_value) >= assets.lovelace_of(order_in_value) - max_tip)?,
+      (assets.without_lovelace(order_out_value) == assets.without_lovelace(
         order_in_value,
-      ),
+      ))?,
       // If sender is script address, the output have to attach the defined datum
       is_valid_datum(
         raw_datum: raw_order_output_datum,
         extra_order_datum: refund_receiver_datum,
-      ),
+      )?,
     }
   if rest_order_inputs == [] {
     True

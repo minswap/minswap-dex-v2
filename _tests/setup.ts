@@ -6,10 +6,12 @@ import {
     applyParamsToScript,
     deserializeAddress,
     resolveScriptHash,
+    resolveStakeKeyHash,
     serializeNativeScript,
     serializePlutusScript,
+    serializeRewardAddress,
 } from "@meshsdk/core";
-import { builtinByteString, conStr, NativeScript, outputReference, scriptAddress, UTxO } from "@meshsdk/common";
+import { builtinByteString, conStr, mPubKeyAddress, NativeScript, outputReference, scriptAddress, scriptHash, ScriptHash, UTxO } from "@meshsdk/common";
 import dotenv from "dotenv";
 dotenv.config();
 import blueprint from "../plutus.json" with { type: "json" };
@@ -21,7 +23,7 @@ if (!maestroKey) {
     throw new Error("MAESTRO_KEY does not exist");
 }
 const blockchainProvider = new MaestroProvider({
-    network: 'Preprod',
+    network: 'Preview',
     apiKey: maestroKey,
 });
 
@@ -50,12 +52,13 @@ const wallet1 = new MeshWallet({
 const wallet1Address = await wallet1.getChangeAddress();
 
 const wallet1Utxos = await wallet1.getUtxos();
-const wallet1Collateral: UTxO = (await wallet1.getCollateral())[0]
+const wallet1Collateral: UTxO = (await blockchainProvider.fetchUTxOs("0f61fee1b8e12b8faf807794464bef3195a32b7949270c7f530fff5144e36aa1", 5))[0];
+// const wallet1Collateral: UTxO = (await wallet1.getCollateral())[0]
 if (!wallet1Collateral) {
     throw new Error('No collateral utxo found');
 }
 
-const { pubKeyHash: wallet1VK } = deserializeAddress(wallet1Address);
+const { pubKeyHash: wallet1VK, stakeCredentialHash: wallet1SK } = deserializeAddress(wallet1Address);
 
 // Setup wallet2
 const wallet2Passphrase = process.env.WALLET_PASSPHRASE_TWO;
@@ -92,15 +95,21 @@ const { address: multiSigAddress, scriptCbor: multiSigCbor } = serializeNativeSc
 const multisigHash = resolveNativeScriptHash(nativeScript);
 
 // Evaluator for Aiken verbose mode
-const evaluator = new OfflineEvaluator(blockchainProvider, "preprod");
+const evaluator = new OfflineEvaluator(blockchainProvider, "preview");
 // Create transaction builder
 const txBuilder = new MeshTxBuilder({
     fetcher: blockchainProvider,
     submitter: blockchainProvider,
     evaluator: evaluator, // Can also be "evaluator: blockchainProvider,"
+    // evaluator: blockchainProvider,
     verbose: false,
 });
-txBuilder.setNetwork('preprod');
+txBuilder.setNetwork('preview');
+
+// constants
+const factoryAssetName = "4d5346";
+const poolAuthAssetName = "4d5350";
+const globalSettingAssetName = "4d534753";
 
 // Always true validator
 const alwaysSuccessValidator = blueprint.validators.filter(v => (
@@ -117,9 +126,11 @@ const alwaysSuccessValidatorHash = resolveScriptHash(alwaysSuccessValidatorScrip
 const authenValidator = blueprint.validators.filter(v => (
     v.title.includes("authen_minting_policy.authen_minting_policy.mint")
 ));
+const dexInitParamTxHash = "038cac6973b0d784ed7a7e472ce7a9cf9fcc14dce2cdf018ce8e1c742000bc8b";
+const dexInitParamTxIndex = 2;
 const authenValidatorScript = applyParamsToScript(
     authenValidator[0].compiledCode,
-    [outputReference("3c149a5500447e8f8c7a508ef47f1743da0ff2e4ef4c6d02b1a44a9888c89569", 0)], // change this to real values <====
+    [outputReference(dexInitParamTxHash, dexInitParamTxIndex)], // change this on each dex init
     "JSON",
 );
 const authenPolicyId = resolveScriptHash(authenValidatorScript, "V3");
@@ -139,9 +150,16 @@ const poolValidatorScript = applyParamsToScript(
     "JSON",
 );
 const poolStakeCredentialHash = resolveScriptHash(poolValidatorScript, "V3");
+const poolValidatorAddress = serializePlutusScript(
+    { code: alwaysSuccessValidatorScript, version: "V3" },
+    poolStakeCredentialHash,
+    0,
+    true,
+).address;
 const poolAddressData = scriptAddress(
     alwaysSuccessValidatorHash, // modify here <==== DONE
     poolStakeCredentialHash,
+    true,
 );
 
 // Pool Batching Validator
@@ -180,6 +198,11 @@ const orderCanclValidatorScript = applyParamsToScript(
     "JSON",
 );
 const orderCanclValidatorHash = resolveScriptHash(orderCanclValidatorScript, "V3");
+const orderCanclValidatorRewardAddress = serializeRewardAddress(
+    orderCanclValidatorHash,
+    true,
+    0,
+);
 
 // Order Validator
 const orderValidator = blueprint.validators.filter(v => (
@@ -190,17 +213,39 @@ const orderValidatorScript = applyParamsToScript(
     [conStr(1, [builtinByteString(poolBatchingValidatorHash)]), conStr(1, [builtinByteString(orderCanclValidatorHash)])],
     "JSON",
 );
-console.log('orderValidatorScript:', orderValidatorScript);
+const orderValidatorScriptHash = resolveScriptHash(orderValidatorScript, "V3");
+const orderValidatorAddress = serializePlutusScript(
+    { code: alwaysSuccessValidatorScript, version: "V3" },
+    orderValidatorScriptHash,
+    0,
+    true,
+).address;
+const orderValidatorRewardAddress = serializeRewardAddress(
+    orderValidatorScriptHash,
+    true,
+    0,
+);
+// console.log("orderValidatorScriptHash:", orderValidatorScriptHash);
+// console.log('orderValidator Reward Address:', orderValidatorRewardAddress);
+
+// tests
+// console.log("orderValidatorScriptHash:", orderValidatorScriptHash);
+// const { pubKeyHash: orderVK, stakeCredentialHash: orderSK, scriptHash: orderScH, stakeScriptCredentialHash: orderStakeScH  } = deserializeAddress(orderValidatorAddress);
+// console.log("orderVK:", orderVK);
+// console.log("orderSK:", orderSK);
+// console.log("orderScH:", orderScH);
+// console.log("orderStakeScH:", orderStakeScH);
+
 
 export {
     blueprint,
-    maestroKey,
     wallet1Passphrase,
     blockchainProvider,
     txBuilder,
     wallet1,
     wallet1Address,
     wallet1VK,
+    wallet1SK,
     wallet1Utxos,
     wallet1Collateral,
     wallet2,
@@ -210,6 +255,27 @@ export {
     authenValidatorScript,
     authenPolicyId,
     authenAddress,
+    dexInitParamTxHash,
+    dexInitParamTxIndex,
     // factory
+    factoryValidatorScript,
     factoryAddress,
+    // order
+    orderValidatorScript,
+    orderValidatorAddress,
+    orderValidatorRewardAddress,
+    orderValidatorScriptHash,
+    // order cancellation validator
+    orderCanclValidatorScript,
+    orderCanclValidatorRewardAddress,
+    // pool
+    poolValidatorAddress,
+    // pool batching
+    poolBatchingValidatorHash,
+    // always success
+    alwaysSuccessValidatorScript,
+    // constants
+    factoryAssetName,
+    poolAuthAssetName,
+    globalSettingAssetName,
 }

@@ -1,13 +1,13 @@
-import { mConStr0, mConStr1 } from "@meshsdk/core";
-import { authenAddress, authenPolicyId, authenValidatorScript, factoryAddress, txBuilder, wallet1, wallet1Address, wallet1Collateral, wallet1Utxos, wallet1VK } from "./setup.js"
+import { mConStr0 } from "@meshsdk/core";
+import { authenAddress, authenPolicyId, authenValidatorScript, blockchainProvider, dexInitParamTxHash, dexInitParamTxIndex, factoryAddress, factoryAssetName, globalSettingAssetName, txBuilder, wallet1, wallet1Address, wallet1Collateral, wallet1Utxos, wallet1VK } from "./setup.js"
 
-const factoryNftUnit = authenPolicyId + "4d5346";
+const factoryNftUnit = authenPolicyId + factoryAssetName;
 const factoryDatum = mConStr0([
     "00",
     "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff00",
 ]);
 
-const globalSettingNftUnit = authenPolicyId + "4d534753";
+const globalSettingNftUnit = authenPolicyId + globalSettingAssetName;
 const poolAuthorizationMethod = mConStr0([wallet1VK]);
 const globalSettingDatum = mConStr0([
     [poolAuthorizationMethod],
@@ -18,15 +18,25 @@ const globalSettingDatum = mConStr0([
     poolAuthorizationMethod,
 ]);
 
+const txInput = (await blockchainProvider.fetchUTxOs(dexInitParamTxHash, dexInitParamTxIndex))[0];
+
+console.log("Authen policy ID:", authenPolicyId);
+
 const unsignedTx = await txBuilder
+    .txIn(
+        txInput.input.txHash,
+        txInput.input.outputIndex,
+        txInput.output.amount,
+        txInput.output.address,
+    )
     .mintPlutusScriptV3()
-    .mint("1", authenPolicyId, "4d534753")
+    .mint("1", authenPolicyId, globalSettingAssetName)
     .mintingScript(authenValidatorScript)
-    .mintRedeemerValue(mConStr1([]))
+    .mintRedeemerValue(mConStr0([]))
     .mintPlutusScriptV3()
-    .mint("1", authenPolicyId, "4d5346")
+    .mint("1", authenPolicyId, factoryAssetName)
     .mintingScript(authenValidatorScript)
-    .mintRedeemerValue(mConStr1([]))
+    .mintRedeemerValue(mConStr0([]))
     .txOut(factoryAddress, [{ unit: factoryNftUnit, quantity: "1" }])
     .txOutInlineDatumValue(factoryDatum)
     .txOut(authenAddress, [{ unit: globalSettingNftUnit, quantity: "1" }])

@@ -40,6 +40,7 @@ validator factory_validator(
         asset_b_policy_id,
         asset_b_asset_name,
       )
+    trace @"computed lp asset name onchain": lp_asset_name
 
     // validate that there's single Factory UTxO in Transaction Input and contain single legitimate Factory NFT Token
     expect Some(factory_input) =
@@ -118,12 +119,12 @@ validator factory_validator(
     // (old head, old tail) -> (old head, Pool LP Token Name) and (Pool LP Token Name, old tail)
     // old head < Pool LP Token Name < old tail
     expect and {
-        builtin.less_than_bytearray(new_head_1, new_tail_1),
-        builtin.less_than_bytearray(new_head_2, new_tail_2),
-        new_head_1 == current_head,
-        new_tail_2 == current_tail,
-        lp_asset_name == new_tail_1,
-        lp_asset_name == new_head_2,
+        builtin.less_than_bytearray(new_head_1, new_tail_1)?,
+        builtin.less_than_bytearray(new_head_2, new_tail_2)?,
+        (new_head_1 == current_head)?,
+        (new_tail_2 == current_tail)?,
+        (lp_asset_name == new_tail_1)?,
+        (lp_asset_name == new_head_2)?,
       }
     // validate that there is a new Pool UTxO in Transaction Outputs. 
     // Pool UTxO must contain single Pool NFT Token
@@ -193,43 +194,43 @@ validator factory_validator(
         |> assets.add(authen_policy_id, utils.pool_auth_asset_name, 1)
     and {
       // stake_credential must be the same with configured credential
-      pool_stake_credential == pool_batching_stake_credential,
+      (pool_stake_credential == pool_batching_stake_credential)?,
       // asset_a and asset_b must be the same with Factory Redeemer
-      pool_datum_asset_a == asset_a,
-      pool_datum_asset_b == asset_b,
+      (pool_datum_asset_a == asset_a)?,
+      (pool_datum_asset_b == asset_b)?,
       // Total Liquidity in PoolDatum must be sqrt(amount_a * amount_b)
-      pool_datum_total_liquidity == total_liquidity,
+      (pool_datum_total_liquidity == total_liquidity)?,
       // Pool Reserve must be the same between datum and value 
-      pool_datum_reserve_a == amount_a,
-      pool_datum_reserve_b == amount_b,
+      (pool_datum_reserve_a == amount_a)?,
+      (pool_datum_reserve_b == amount_b)?,
       // Initial Pool Reserves must be positive and the liquditiy must be greater than the burn liquidity
-      amount_a > 0,
-      amount_b > 0,
-      total_liquidity > utils.default_burn_liquidity,
+      (amount_a > 0)?,
+      (amount_b > 0)?,
+      (total_liquidity > utils.default_burn_liquidity)?,
       // base_fee_a_numerator and base_fee_b_numerator must be the same
-      pool_datum_base_fee_a_numerator == pool_datum_base_fee_b_numerator,
+      (pool_datum_base_fee_a_numerator == pool_datum_base_fee_b_numerator)?,
       // base_fee_a_numerator and base_fee_b_numerator must be between **5** and **2000**
-      pool_validation.validate_fee_percent(
+      (pool_validation.validate_fee_percent(
         fee_num: pool_datum_base_fee_a_numerator,
         max_fee_num: utils.max_base_fee_numerator,
         min_fee_num: utils.min_base_fee_numerator,
-      ),
+      ))?,
       // Dynamic Fee is not allowed in Pool Creation 
-      pool_allow_dynamic_fee == False,
+      (pool_allow_dynamic_fee == False)?,
       // fee_sharing_numerator_opt must be empty
-      pool_datum_fee_sharing_numerator_opt == None,
+      (pool_datum_fee_sharing_numerator_opt == None)?,
       // Transaction must mint necessary assets
-      mint == pool_validation.get_pool_creation_expected_mint(
+      (mint == pool_validation.get_pool_creation_expected_mint(
         authen_policy_id: authen_policy_id,
         lp_asset_name: lp_asset_name,
-      ),
+      ))?,
       // Pool Value must only have necessary Token:
       // - Asset A 
       // - Asset B
       // - remaining LP Token (_MAX_INT64_ - _total_liquidity_)
       // - 1 Pool NFT Token
       // - 3 ADA (required ADA for an UTxO)
-      expected_pool_out_value == pool_output_value,
+      (expected_pool_out_value == pool_output_value)?,
     }
   }
 
