@@ -34,7 +34,7 @@ const blockchainProvider = new MaestroProvider({
 // }
 // const blockchainProvider = new BlockfrostProvider(blockfrostId);
 
-// import admin's wallet passphrase and initialize the wallet
+// import wallet1's wallet passphrase and initialize the wallet
 const wallet1Passphrase = process.env.WALLET_PASSPHRASE_ONE;
 if (!wallet1Passphrase) {
     throw new Error("WALLET_PASSPHRASE_ONE does not exist");
@@ -76,6 +76,11 @@ const wallet2 = new MeshWallet({
 });
 const wallet2Address = await wallet1.getChangeAddress();
 const { pubKeyHash: wallet2VK } = deserializeAddress(wallet2Address);
+const wallet2Utxos = await wallet2.getUtxos();
+const wallet2Collateral: UTxO = (await wallet2.getCollateral())[0]
+if (!wallet2Collateral) {
+    throw new Error('No collateral utxo found');
+}
 
 // Setup multisig
 const nativeScript: NativeScript = {
@@ -239,16 +244,21 @@ const orderValidatorRewardAddress = serializeRewardAddress(
 
 export {
     blueprint,
-    wallet1Passphrase,
     blockchainProvider,
     txBuilder,
+    // wallet1
     wallet1,
     wallet1Address,
     wallet1VK,
     wallet1SK,
     wallet1Utxos,
     wallet1Collateral,
+    // wallet 2
     wallet2,
+    wallet2Collateral,
+    wallet2Utxos,
+    wallet2Address,
+    // multisig
     multisigHash,
     multiSigAddress,
     // authen

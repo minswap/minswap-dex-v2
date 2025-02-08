@@ -18,7 +18,7 @@ const orderUtxo = (await blockchainProvider.fetchAddressUTxOs(orderValidatorAddr
 if (!orderUtxo) {
     throw new Error("order utxo not found!");
 }
-console.log("orderUtxos:", orderUtxo);
+console.log("orderUtxo:", orderUtxo);
 
 const invalidBefore = unixTimeToEnclosingSlot(
     (Date.now() - 15000),

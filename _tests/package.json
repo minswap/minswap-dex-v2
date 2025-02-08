@@ -13,7 +13,7 @@
     "@meshsdk/core": "^1.8.14",
     "@meshsdk/core-csl": "^1.8.14",
     "dotenv": "^16.4.7",
-    "lucid-cardano": "^0.10.11",
+    "sha3": "^2.1.4",
     "typescript": "^5.7.3"
   }
 }
