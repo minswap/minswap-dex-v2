@@ -11,11 +11,13 @@ import {
     serializePlutusScript,
     serializeRewardAddress,
 } from "@meshsdk/core";
-import { builtinByteString, conStr, mPubKeyAddress, NativeScript, outputReference, scriptAddress, scriptHash, ScriptHash, UTxO } from "@meshsdk/common";
+import { builtinByteString, conStr, mConStr0, mPubKeyAddress, NativeScript, outputReference, scriptAddress, scriptHash, ScriptHash, stringToHex, UTxO } from "@meshsdk/common";
 import dotenv from "dotenv";
 dotenv.config();
 import blueprint from "../plutus.json" with { type: "json" };
+import testBlueprint from "./always_success_mint/plutus.json" with { type: "json" };
 import { OfflineEvaluator, resolveNativeScriptHash } from "@meshsdk/core-csl";
+import { SHA3 } from "sha3";
 
 // Setup blockhain provider as Maestro
 const maestroKey = process.env.MAESTRO_KEY;
@@ -116,6 +118,18 @@ const factoryAssetName = "4d5346";
 const poolAuthAssetName = "4d5350";
 const globalSettingAssetName = "4d534753";
 
+// Utils
+const calculateInitialLiquidity = (out_a: number, out_b: number) => {
+    let p = out_a * out_b
+    let sqrt = Math.floor(Math.sqrt(p)); // mimicking Aiken, because it floors any decimal
+    if ((sqrt * sqrt) < p) {
+        // console.log("sqrt + 1:", sqrt + 1);
+        return (sqrt + 1);
+    }
+    // console.log("sqrt:", sqrt);
+    return sqrt;
+}
+
 // Always true validator
 const alwaysSuccessValidator = blueprint.validators.filter(v => (
     v.title.includes("always_success.always_success.spend")
@@ -161,6 +175,11 @@ const poolValidatorAddress = serializePlutusScript(
     0,
     true,
 ).address;
+const poolValidatorRewardAddress = serializeRewardAddress(
+    poolStakeCredentialHash,
+    true,
+    0,
+);
 const poolAddressData = scriptAddress(
     alwaysSuccessValidatorHash, // modify here <==== DONE
     poolStakeCredentialHash,
@@ -177,6 +196,11 @@ const poolBatchingValidatorScript = applyParamsToScript(
     "JSON",
 );
 const poolBatchingValidatorHash = resolveScriptHash(poolBatchingValidatorScript, "V3");
+const poolBatchingValidatorRewardAddress = serializeRewardAddress(
+    poolBatchingValidatorHash,
+    true,
+    0,
+);
 
 // Factory Validator
 const factoryValidator = blueprint.validators.filter(v => (
@@ -241,6 +265,48 @@ const orderValidatorRewardAddress = serializeRewardAddress(
 // console.log("orderScH:", orderScH);
 // console.log("orderStakeScH:", orderStakeScH);
 
+// test mint
+// Always success mint validator
+const alwaysSuccessMintValidator = testBlueprint.validators.filter(v => (
+    v.title.includes("placeholder.placeholder.mint")
+));
+const alwaysSuccessValidatorMintScript = applyParamsToScript(
+    alwaysSuccessMintValidator[0].compiledCode,
+    [],
+    "JSON",
+);
+const alwaysSuccessMintValidatorHash = resolveScriptHash(alwaysSuccessValidatorMintScript, "V3");
+
+// pool utils
+const tokenA = stringToHex("iMyTokenTwo");
+const assetA = mConStr0([
+    alwaysSuccessMintValidatorHash,
+    tokenA,
+]);
+const tokenB = stringToHex("myTokenOne");
+const assetB = mConStr0([
+    alwaysSuccessMintValidatorHash,
+    tokenB,
+]);
+// compute lp asset name
+const sha3 = (hex: string): string => {
+    const hash = new SHA3(256);
+    hash.update(hex, "hex");
+    return hash.digest("hex");
+  }
+const assetASha256 = sha3(alwaysSuccessMintValidatorHash + tokenA);
+const assetBSha256 = sha3(alwaysSuccessMintValidatorHash + tokenB);
+const lpAssetName = sha3(assetASha256 + assetBSha256);
+// asset supplies
+const iMyTokenTwoSupply = 1500;
+const myTokenOneSupply = 1500;
+const totalLiquidity = calculateInitialLiquidity(myTokenOneSupply, iMyTokenTwoSupply);
+const maxInt64 = 9223372036854775807n;
+const remainingLiquidity = maxInt64 - (BigInt(totalLiquidity) - 10n);
+
+// order utils
+const swapAmount = 20;
+const orderLovelaceAmount = 10000000;
 
 export {
     blueprint,
@@ -280,12 +346,35 @@ export {
     orderCanclValidatorRewardAddress,
     // pool
     poolValidatorAddress,
+    poolValidatorRewardAddress,
+    poolValidatorScript,
     // pool batching
     poolBatchingValidatorHash,
+    poolBatchingValidatorRewardAddress,
+    poolBatchingValidatorScript,
     // always success
     alwaysSuccessValidatorScript,
+    // always success mint
+    alwaysSuccessValidatorMintScript,
+    alwaysSuccessMintValidatorHash,
     // constants
     factoryAssetName,
     poolAuthAssetName,
     globalSettingAssetName,
+    // Utils
+    calculateInitialLiquidity,
+    // pool utils
+    tokenA,
+    tokenB,
+    assetA,
+    assetB,
+    lpAssetName,
+    iMyTokenTwoSupply,
+    myTokenOneSupply,
+    totalLiquidity,
+    maxInt64,
+    remainingLiquidity,
+    // order utils
+    swapAmount,
+    orderLovelaceAmount,
 }

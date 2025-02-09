@@ -1,7 +1,5 @@
 import { mConStr0, mConStr1, stringToHex } from "@meshsdk/core";
-import { authenPolicyId, authenValidatorScript, blockchainProvider, factoryAddress, factoryAssetName, poolAuthAssetName, poolBatchingValidatorHash, poolValidatorAddress, txBuilder, wallet1, wallet1Address, wallet1Collateral, wallet1Utxos } from "./setup.js";
-import { alwaysSuccessMintValidatorHash } from "./mint_test_tokens.js";
-import { SHA3 } from "sha3";
+import { alwaysSuccessMintValidatorHash, assetA, assetB, authenPolicyId, authenValidatorScript, blockchainProvider, factoryAddress, factoryAssetName, iMyTokenTwoSupply, lpAssetName, maxInt64, myTokenOneSupply, poolAuthAssetName, poolBatchingValidatorHash, poolValidatorAddress, remainingLiquidity, totalLiquidity, txBuilder, wallet1, wallet1Address, wallet1Collateral, wallet1Utxos } from "./setup.js";
 // Authen
 const authenScriptTxHash = "cd7e32ac4dbb39a18b0dedc6b0503efc7d7245bf0318d5c223b6a80de9ae12bd";
 const authenScriptTxIndex = 0;
@@ -13,32 +11,12 @@ const factoryInput = factoryUtxos[factoryUtxos.length - 1];
 if (!factoryInput) {
     throw new Error('Factory input not found');
 }
-const tokenA = stringToHex("iMyTokenTwo");
-const assetA = mConStr0([
-    alwaysSuccessMintValidatorHash,
-    tokenA,
-]);
-const tokenB = stringToHex("myTokenOne");
-const assetB = mConStr0([
-    alwaysSuccessMintValidatorHash,
-    tokenB,
-]);
 const factoryRedeemer = mConStr0([
     assetA,
     assetB,
 ]);
-console.log("Asset A unit:", alwaysSuccessMintValidatorHash, tokenA);
-console.log("Asset B unit:", alwaysSuccessMintValidatorHash, tokenB);
-// compute lp asset name
-const sha3 = (hex) => {
-    const hash = new SHA3(256);
-    hash.update(hex, "hex");
-    return hash.digest("hex");
-};
-const assetASha256 = sha3(alwaysSuccessMintValidatorHash + tokenA);
-const assetBSha256 = sha3(alwaysSuccessMintValidatorHash + tokenB);
-const lpAssetName = sha3(assetASha256 + assetBSha256);
-console.log("lpAssetName offchain:", lpAssetName, '\n');
+// console.log("Asset A unit:", alwaysSuccessMintValidatorHash, tokenA);
+// console.log("Asset B unit:", alwaysSuccessMintValidatorHash, tokenB);
 const factoryNftUnit = authenPolicyId + factoryAssetName;
 const factoryDatum1 = mConStr0([
     "00",
@@ -48,19 +26,6 @@ const factoryDatum2 = mConStr0([
     lpAssetName,
     "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff00",
 ]);
-const calculateInitialLiquidity = (out_a, out_b) => {
-    let p = out_a * out_b;
-    let sqrt = Math.floor(Math.sqrt(p)); // mimicking Aiken, because it floors any decimal
-    if ((sqrt * sqrt) < p) {
-        console.log("sqrt + 1:", sqrt + 1);
-        return (sqrt + 1);
-    }
-    console.log("sqrt:", sqrt);
-    return sqrt;
-};
-const iMyTokenTwoSupply = 1500;
-const myTokenOneSupply = 1500;
-const totalLiquidity = calculateInitialLiquidity(myTokenOneSupply, iMyTokenTwoSupply);
 // pool datum
 const poolDatum = mConStr0([
     mConStr1([poolBatchingValidatorHash]),
@@ -74,11 +39,9 @@ const poolDatum = mConStr0([
     mConStr1([]),
     mConStr0([]),
 ]);
-const maxInt64 = 9223372036854775807n;
-const remainingLiquidity = maxInt64 - (BigInt(totalLiquidity) - 10n);
-console.log("totalLiquidity:", totalLiquidity, '\n');
-console.log("remainingLiquidity:", remainingLiquidity, '\n');
-console.log("remainingLiquidity String:", String(remainingLiquidity), '\n');
+// console.log("totalLiquidity:", totalLiquidity, '\n');
+// console.log("remainingLiquidity:", remainingLiquidity, '\n');
+// console.log("remainingLiquidity String:", String(remainingLiquidity), '\n');
 const unsignedTx = await txBuilder
     // consume last factory UTxO
     .spendingPlutusScriptV3()

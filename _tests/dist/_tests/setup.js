@@ -1,9 +1,11 @@
 import { MaestroProvider, MeshTxBuilder, MeshWallet, applyParamsToScript, deserializeAddress, resolveScriptHash, serializeNativeScript, serializePlutusScript, serializeRewardAddress, } from "@meshsdk/core";
-import { builtinByteString, conStr, outputReference, scriptAddress } from "@meshsdk/common";
+import { builtinByteString, conStr, mConStr0, outputReference, scriptAddress, stringToHex } from "@meshsdk/common";
 import dotenv from "dotenv";
 dotenv.config();
 import blueprint from "../plutus.json" with { type: "json" };
+import testBlueprint from "./always_success_mint/plutus.json" with { type: "json" };
 import { OfflineEvaluator, resolveNativeScriptHash } from "@meshsdk/core-csl";
+import { SHA3 } from "sha3";
 // Setup blockhain provider as Maestro
 const maestroKey = process.env.MAESTRO_KEY;
 if (!maestroKey) {
@@ -93,6 +95,17 @@ txBuilder.setNetwork('preview');
 const factoryAssetName = "4d5346";
 const poolAuthAssetName = "4d5350";
 const globalSettingAssetName = "4d534753";
+// Utils
+const calculateInitialLiquidity = (out_a, out_b) => {
+    let p = out_a * out_b;
+    let sqrt = Math.floor(Math.sqrt(p)); // mimicking Aiken, because it floors any decimal
+    if ((sqrt * sqrt) < p) {
+        // console.log("sqrt + 1:", sqrt + 1);
+        return (sqrt + 1);
+    }
+    // console.log("sqrt:", sqrt);
+    return sqrt;
+};
 // Always true validator
 const alwaysSuccessValidator = blueprint.validators.filter(v => (v.title.includes("always_success.always_success.spend")));
 const alwaysSuccessValidatorScript = applyParamsToScript(alwaysSuccessValidator[0].compiledCode, [], "JSON");
@@ -111,6 +124,7 @@ const poolValidator = blueprint.validators.filter(v => (v.title.includes("pool_v
 const poolValidatorScript = applyParamsToScript(poolValidator[0].compiledCode, [builtinByteString(authenPolicyId)], "JSON");
 const poolStakeCredentialHash = resolveScriptHash(poolValidatorScript, "V3");
 const poolValidatorAddress = serializePlutusScript({ code: alwaysSuccessValidatorScript, version: "V3" }, poolStakeCredentialHash, 0, true).address;
+const poolValidatorRewardAddress = serializeRewardAddress(poolStakeCredentialHash, true, 0);
 const poolAddressData = scriptAddress(alwaysSuccessValidatorHash, // modify here <==== DONE
 poolStakeCredentialHash, true);
 // Pool Batching Validator
@@ -118,6 +132,7 @@ const poolBatchingValidator = blueprint.validators.filter(v => (v.title.includes
 const poolBatchingValidatorScript = applyParamsToScript(poolBatchingValidator[0].compiledCode, [builtinByteString(authenPolicyId), conStr(1, [builtinByteString(alwaysSuccessValidatorHash)])], // modify here <==== DONE
 "JSON");
 const poolBatchingValidatorHash = resolveScriptHash(poolBatchingValidatorScript, "V3");
+const poolBatchingValidatorRewardAddress = serializeRewardAddress(poolBatchingValidatorHash, true, 0);
 // Factory Validator
 const factoryValidator = blueprint.validators.filter(v => (v.title.includes("factory_validator.factory_validator.spend")));
 const factoryValidatorScript = applyParamsToScript(factoryValidator[0].compiledCode, [builtinByteString(authenPolicyId), poolAddressData, conStr(1, [builtinByteString(poolBatchingValidatorHash)])], "JSON");
@@ -142,6 +157,40 @@ const orderValidatorRewardAddress = serializeRewardAddress(orderValidatorScriptH
 // console.log("orderSK:", orderSK);
 // console.log("orderScH:", orderScH);
 // console.log("orderStakeScH:", orderStakeScH);
+// test mint
+// Always success mint validator
+const alwaysSuccessMintValidator = testBlueprint.validators.filter(v => (v.title.includes("placeholder.placeholder.mint")));
+const alwaysSuccessValidatorMintScript = applyParamsToScript(alwaysSuccessMintValidator[0].compiledCode, [], "JSON");
+const alwaysSuccessMintValidatorHash = resolveScriptHash(alwaysSuccessValidatorMintScript, "V3");
+// pool utils
+const tokenA = stringToHex("iMyTokenTwo");
+const assetA = mConStr0([
+    alwaysSuccessMintValidatorHash,
+    tokenA,
+]);
+const tokenB = stringToHex("myTokenOne");
+const assetB = mConStr0([
+    alwaysSuccessMintValidatorHash,
+    tokenB,
+]);
+// compute lp asset name
+const sha3 = (hex) => {
+    const hash = new SHA3(256);
+    hash.update(hex, "hex");
+    return hash.digest("hex");
+};
+const assetASha256 = sha3(alwaysSuccessMintValidatorHash + tokenA);
+const assetBSha256 = sha3(alwaysSuccessMintValidatorHash + tokenB);
+const lpAssetName = sha3(assetASha256 + assetBSha256);
+// asset supplies
+const iMyTokenTwoSupply = 1500;
+const myTokenOneSupply = 1500;
+const totalLiquidity = calculateInitialLiquidity(myTokenOneSupply, iMyTokenTwoSupply);
+const maxInt64 = 9223372036854775807n;
+const remainingLiquidity = maxInt64 - (BigInt(totalLiquidity) - 10n);
+// order utils
+const swapAmount = 20;
+const orderLovelaceAmount = 10000000;
 export { blueprint, blockchainProvider, txBuilder, 
 // wallet1
 wallet1, wallet1Address, wallet1VK, wallet1SK, wallet1Utxos, wallet1Collateral, 
@@ -158,10 +207,18 @@ orderValidatorScript, orderValidatorAddress, orderValidatorRewardAddress, orderV
 // order cancellation validator
 orderCanclValidatorScript, orderCanclValidatorRewardAddress, 
 // pool
-poolValidatorAddress, 
+poolValidatorAddress, poolValidatorRewardAddress, poolValidatorScript, 
 // pool batching
-poolBatchingValidatorHash, 
+poolBatchingValidatorHash, poolBatchingValidatorRewardAddress, poolBatchingValidatorScript, 
 // always success
 alwaysSuccessValidatorScript, 
+// always success mint
+alwaysSuccessValidatorMintScript, alwaysSuccessMintValidatorHash, 
 // constants
-factoryAssetName, poolAuthAssetName, globalSettingAssetName, };
+factoryAssetName, poolAuthAssetName, globalSettingAssetName, 
+// Utils
+calculateInitialLiquidity, 
+// pool utils
+tokenA, tokenB, assetA, assetB, lpAssetName, iMyTokenTwoSupply, myTokenOneSupply, totalLiquidity, maxInt64, remainingLiquidity, 
+// order utils
+swapAmount, orderLovelaceAmount, };

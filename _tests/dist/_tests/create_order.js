@@ -1,9 +1,9 @@
-import { mConStr0, mConStr1, mPubKeyAddress } from "@meshsdk/core";
-import { authenPolicyId, orderValidatorAddress, txBuilder, wallet1, wallet1Address, wallet1Collateral, wallet1SK, wallet1Utxos, wallet1VK } from "./setup.js";
+import { mConStr0, mConStr1, mPubKeyAddress, stringToHex } from "@meshsdk/core";
+import { alwaysSuccessMintValidatorHash, authenPolicyId, lpAssetName, orderLovelaceAmount, orderValidatorAddress, swapAmount, txBuilder, wallet1, wallet1Address, wallet1Collateral, wallet1SK, wallet1Utxos, wallet1VK } from "./setup.js";
 const orderStep = mConStr0([
     mConStr1([]), // True
-    mConStr0([20]),
-    20,
+    mConStr0([swapAmount]), // swap_amount_option
+    18, // minimum_receive
     mConStr1([]), // True
 ]);
 const orderDatum = mConStr0([
@@ -14,14 +14,17 @@ const orderDatum = mConStr0([
     mConStr0([]),
     mConStr0([
         authenPolicyId, // policy id
-        "my_asset" // asset name
-    ]), // template lp_asset (just for an order to cancel) <=== To be editted when submitting a real order
+        lpAssetName // asset name
+    ]), // changes according to the related liquidity pool
     orderStep,
-    10,
-    mConStr0([[(Date.now() + (10 * 60 * 1000)), 0]]), // 10 mins exp time; tip 0
+    6000000, // max_batcher_fee: 6 ADA
+    mConStr1([]), // mConStr0([[(Date.now() + (10 * 60 * 1000)), 0]]), // 10 mins exp time; tip 0
 ]);
 const unsignedTx = await txBuilder
-    .txOut(orderValidatorAddress, [{ unit: "lovelace", quantity: "120000000" }])
+    .txOut(orderValidatorAddress, [
+    { unit: "lovelace", quantity: String(orderLovelaceAmount) }, // batcher fee is deducted from here
+    { unit: alwaysSuccessMintValidatorHash + stringToHex("iMyTokenTwo"), quantity: String(swapAmount) }, // the asset A to swap for asset B using the pool asset in the order datum
+])
     .txOutInlineDatumValue(orderDatum)
     .txInCollateral(wallet1Collateral.input.txHash, wallet1Collateral.input.outputIndex, wallet1Collateral.output.amount, wallet1Collateral.output.address)
     .changeAddress(wallet1Address)
