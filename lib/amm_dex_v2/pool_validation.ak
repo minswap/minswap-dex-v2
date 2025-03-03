@@ -1,18 +1,15 @@
-use aiken/list
-use aiken/transaction.{Input, Output}
-use aiken/transaction/credential.{
-  Address, PaymentCredential, ScriptCredential, StakeCredential,
-  VerificationKeyCredential,
-}
-use aiken/transaction/value.{
-  AssetName, PolicyId, Value, ada_asset_name, ada_policy_id,
-}
+use aiken/collection/list
 use amm_dex_v2/types.{
   Asset, BatchingPool, GlobalSetting, PAMSpendScript, PAMWithdrawScript,
   PoolAuthorizationMethod, PoolDatum, UpdateDynamicFee, UpdatePoolFee,
   UpdatePoolParametersAction, UpdatePoolStakeCredential,
 }
 use amm_dex_v2/utils
+use cardano/address.{
+  Address, Credential, PaymentCredential, Script, VerificationKey,
+}
+use cardano/assets.{AssetName, PolicyId, Value, ada_asset_name, ada_policy_id}
+use cardano/transaction.{Input, Output}
 
 // Global Setting must be provided through the @reference_inputs
 // and has to keep the Global Setting NFT in its value
@@ -23,20 +20,20 @@ pub fn get_and_validate_global_setting(
   expect Some(global_input) =
     reference_inputs
       |> list.find(
-           fn(input) {
-             let Input {
-               output: Output {
-                 address: Address { payment_credential: payment_cred, .. },
-                 ..
-               },
-               ..
-             } = input
-             when payment_cred is {
-               ScriptCredential(hash) -> hash == authen_policy_id
-               _ -> False
-             }
-           },
-         )
+          fn(input) {
+            let Input {
+              output: Output {
+                address: Address { payment_credential: payment_cred, .. },
+                ..
+              },
+              ..
+            } = input
+            when payment_cred is {
+              Script(hash) -> hash == authen_policy_id
+              _ -> False
+            }
+          },
+        )
   let Input {
     output: Output {
       value: global_setting_value,
@@ -48,7 +45,7 @@ pub fn get_and_validate_global_setting(
   expect
     (
       global_setting_value
-        |> value.quantity_of(authen_policy_id, utils.global_setting_asset_name)
+        |> assets.quantity_of(authen_policy_id, utils.global_setting_asset_name)
     ) == 1
   expect global_setting_datum: GlobalSetting =
     utils.must_find_script_inline_datum(global_setting_datum_raw)
@@ -56,7 +53,7 @@ pub fn get_and_validate_global_setting(
 }
 
 pub fn get_batching_pool(
-  stake_credential: StakeCredential,
+  stake_credential: Credential,
   pool_input: Output,
   pool_output: Output,
   authen_policy_id: PolicyId,
@@ -139,9 +136,9 @@ pub fn get_batching_pool(
     Asset { policy_id: authen_policy_id, asset_name: lp_asset_name }
 
   let estimate_value_reserve_a_in =
-    value.quantity_of(pool_in_value, asset_a_policy_id, asset_a_asset_name)
+    assets.quantity_of(pool_in_value, asset_a_policy_id, asset_a_asset_name)
   let estimate_value_reserve_a_out =
-    value.quantity_of(pool_out_value, asset_a_policy_id, asset_a_asset_name)
+    assets.quantity_of(pool_out_value, asset_a_policy_id, asset_a_asset_name)
   let (value_reserve_a_in, value_reserve_a_out) =
     if utils.is_ada_asset(asset_a_policy_id, asset_a_asset_name) {
       (
@@ -152,28 +149,32 @@ pub fn get_batching_pool(
       (estimate_value_reserve_a_in, estimate_value_reserve_a_out)
     }
   let value_reserve_b_in =
-    value.quantity_of(pool_in_value, asset_b_policy_id, asset_b_asset_name)
+    assets.quantity_of(pool_in_value, asset_b_policy_id, asset_b_asset_name)
   let value_reserve_b_out =
-    value.quantity_of(pool_out_value, asset_b_policy_id, asset_b_asset_name)
+    assets.quantity_of(pool_out_value, asset_b_policy_id, asset_b_asset_name)
 
   let remaining_liquidity_supply_in =
-    value.quantity_of(pool_in_value, authen_policy_id, lp_asset_name)
+    assets.quantity_of(pool_in_value, authen_policy_id, lp_asset_name)
   let remaining_liquidity_supply_out =
-    value.quantity_of(pool_out_value, authen_policy_id, lp_asset_name)
+    assets.quantity_of(pool_out_value, authen_policy_id, lp_asset_name)
   let estimate_pool_in_value =
-    value.zero()
-      |> value.add(authen_policy_id, utils.pool_auth_asset_name, 1)
-      |> value.add(asset_a_policy_id, asset_a_asset_name, value_reserve_a_in)
-      |> value.add(asset_b_policy_id, asset_b_asset_name, value_reserve_b_in)
-      |> value.add(authen_policy_id, lp_asset_name, remaining_liquidity_supply_in)
-      |> value.add(ada_policy_id, ada_asset_name, utils.min_pool_ada)
+    assets.zero
+      |> assets.add(authen_policy_id, utils.pool_auth_asset_name, 1)
+      |> assets.add(asset_a_policy_id, asset_a_asset_name, value_reserve_a_in)
+      |> assets.add(asset_b_policy_id, asset_b_asset_name, value_reserve_b_in)
+      |> assets.add(authen_policy_id, lp_asset_name, remaining_liquidity_supply_in)
+      |> assets.add(ada_policy_id, ada_asset_name, utils.min_pool_ada)
   let estimate_pool_out_value =
-    value.zero()
-      |> value.add(authen_policy_id, utils.pool_auth_asset_name, 1)
-      |> value.add(asset_a_policy_id, asset_a_asset_name, value_reserve_a_out)
-      |> value.add(asset_b_policy_id, asset_b_asset_name, value_reserve_b_out)
-      |> value.add(authen_policy_id, lp_asset_name, remaining_liquidity_supply_out)
-      |> value.add(ada_policy_id, ada_asset_name, utils.min_pool_ada)
+    assets.zero
+      |> assets.add(authen_policy_id, utils.pool_auth_asset_name, 1)
+      |> assets.add(asset_a_policy_id, asset_a_asset_name, value_reserve_a_out)
+      |> assets.add(asset_b_policy_id, asset_b_asset_name, value_reserve_b_out)
+      |> assets.add(
+          authen_policy_id,
+          lp_asset_name,
+          remaining_liquidity_supply_out,
+        )
+      |> assets.add(ada_policy_id, ada_asset_name, utils.min_pool_ada)
   expect and {
       estimate_pool_in_value == pool_in_value,
       estimate_pool_out_value == pool_out_value,
@@ -242,7 +243,7 @@ pub fn validate_update_pool_parameters(
     )
   expect and {
       // Pool Input contains 1 valid Pool NFT Token
-      value.quantity_of(
+      assets.quantity_of(
         pool_in_value,
         authen_policy_id,
         utils.pool_auth_asset_name,
@@ -376,7 +377,7 @@ pub fn validate_withdraw_fee_sharing(
       pool_in_address == pool_out_address,
       // Pool Datum must be unchanged
       pool_in_datum == pool_out_datum,
-      value.quantity_of(
+      assets.quantity_of(
         pool_in_value,
         authen_policy_id,
         utils.pool_auth_asset_name,
@@ -394,7 +395,7 @@ pub fn validate_withdraw_fee_sharing(
   let Asset { policy_id: asset_b_policy_id, asset_name: asset_b_asset_name } =
     asset_b
   let temp_value_reserve_a_in =
-    value.quantity_of(pool_in_value, asset_a_policy_id, asset_a_asset_name)
+    assets.quantity_of(pool_in_value, asset_a_policy_id, asset_a_asset_name)
   let value_reserve_a_in =
     if utils.is_ada_asset(asset_a_policy_id, asset_a_asset_name) {
       temp_value_reserve_a_in - utils.min_pool_ada
@@ -402,22 +403,22 @@ pub fn validate_withdraw_fee_sharing(
       temp_value_reserve_a_in
     }
   let value_reserve_b_in =
-    value.quantity_of(pool_in_value, asset_b_policy_id, asset_b_asset_name)
+    assets.quantity_of(pool_in_value, asset_b_policy_id, asset_b_asset_name)
   // validate Admin withdraws the exact earned Profit Sharing amount:
   //    Earned Asset A: Reserve A in Value - Reserve A in Datum
   //    Earned Asset B: Reserve B in Value - Reserve B in Datum
   let expected_pool_out_value =
     pool_in_value
-      |> value.add(
-           asset_a_policy_id,
-           asset_a_asset_name,
-           datum_reserve_a_in - value_reserve_a_in,
-         )
-      |> value.add(
-           asset_b_policy_id,
-           asset_b_asset_name,
-           datum_reserve_b_in - value_reserve_b_in,
-         )
+      |> assets.add(
+          asset_a_policy_id,
+          asset_a_asset_name,
+          datum_reserve_a_in - value_reserve_a_in,
+        )
+      |> assets.add(
+          asset_b_policy_id,
+          asset_b_asset_name,
+          datum_reserve_b_in - value_reserve_b_in,
+        )
   pool_out_value == expected_pool_out_value
 }
 
@@ -428,10 +429,10 @@ pub fn get_pool_creation_expected_mint(
   authen_policy_id: PolicyId,
   lp_asset_name: AssetName,
 ) -> Value {
-  value.zero()
-    |> value.add(authen_policy_id, utils.factory_auth_asset_name, 1)
-    |> value.add(authen_policy_id, utils.pool_auth_asset_name, 1)
-    |> value.add(authen_policy_id, lp_asset_name, 9223372036854775807)
+  assets.zero
+    |> assets.add(authen_policy_id, utils.factory_auth_asset_name, 1)
+    |> assets.add(authen_policy_id, utils.pool_auth_asset_name, 1)
+    |> assets.add(authen_policy_id, lp_asset_name, 9223372036854775807)
 }
 
 // This function get Pool output from output list and make sure there's single Pool Output
@@ -543,34 +544,34 @@ pub fn has_only_pool_and_author(
   expect [_] =
     inputs
       |> list.filter(
-           fn(input) {
-             let Input {
-               output: Output {
-                 address: Address { payment_credential: payment_cred, .. },
-                 ..
-               },
-               ..
-             } = input
-             pool_payment_cred == payment_cred
-           },
-         )
+          fn(input) {
+            let Input {
+              output: Output {
+                address: Address { payment_credential: payment_cred, .. },
+                ..
+              },
+              ..
+            } = input
+            pool_payment_cred == payment_cred
+          },
+        )
   // All inputs does not contain other scripts except for the Pool and Author 
   inputs
     |> list.all(
-         fn(input) {
-           let Input { output: Output { address: addr, .. }, .. } = input
-           let Address { payment_credential: payment_cred, .. } = addr
-           when payment_cred is {
-             ScriptCredential(sh) -> or {
-                 payment_cred == pool_payment_cred,
-                 when pool_author is {
-                   PAMSpendScript(author_hash) -> sh == author_hash
-                   PAMWithdrawScript(author_hash) -> sh == author_hash
-                   _ -> False
-                 },
-               }
-             VerificationKeyCredential(_) -> True
-           }
-         },
-       )
+        fn(input) {
+          let Input { output: Output { address: addr, .. }, .. } = input
+          let Address { payment_credential: payment_cred, .. } = addr
+          when payment_cred is {
+            Script(sh) -> or {
+                payment_cred == pool_payment_cred,
+                when pool_author is {
+                  PAMSpendScript(author_hash) -> sh == author_hash
+                  PAMWithdrawScript(author_hash) -> sh == author_hash
+                  _ -> False
+                },
+              }
+            VerificationKey(_) -> True
+          }
+        },
+      )
 }

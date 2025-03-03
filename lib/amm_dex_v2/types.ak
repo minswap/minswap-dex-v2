@@ -1,21 +1,19 @@
-use aiken/dict.{Dict}
-use aiken/hash.{Blake2b_224, Blake2b_256, Hash}
-use aiken/transaction/credential.{
-  Address, Script, StakeCredential, VerificationKey,
-}
-use aiken/transaction/value.{AssetName, PolicyId}
+use aiken/collection/dict.{Dict}
+use aiken/crypto.{DataHash, ScriptHash, VerificationKeyHash}
+use cardano/address.{Address, Credential}
+use cardano/assets.{AssetName, PolicyId}
 
 pub type CustomDatumHash =
-  Hash<Blake2b_256, Data>
+  DataHash
 
 pub type ValidatorHash =
-  Hash<Blake2b_224, Script>
+  ScriptHash
 
 pub type PubKeyHash =
-  Hash<Blake2b_224, VerificationKey>
+  VerificationKeyHash
 
 pub type SortedValueList =
-  List<(ByteArray, List<(ByteArray, Int)>)>
+  Pairs<ByteArray, Pairs<ByteArray, Int>>
 
 pub type Asset {
   policy_id: PolicyId,
@@ -23,11 +21,11 @@ pub type Asset {
 }
 
 pub type DatumMap =
-  Dict<Hash<Blake2b_256, Data>, Data>
+  Dict<DataHash, Data>
 
 pub type PoolDatum {
   // Stake Credential of `Pool Batching` validator
-  pool_batching_stake_credential: StakeCredential,
+  pool_batching_stake_credential: Credential,
   // The Pool's Asset A
   asset_a: Asset,
   // The Pool's Asset B

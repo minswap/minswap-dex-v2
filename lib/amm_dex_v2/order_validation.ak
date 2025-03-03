@@ -1,13 +1,6 @@
 use aiken/builtin
-use aiken/hash
-use aiken/list
-use aiken/transaction.{Datum, DatumHash, InlineDatum, Input, NoDatum, Output}
-use aiken/transaction/credential.{
-  Address, ScriptCredential, VerificationKeyCredential,
-}
-use aiken/transaction/value.{
-  AssetName, PolicyId, Value, ada_asset_name, ada_policy_id,
-}
+use aiken/collection/list
+use aiken/crypto.{blake2b_256}
 use amm_dex_v2/math
 use amm_dex_v2/types.{
   Asset, BatchingPool, DAOAll, DAOSpecificAmount, DatumMap, Deposit,
@@ -18,11 +11,14 @@ use amm_dex_v2/types.{
   Withdraw, WithdrawAmountOption, WithdrawImbalance, ZapOut,
 }
 use amm_dex_v2/utils
+use cardano/address.{Address, Script, VerificationKey}
+use cardano/assets.{AssetName, PolicyId, Value, ada_asset_name, ada_policy_id}
+use cardano/transaction.{Datum, DatumHash, InlineDatum, Input, NoDatum, Output}
 
 // Construct the value when order is cancelled by the batcher
 // Only batcher fee is deducted from the order value
 fn get_returnable_value(order_in_value: Value, used_batcher_fee: Int) -> Value {
-  value.add(
+  assets.add(
     order_in_value,
     ada_policy_id,
     ada_asset_name,
@@ -57,16 +53,12 @@ fn get_optimized_swap_output_value(
         if a_to_b {
           Some(
             [
-              (
-                ada_policy_id,
-                [
-                  (
-                    ada_asset_name,
-                    asset_a_amount - ( used_batcher_fee + amount_in ),
-                  ),
-                ],
-              ),
-              (asset_b_policy_id, [(asset_b_asset_name, amount_out)]),
+              Pair(ada_policy_id,
+              [
+                Pair(ada_asset_name,
+                asset_a_amount - ( used_batcher_fee + amount_in )),
+              ]),
+              Pair(asset_b_policy_id, [Pair(asset_b_asset_name, amount_out)]),
             ],
           )
         } else {
@@ -74,7 +66,7 @@ fn get_optimized_swap_output_value(
         }
       // If the input value contains ADA and one additional asset, with Asset B being swapped for Asset A,
       // subtract the batcher fee and add the output amount to the ADA portion, then subtract the swap amount of Asset B.
-      [(asset_pid, [(asset_tn, asset_amount)])] ->
+      [Pair(asset_pid, [Pair(asset_tn, asset_amount)])] ->
         if
         !a_to_b && asset_pid == asset_b_policy_id && asset_tn == asset_b_asset_name{
         
@@ -82,31 +74,23 @@ fn get_optimized_swap_output_value(
           if asset_amount > amount_in {
             Some(
               [
-                (
-                  ada_policy_id,
-                  [
-                    (
-                      ada_asset_name,
-                      asset_a_amount - used_batcher_fee + amount_out,
-                    ),
-                  ],
-                ),
-                (asset_pid, [(asset_tn, asset_amount - amount_in)]),
+                Pair(ada_policy_id,
+                [
+                  Pair(ada_asset_name,
+                  asset_a_amount - used_batcher_fee + amount_out),
+                ]),
+                Pair(asset_pid, [Pair(asset_tn, asset_amount - amount_in)]),
               ],
             )
           } else if asset_amount == amount_in {
             // Asset B have no change
             Some(
               [
-                (
-                  ada_policy_id,
-                  [
-                    (
-                      ada_asset_name,
-                      asset_a_amount - used_batcher_fee + amount_out,
-                    ),
-                  ],
-                ),
+                Pair(ada_policy_id,
+                [
+                  Pair(ada_asset_name,
+                  asset_a_amount - used_batcher_fee + amount_out),
+                ]),
               ],
             )
           } else {
@@ -134,17 +118,17 @@ fn get_swap_output_value(
 ) -> Value {
   if utils.is_ada_asset(asset_in_policy_id, asset_in_asset_name) {
     order_in_value
-      |> value.add(ada_policy_id, ada_asset_name, -(used_batcher_fee + amount_in))
-      |> value.add(asset_out_policy_id, asset_out_asset_name, amount_out)
+      |> assets.add(ada_policy_id, ada_asset_name, -(used_batcher_fee + amount_in))
+      |> assets.add(asset_out_policy_id, asset_out_asset_name, amount_out)
   } else if utils.is_ada_asset(asset_out_policy_id, asset_out_asset_name) {
     order_in_value
-      |> value.add(ada_policy_id, ada_asset_name, amount_out - used_batcher_fee)
-      |> value.add(asset_in_policy_id, asset_in_asset_name, -amount_in)
+      |> assets.add(ada_policy_id, ada_asset_name, amount_out - used_batcher_fee)
+      |> assets.add(asset_in_policy_id, asset_in_asset_name, -amount_in)
   } else {
     order_in_value
-      |> value.add(ada_policy_id, ada_asset_name, -used_batcher_fee)
-      |> value.add(asset_in_policy_id, asset_in_asset_name, -amount_in)
-      |> value.add(asset_out_policy_id, asset_out_asset_name, amount_out)
+      |> assets.add(ada_policy_id, ada_asset_name, -used_batcher_fee)
+      |> assets.add(asset_in_policy_id, asset_in_asset_name, -amount_in)
+      |> assets.add(asset_out_policy_id, asset_out_asset_name, amount_out)
   }
 }
 
@@ -242,7 +226,7 @@ fn validate_swap_exact_in(
       SAOAll(deducted_amount) -> {
         // deducted amount must be non-negative
         expect deducted_amount >= 0
-        value.quantity_of(
+        assets.quantity_of(
           order_in_value,
           asset_in_policy_id,
           asset_in_asset_name,
@@ -385,7 +369,7 @@ fn validate_swap_exact_out(
       SAOAll(deducted_amount) -> {
         // deducted amount must be non-negative
         expect deducted_amount >= 0
-        value.quantity_of(
+        assets.quantity_of(
           order_in_value,
           asset_in_policy_id,
           asset_in_asset_name,
@@ -490,13 +474,13 @@ fn validate_deposit(
             deducted_amount_b >= 0,
           }
         let am_a =
-          value.quantity_of(
+          assets.quantity_of(
             order_in_value,
             asset_a_policy_id,
             asset_a_asset_name,
           ) - deducted_amount_a
         let am_b =
-          value.quantity_of(
+          assets.quantity_of(
             order_in_value,
             asset_b_policy_id,
             asset_b_asset_name,
@@ -528,10 +512,10 @@ fn validate_deposit(
   if slippage_satisfied {
     let expect_order_value_out =
       order_in_value
-        |> value.add(ada_policy_id, ada_asset_name, -used_batcher_fee)
-        |> value.add(asset_a_policy_id, asset_a_asset_name, -deposit_amount_a)
-        |> value.add(asset_b_policy_id, asset_b_asset_name, -deposit_amount_b)
-        |> value.add(lp_asset_policy_id, lp_asset_asset_name, lp_amount)
+        |> assets.add(ada_policy_id, ada_asset_name, -used_batcher_fee)
+        |> assets.add(asset_a_policy_id, asset_a_asset_name, -deposit_amount_a)
+        |> assets.add(asset_b_policy_id, asset_b_asset_name, -deposit_amount_b)
+        |> assets.add(lp_asset_policy_id, lp_asset_asset_name, lp_amount)
     expect
       validate_order_output(
         receiver: success_receiver,
@@ -598,7 +582,7 @@ fn validate_withdraw(
       WAOAll(deducted_amount) -> {
         // deducted amount must be non-negative
         expect deducted_amount >= 0
-        value.quantity_of(order_in_value, lp_policy_id, lp_asset_name) - deducted_amount
+        assets.quantity_of(order_in_value, lp_policy_id, lp_asset_name) - deducted_amount
       }
     }
 
@@ -618,10 +602,10 @@ fn validate_withdraw(
   if slippage_satisfied {
     let expect_order_value_out =
       order_in_value
-        |> value.add(ada_policy_id, ada_asset_name, -used_batcher_fee)
-        |> value.add(lp_policy_id, lp_asset_name, -withdrawal_lp_amount)
-        |> value.add(asset_a_policy_id, asset_a_asset_name, amount_a_out)
-        |> value.add(asset_b_policy_id, asset_b_asset_name, amount_b_out)
+        |> assets.add(ada_policy_id, ada_asset_name, -used_batcher_fee)
+        |> assets.add(lp_policy_id, lp_asset_name, -withdrawal_lp_amount)
+        |> assets.add(asset_a_policy_id, asset_a_asset_name, amount_a_out)
+        |> assets.add(asset_b_policy_id, asset_b_asset_name, amount_b_out)
     expect
       validate_order_output(
         receiver: success_receiver,
@@ -695,7 +679,7 @@ fn validate_zap_out(
       WAOAll(deducted_amount) -> {
         // deducted amount must be non-negative
         expect deducted_amount >= 0
-        value.quantity_of(order_in_value, lp_policy_id, lp_asset_name) - deducted_amount
+        assets.quantity_of(order_in_value, lp_policy_id, lp_asset_name) - deducted_amount
       }
     }
 
@@ -716,9 +700,9 @@ fn validate_zap_out(
   if slippage_satisfied {
     let expect_order_value_out =
       order_in_value
-        |> value.add(ada_policy_id, ada_asset_name, -used_batcher_fee)
-        |> value.add(lp_policy_id, lp_asset_name, -withdrawal_lp_amount)
-        |> value.add(asset_out_policy_id, asset_out_asset_name, amount_out)
+        |> assets.add(ada_policy_id, ada_asset_name, -used_batcher_fee)
+        |> assets.add(lp_policy_id, lp_asset_name, -withdrawal_lp_amount)
+        |> assets.add(asset_out_policy_id, asset_out_asset_name, amount_out)
     expect
       validate_order_output(
         receiver: success_receiver,
@@ -914,7 +898,7 @@ fn validate_withdraw_imbalance(
       WAOAll(deducted_amount) -> {
         // deducted amount must be non-negative
         expect deducted_amount >= 0
-        value.quantity_of(order_in_value, lp_policy_id, lp_asset_name) - deducted_amount
+        assets.quantity_of(order_in_value, lp_policy_id, lp_asset_name) - deducted_amount
       }
     }
   // withdrawal amount must be positive
@@ -935,10 +919,10 @@ fn validate_withdraw_imbalance(
   if slippage_satisfied {
     let expect_order_value_out =
       order_in_value
-        |> value.add(ada_policy_id, ada_asset_name, -used_batcher_fee)
-        |> value.add(lp_policy_id, lp_asset_name, -withdrawal_lp_amount)
-        |> value.add(asset_a_policy_id, asset_a_asset_name, amount_a_out)
-        |> value.add(asset_b_policy_id, asset_b_asset_name, amount_b_out)
+        |> assets.add(ada_policy_id, ada_asset_name, -used_batcher_fee)
+        |> assets.add(lp_policy_id, lp_asset_name, -withdrawal_lp_amount)
+        |> assets.add(asset_a_policy_id, asset_a_asset_name, amount_a_out)
+        |> assets.add(asset_b_policy_id, asset_b_asset_name, amount_b_out)
     expect
       validate_order_output(
         receiver: success_receiver,
@@ -989,18 +973,18 @@ fn validate_donation(
   let Asset { policy_id: asset_b_policy_id, asset_name: asset_b_asset_name } =
     asset_b
   let temp_amount_a =
-    order_in_value |> value.quantity_of(asset_a_policy_id, asset_a_asset_name)
+    order_in_value |> assets.quantity_of(asset_a_policy_id, asset_a_asset_name)
   let amount_a =
     if utils.is_ada_asset(asset_a_policy_id, asset_a_asset_name) {
       temp_amount_a - used_batcher_fee
     } else {
       let ada_amount =
-        order_in_value |> value.quantity_of(ada_policy_id, ada_asset_name)
+        order_in_value |> assets.quantity_of(ada_policy_id, ada_asset_name)
       expect ada_amount >= used_batcher_fee
       temp_amount_a
     }
   let amount_b =
-    order_in_value |> value.quantity_of(asset_b_policy_id, asset_b_asset_name)
+    order_in_value |> assets.quantity_of(asset_b_policy_id, asset_b_asset_name)
 
   expect and {
       amount_a >= 0,
@@ -1156,7 +1140,7 @@ pub fn validate_swap_multi_routing_order(
       SAOAll(deducted_amount) -> {
         // deducted amount must be non-negative
         expect deducted_amount >= 0
-        value.quantity_of(
+        assets.quantity_of(
           order_in_value,
           asset_in_policy_id,
           asset_in_asset_name,
@@ -1173,9 +1157,9 @@ pub fn validate_swap_multi_routing_order(
     )
   let expect_order_value_out =
     order_in_value
-      |> value.add(ada_policy_id, ada_asset_name, -used_batcher_fee)
-      |> value.add(asset_in_policy_id, asset_in_asset_name, -swap_amount)
-      |> value.add(asset_out_policy_id, asset_out_asset_name, amount_out)
+      |> assets.add(ada_policy_id, ada_asset_name, -used_batcher_fee)
+      |> assets.add(asset_in_policy_id, asset_in_asset_name, -swap_amount)
+      |> assets.add(asset_out_policy_id, asset_out_asset_name, amount_out)
   and {
     amount_out >= minimum_receive,
     expect_order_value_out == order_out_value,
@@ -1188,7 +1172,7 @@ fn is_valid_datum(raw_datum: Datum, extra_order_datum: ExtraOrderDatum) -> Bool 
       NoDatum -> EODNoDatum
       DatumHash(dh) -> EODDatumHash(dh)
       InlineDatum(dat) ->
-        EODInlineDatum(hash.blake2b_256(builtin.serialise_data(dat)))
+        EODInlineDatum(blake2b_256(builtin.serialise_data(dat)))
     }
   extra_order_datum == expect_extra_order_datum
 }
@@ -1203,8 +1187,8 @@ pub fn validate_order_receiver(
   let Address { payment_credential: receiver_payment_cred, .. } = receiver
   let is_correct_address = receiver == output_address
   when receiver_payment_cred is {
-    VerificationKeyCredential(_) -> is_correct_address
-    ScriptCredential(_) -> and {
+    VerificationKey(_) -> is_correct_address
+    Script(_) -> and {
         is_correct_address,
         is_valid_datum(
           raw_datum: raw_order_output_datum,
@@ -1233,8 +1217,8 @@ fn validate_order_output(
     }
   let Address { payment_credential: receiver_payment_cred, .. } = receiver
   when receiver_payment_cred is {
-    VerificationKeyCredential(_) -> is_correct_address_and_value
-    ScriptCredential(_) -> and {
+    VerificationKey(_) -> is_correct_address_and_value
+    Script(_) -> and {
         is_correct_address_and_value,
         is_valid_datum(
           raw_datum: raw_order_output_datum,
@@ -1254,8 +1238,8 @@ fn validate_order_output_except_value(
 
   let Address { payment_credential: receiver_payment_cred, .. } = receiver
   when receiver_payment_cred is {
-    VerificationKeyCredential(_) -> receiver == output_address
-    ScriptCredential(_) -> and {
+    VerificationKey(_) -> receiver == output_address
+    Script(_) -> and {
         receiver == output_address,
         is_valid_datum(
           raw_datum: raw_order_output_datum,
@@ -1740,21 +1724,21 @@ pub fn validate_cancel_expired_orders(
   expect Some((expired_time, max_tip)) = expiry_setting_opt
   expect and {
       // the transaction must be created after expired time
-      expired_time < start_valid_time_range,
+      (expired_time < start_valid_time_range)?,
       // the output have to paid back to sender
-      refund_receiver == order_out_address,
+      (refund_receiver == order_out_address)?,
       // ADA in the order might be deducted for tipping a canceller
       // The tip must not exceed the maximum tip
       // Other tokens must be returned to sender
-      value.lovelace_of(order_out_value) >= value.lovelace_of(order_in_value) - max_tip,
-      value.without_lovelace(order_out_value) == value.without_lovelace(
+      (assets.lovelace_of(order_out_value) >= assets.lovelace_of(order_in_value) - max_tip)?,
+      (assets.without_lovelace(order_out_value) == assets.without_lovelace(
         order_in_value,
-      ),
+      ))?,
       // If sender is script address, the output have to attach the defined datum
       is_valid_datum(
         raw_datum: raw_order_output_datum,
         extra_order_datum: refund_receiver_datum,
-      ),
+      )?,
     }
   if rest_order_inputs == [] {
     True

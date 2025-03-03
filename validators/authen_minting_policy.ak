@@ -1,11 +1,5 @@
 use aiken/builtin
-use aiken/dict
-use aiken/list
-use aiken/transaction.{
-  Input, Mint, Output, OutputReference, ScriptContext, Spend, Transaction,
-}
-use aiken/transaction/credential.{Address, ScriptCredential}
-use aiken/transaction/value
+use aiken/collection/list
 use amm_dex_v2/pool_validation
 use amm_dex_v2/types.{
   Asset, AuthenRedeemer, CreatePool, DexInitialization, FactoryDatum,
@@ -13,15 +7,20 @@ use amm_dex_v2/types.{
   PAMWithdrawScript, PoolAuthorizationMethod,
 }
 use amm_dex_v2/utils
+use cardano/address.{Address, Script}
+use cardano/assets.{PolicyId}
+use cardano/transaction.{Input, Output, OutputReference, Spend, Transaction}
 
-validator(
+validator authen_minting_policy(
   // @out_ref is a Reference of an Unspent Transaction Output,
   // which will only be spent on `MintFactoryAuthen` redeemer to make sure this redeemer can only be called once
   out_ref: OutputReference,
 ) {
-  fn validate_authen(redeemer: AuthenRedeemer, context: ScriptContext) {
-    let ScriptContext { transaction, purpose } = context
-    expect Mint(authen_policy_id) = purpose
+  mint(
+    redeemer: AuthenRedeemer,
+    authen_policy_id: PolicyId,
+    transaction: Transaction,
+  ) {
     when redeemer is {
       CreatePool -> {
         let Transaction { inputs, mint, redeemers, .. } = transaction
@@ -33,7 +32,7 @@ validator(
             fn(input) {
               let Input { output, .. } = input
               let Output { value: out_value, .. } = output
-              value.quantity_of(
+              assets.quantity_of(
                 out_value,
                 authen_policy_id,
                 utils.factory_auth_asset_name,
@@ -41,12 +40,12 @@ validator(
             },
           )
         let Input { output_reference: factory_input_ref, .. } = factory_input
-        let redeemer_list = dict.to_list(redeemers)
-        expect [(_, raw_factory_redeemer)] =
+        let redeemer_list = redeemers
+        expect [Pair(_, raw_factory_redeemer)] =
           list.filter(
             redeemer_list,
             fn(r) {
-              let (p, _) = r
+              let Pair(p, _) = r
               when p is {
                 Spend(ref) -> factory_input_ref == ref
                 _ -> False
@@ -71,7 +70,7 @@ validator(
             asset_b_policy_id,
             asset_b_asset_name,
           )
-        value.from_minted_value(mint) == pool_validation.get_pool_creation_expected_mint(
+        mint == pool_validation.get_pool_creation_expected_mint(
           authen_policy_id: authen_policy_id,
           lp_asset_name: lp_asset_name,
         )
@@ -95,15 +94,15 @@ validator(
         //        and token name is defined in @factory_auth_asset_name
         // - 1 Global Setting NFT that have the same policy id with the own script hash 
         //        and token name is defined in @global_setting_asset_name
-        let mint_value = value.from_minted_value(mint)
+        let mint_value = mint
         expect and {
-            list.length(value.flatten(mint_value)) == 2,
-            value.quantity_of(
+            list.length(assets.flatten(mint_value)) == 2,
+            assets.quantity_of(
               mint_value,
               authen_policy_id,
               utils.global_setting_asset_name,
             ) == 1,
-            value.quantity_of(
+            assets.quantity_of(
               mint_value,
               authen_policy_id,
               utils.factory_auth_asset_name,
@@ -116,7 +115,7 @@ validator(
             outputs,
             fn(output) {
               let Output { value: out_value, .. } = output
-              value.without_lovelace(out_value) == value.from_asset(
+              assets.without_lovelace(out_value) == assets.from_asset(
                 authen_policy_id,
                 utils.factory_auth_asset_name,
                 1,
@@ -139,7 +138,7 @@ validator(
                 ..
               } = output
               when payment_cred is {
-                ScriptCredential(h) -> h == authen_policy_id
+                Script(h) -> h == authen_policy_id
                 _ -> False
               }
             },
@@ -156,7 +155,7 @@ validator(
           tail == #"ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff00",
           validate_global_setting(global_setting),
           // The Global Setting UTxO must contain 1 Global Setting Token in the value
-          value.without_lovelace(global_setting_value) == value.from_asset(
+          assets.without_lovelace(global_setting_value) == assets.from_asset(
             authen_policy_id,
             utils.global_setting_asset_name,
             1,
@@ -166,13 +165,12 @@ validator(
     }
   }
 
-  fn validate_spend_global_setting(
-    datum: GlobalSetting,
+  spend(
+    datum: Option<GlobalSetting>,
     _redeemer: Data,
-    context: ScriptContext,
+    global_setting_input_ref: OutputReference,
+    transaction: Transaction,
   ) {
-    let ScriptContext { transaction, purpose } = context
-    expect Spend(global_setting_input_ref) = purpose
     let Transaction {
       inputs,
       outputs,
@@ -194,10 +192,10 @@ validator(
       },
       ..
     } = global_setting_input
-    expect ScriptCredential(global_setting_script_hash) =
+    expect Script(global_setting_script_hash) =
       global_setting_payment_credential
 
-    let GlobalSetting { admin, .. } = datum
+    expect Some(GlobalSetting { admin, .. }) = datum
     let global_setting_output = outputs |> builtin.head_list
     let Output {
       value: global_setting_value_out,
@@ -221,21 +219,25 @@ validator(
       ),
       // Both Global Setting input and output must have the same payment credential 
       // and keep the Global Setting Token
-      value.quantity_of(
+      assets.quantity_of(
         global_setting_value_input,
         global_setting_script_hash,
         utils.global_setting_asset_name,
       ) == 1,
-      value.without_lovelace(global_setting_value_out) == value.from_asset(
+      assets.without_lovelace(global_setting_value_out) == assets.from_asset(
         global_setting_script_hash,
         utils.global_setting_asset_name,
         1,
       ),
       global_setting_payment_credential_out == global_setting_payment_credential,
       // transaction won't mint anything 
-      value.is_zero(value.from_minted_value(mint)),
+      assets.is_zero(mint),
       validate_global_setting(global_setting_out_datum),
     }
+  }
+
+  else(_) {
+    fail
   }
 }
 

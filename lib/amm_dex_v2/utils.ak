@@ -1,22 +1,21 @@
 use aiken/builtin
-use aiken/bytearray
-use aiken/dict.{Dict}
-use aiken/hash.{Blake2b_224, Hash}
+use aiken/collection/dict
+use aiken/collection/list
+use aiken/collection/pairs
+use aiken/crypto.{DataHash, VerificationKeyHash, sha3_256}
 use aiken/interval.{Finite, Interval, IntervalBound}
-use aiken/list
-use aiken/transaction.{
-  Datum, DatumHash, InlineDatum, Input, NoDatum, Output, ValidityRange,
-}
-use aiken/transaction/credential.{
-  Address, Inline, ScriptCredential, StakeCredential, VerificationKey,
-}
-use aiken/transaction/value.{
-  AssetName, MintedValue, PolicyId, Value, ada_asset_name, ada_policy_id,
-}
+use aiken/primitive/bytearray
 use amm_dex_v2/types.{
   Asset, DatumMap, OAMMintScript, OAMSignature, OAMSpendScript,
   OAMWithdrawScript, OrderAuthorizationMethod, PAMSignature, PAMSpendScript,
   PAMWithdrawScript, PoolAuthorizationMethod, SortedValueList,
+}
+use cardano/address.{Address, Credential, Script}
+use cardano/assets.{
+  AssetName, Lovelace, PolicyId, Value, ada_asset_name, ada_policy_id,
+}
+use cardano/transaction.{
+  Datum, DatumHash, InlineDatum, Input, NoDatum, Output, ValidityRange,
 }
 
 // the legitimate Pool TokenName
@@ -99,11 +98,11 @@ pub fn compute_lp_asset_name(
   asset_b_asset_name: AssetName,
 ) -> AssetName {
   let asset_a_ident =
-    hash.sha3_256(bytearray.concat(asset_a_policy_id, asset_a_asset_name))
+    sha3_256(bytearray.concat(asset_a_policy_id, asset_a_asset_name))
   let asset_b_ident =
-    hash.sha3_256(bytearray.concat(asset_b_policy_id, asset_b_asset_name))
+    sha3_256(bytearray.concat(asset_b_policy_id, asset_b_asset_name))
   let pair_ident = bytearray.concat(asset_a_ident, asset_b_ident)
-  hash.sha3_256(pair_ident)
+  sha3_256(pair_ident)
 }
 
 test test_compute_lp_asset_name() {
@@ -142,13 +141,13 @@ pub fn must_find_script_datum(datums: DatumMap, datum: Datum) -> Data {
 /// rewrite dict.get
 /// convert `Option<value>` to `value`
 /// `None` -> `fail`
-fn dict_must_get(self: dict.Dict<key, value>, key: key) -> value {
-  dict_do_must_get(dict.to_list(self), key)
+fn dict_must_get(self: dict.Dict<DataHash, value>, key: DataHash) -> value {
+  dict_do_must_get(dict.to_pairs(self), key)
 }
 
-fn dict_do_must_get(self: List<(key, value)>, key k: key) -> value {
+fn dict_do_must_get(self: Pairs<DataHash, value>, key k: DataHash) -> value {
   when self is {
-    [(k2, v), ..rest] ->
+    [Pair(k2, v), ..rest] ->
       if k == k2 {
         v
       } else {
@@ -165,14 +164,14 @@ const bar = #"626172"
 const baz = #"62617a"
 
 test dict_must_get_1() fail {
-  dict_must_get(dict.new(), foo) == ""
+  dict_must_get(dict.empty, foo) == ""
 }
 
 test dict_must_get_2() {
   let m =
-    dict.new()
-      |> dict.insert(foo, "Aiken", bytearray.compare)
-      |> dict.insert(bar, "awesome", bytearray.compare)
+    dict.empty
+      |> dict.insert(foo, "Aiken")
+      |> dict.insert(bar, "awesome")
   and {
     Some(dict_must_get(m, key: foo)) == dict.get(m, key: foo),
     Some(dict_must_get(m, key: bar)) == dict.get(m, key: bar),
@@ -181,9 +180,9 @@ test dict_must_get_2() {
 
 test dict_must_get_3() fail {
   let m =
-    dict.new()
-      |> dict.insert(foo, "Aiken", bytearray.compare)
-      |> dict.insert(bar, "awesome", bytearray.compare)
+    dict.empty
+      |> dict.insert(foo, "Aiken")
+      |> dict.insert(bar, "awesome")
   dict_must_get(m, key: baz) == ""
 }
 
@@ -504,29 +503,24 @@ pub fn must_get_finite_start_validity(validity_range: ValidityRange) -> Int {
 
 pub fn value_to_list(val: Value) -> SortedValueList {
   val
-    |> value.to_dict
-    |> dict.to_list
-    |> list.map(
-         fn(e) {
-           let (k, v) = e
-           (k, dict.to_list(v))
-         },
-       )
+    |> assets.to_dict
+    |> dict.to_pairs
+    |> pairs.map(fn(_k, v) { dict.to_pairs(v) })
 }
 
 // Pool Author can be one of 3 authorization methods
 pub fn authorize_pool_license(
   author: PoolAuthorizationMethod,
   transaction_inputs: List<Input>,
-  withdrawals: Dict<StakeCredential, Int>,
-  extra_signatories: List<Hash<Blake2b_224, VerificationKey>>,
+  withdrawals: Pairs<Credential, Lovelace>,
+  extra_signatories: List<VerificationKeyHash>,
 ) -> Bool {
   when author is {
     // If the authorization method is PubKey, validate using the provided signature.
     PAMSignature(pub_key_hash) -> list.has(extra_signatories, pub_key_hash)
     // If the authorization method is SpendScript, ensure the Utxo is present in the transaction inputs.
     PAMSpendScript(script_hash) -> {
-      let auth_cred = ScriptCredential(script_hash)
+      let auth_cred = Script(script_hash)
       list.any(
         transaction_inputs,
         fn(input) {
@@ -539,10 +533,8 @@ pub fn authorize_pool_license(
       )
     }
     // If the authorization method is WithdrawScript, validate the presence of a withdrawal in the transaction.
-    PAMWithdrawScript(script_hash) -> {
-      let credential = Inline(ScriptCredential(script_hash))
-      dict.has_key(withdrawals, credential)
-    }
+    PAMWithdrawScript(script_hash) ->
+      pairs.has_key(withdrawals, Script(script_hash))
   }
 }
 
@@ -550,16 +542,16 @@ pub fn authorize_pool_license(
 pub fn authorize_order_license(
   author: OrderAuthorizationMethod,
   transaction_inputs: List<Input>,
-  withdrawals: Dict<StakeCredential, Int>,
-  extra_signatories: List<Hash<Blake2b_224, VerificationKey>>,
-  transaction_mint: MintedValue,
+  withdrawals: Pairs<Credential, Lovelace>,
+  extra_signatories: List<VerificationKeyHash>,
+  transaction_mint: Value,
 ) -> Bool {
   when author is {
     // If the authorization method is PubKey, validate using the provided signature.
     OAMSignature(pub_key_hash) -> list.has(extra_signatories, pub_key_hash)
     // If the authorization method is SpendScript, ensure the Utxo is present in the transaction inputs.
     OAMSpendScript(script_hash) -> {
-      let auth_cred = ScriptCredential(script_hash)
+      let auth_cred = Script(script_hash)
       list.any(
         transaction_inputs,
         fn(input) {
@@ -572,19 +564,14 @@ pub fn authorize_order_license(
       )
     }
     // If the authorization method is WithdrawScript, validate the presence of a withdrawal in the transaction.
-    OAMWithdrawScript(script_hash) -> {
-      let credential = Inline(ScriptCredential(script_hash))
-      dict.has_key(withdrawals, credential)
-    }
+    OAMWithdrawScript(script_hash) ->
+      pairs.has_key(withdrawals, Script(script_hash))
     // If the authorization method is MintScript, ensure the minted tokens meet the policy ID requirements and have a non-zero quantity.
     OAMMintScript(script_hash) -> {
-      let fst_token_quantity =
+      expect [Pair(_, fst_token_quantity), ..] =
         transaction_mint
-          |> value.from_minted_value()
-          |> value.tokens(script_hash)
-          |> dict.to_list()
-          |> builtin.head_list
-          |> builtin.snd_pair
+          |> assets.tokens(script_hash)
+          |> dict.to_pairs
       fst_token_quantity != 0
     }
   }

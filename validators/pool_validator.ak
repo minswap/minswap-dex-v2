@@ -1,14 +1,7 @@
 use aiken/builtin
-use aiken/bytearray
-use aiken/dict
-use aiken/list
-use aiken/transaction.{
-  Input, Output, ScriptContext, Spend, Transaction, WithdrawFrom,
-}
-use aiken/transaction/credential.{
-  Address, Credential, ScriptCredential, VerificationKeyCredential,
-}
-use aiken/transaction/value.{PolicyId}
+use aiken/collection/list
+use aiken/collection/pairs
+use aiken/primitive/bytearray
 use amm_dex_v2/order_validation
 use amm_dex_v2/pool_validation
 use amm_dex_v2/types.{
@@ -18,23 +11,26 @@ use amm_dex_v2/types.{
   UpdatePoolParameters, UpdatePoolStakeCredential, WithdrawFeeSharing,
 }
 use amm_dex_v2/utils
+use cardano/address.{Address, Credential, Script, VerificationKey}
+use cardano/assets.{PolicyId}
+use cardano/transaction.{Input, Output, OutputReference, Transaction}
 
-validator(
+validator pool_validator(
   // The PolicyID of Authen Minting Policy
   authen_policy_id: PolicyId,
 ) {
-  fn validate_pool(
-    datum: PoolDatum,
+  spend(
+    datum_opt: Option<PoolDatum>,
     redeemer: PoolRedeemer,
-    context: ScriptContext,
+    pool_input_ref: OutputReference,
+    transaction: Transaction,
   ) {
-    expect ScriptContext { transaction, purpose: Spend(pool_input_ref) } =
-      context
+    expect Some(datum) = datum_opt
     when redeemer is {
       Batching -> {
         let Transaction { withdrawals, .. } = transaction
         let PoolDatum { pool_batching_stake_credential, .. } = datum
-        dict.has_key(withdrawals, pool_batching_stake_credential)
+        pairs.has_key(withdrawals, pool_batching_stake_credential)
       }
       UpdatePoolParameters(action) -> {
         let Transaction {
@@ -81,7 +77,7 @@ validator(
             pool_author: authorizer,
           ),
           // This Redeemer won't mint anything 
-          value.is_zero(value.from_minted_value(mint)),
+          assets.is_zero(mint),
           pool_validation.validate_update_pool_parameters(
             action: action,
             authen_policy_id: authen_policy_id,
@@ -125,7 +121,7 @@ validator(
             pool_author: fee_sharing_taker,
           ),
           // This Redeemer won't mint anything 
-          value.is_zero(value.from_minted_value(mint)),
+          assets.is_zero(mint),
           pool_validation.validate_withdraw_fee_sharing(
             authen_policy_id: authen_policy_id,
             pool_input: pool_input,
@@ -136,22 +132,23 @@ validator(
       }
     }
   }
+
+  else(_) {
+    fail
+  }
 }
 
-validator(
+validator pool_batching_validator(
   // The PolicyID of Authen Minting Policy
   authen_policy_id: PolicyId,
   // The Payment Credential of Pool Validator
   pool_payment_cred: Credential,
 ) {
-  fn validate_pool_batching(
+  withdraw(
     redeemer: PoolBatchingRedeemer,
-    context: ScriptContext,
+    stake_credential: Credential,
+    transaction: Transaction,
   ) {
-    expect ScriptContext {
-      transaction,
-      purpose: WithdrawFrom(stake_credential),
-    } = context
     let Transaction {
       inputs,
       outputs,
@@ -193,7 +190,7 @@ validator(
         // Input indexes must not be empty list and be unique
         utils.is_unique_bytearray_unsorted(input_indexes),
         // validate Transaction won't mint any assets
-        value.is_zero(value.from_minted_value(mint)),
+        assets.is_zero(mint),
       }
 
     let pool_inputs =
@@ -228,10 +225,9 @@ validator(
           and {
             payment_cred != pool_payment_cred,
             when batcher_address is {
-              PAMSignature(pkh) ->
-                payment_cred != VerificationKeyCredential(pkh)
-              PAMSpendScript(sh) -> payment_cred != ScriptCredential(sh)
-              PAMWithdrawScript(sh) -> payment_cred != ScriptCredential(sh)
+              PAMSignature(pkh) -> payment_cred != VerificationKey(pkh)
+              PAMSpendScript(sh) -> payment_cred != Script(sh)
+              PAMWithdrawScript(sh) -> payment_cred != Script(sh)
             },
           }
         },
@@ -387,5 +383,9 @@ validator(
         )
       }
     }
+  }
+
+  else(_) {
+    fail
   }
 }
