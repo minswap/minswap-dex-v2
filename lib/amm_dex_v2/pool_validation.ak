@@ -436,7 +436,7 @@ pub fn get_pool_creation_expected_mint(
 }
 
 // This function get Pool output from output list and make sure there's single Pool Output
-fn get_single_pool_output(
+pub fn get_single_pool_output(
   all_outputs: List<Output>,
   pool_payment_credential: PaymentCredential,
 ) -> Output {

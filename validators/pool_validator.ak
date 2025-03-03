@@ -2,12 +2,14 @@ use aiken/builtin
 use aiken/collection/list
 use aiken/collection/pairs
 use aiken/primitive/bytearray
+use amm_dex_v2/math
 use amm_dex_v2/order_validation
 use amm_dex_v2/pool_validation
 use amm_dex_v2/types.{
-  Batching, BatchingPool, GlobalSetting, OrderDatum, PAMSignature,
-  PAMSpendScript, PAMWithdrawScript, PoolBatchingRedeemer, PoolDatum,
-  PoolRedeemer, SwapMultiRouting, SwapRouting, UpdateDynamicFee, UpdatePoolFee,
+  Batching, BatchingPool, DirectDeposit, DirectInteract, DirectSwap,
+  DirectWithdraw, GlobalSetting, OrderDatum, PAMSignature, PAMSpendScript,
+  PAMWithdrawScript, PoolBatchingRedeemer, PoolDatum, PoolRedeemer,
+  SwapMultiRouting, SwapRouting, UpdateDynamicFee, UpdatePoolFee,
   UpdatePoolParameters, UpdatePoolStakeCredential, WithdrawFeeSharing,
 }
 use amm_dex_v2/utils
@@ -128,6 +130,187 @@ validator pool_validator(
             pool_in_datum: datum,
             all_outputs: outputs,
           ),
+        }
+      }
+      DirectInteract(action, integrator_index) -> {
+        let Transaction {
+          inputs,
+          reference_inputs,
+          outputs,
+          mint,
+          withdrawals,
+          extra_signatories,
+          ..
+        } = transaction
+        expect Some(pool_input) = transaction.find_input(inputs, pool_input_ref)
+        let Input {
+          output: Output { address: pool_in_address, value: pool_in_value, .. },
+          ..
+        } = pool_input
+        let Address {
+          payment_credential: pool_in_address_payment_credential,
+          ..
+        } = pool_in_address
+        let global_setting =
+          pool_validation.get_and_validate_global_setting(
+            reference_inputs: reference_inputs,
+            authen_policy_id: authen_policy_id,
+          )
+        let GlobalSetting { integrators, .. } = global_setting
+        let integrator = utils.list_at_index(integrators, integrator_index)
+        expect and {
+            // Transaction must be executed by the correct authorizer
+            utils.authorize_pool_license(
+              author: integrator,
+              transaction_inputs: inputs,
+              withdrawals: withdrawals,
+              extra_signatories: extra_signatories,
+            ),
+            // Verify that the transaction spends only one Single Pool Script and does not contain any other scripts in its inputs, except for the Author, in cases where the Author is a script
+            pool_validation.has_only_pool_and_author(
+              inputs: inputs,
+              pool_address: pool_in_address,
+              pool_author: integrator,
+            ),
+            // This Redeemer won't mint anything 
+            assets.is_zero(mint),
+          }
+        let Output {
+          address: pool_out_address,
+          value: pool_out_value,
+          datum: raw_pool_out_datum,
+          ..
+        } =
+          pool_validation.get_single_pool_output(
+            all_outputs: outputs,
+            pool_payment_credential: pool_in_address_payment_credential,
+          )
+
+        expect and {
+            // Pool Input contains 1 valid Pool NFT Token
+            assets.quantity_of(
+              pool_in_value,
+              authen_policy_id,
+              utils.pool_auth_asset_name,
+            ) == 1,
+            // Pool Output contains 1 valid Pool NFT Token
+            assets.quantity_of(
+              pool_out_value,
+              authen_policy_id,
+              utils.pool_auth_asset_name,
+            ) == 1,
+          }
+        expect pool_out_datum: PoolDatum =
+          utils.must_find_script_inline_datum(raw_pool_out_datum)
+        let PoolDatum {
+          pool_batching_stake_credential: pool_in_stake_credential,
+          asset_a: pool_in_asset_a,
+          asset_b: pool_in_asset_b,
+          total_liquidity: pool_in_total_liquidity,
+          reserve_a: pool_in_reserve_a,
+          reserve_b: pool_in_reserve_b,
+          base_fee_a_numerator: pool_in_base_fee_a_numerator,
+          base_fee_b_numerator: pool_in_base_fee_b_numerator,
+          fee_sharing_numerator_opt: pool_in_fee_sharing_numerator_opt,
+          allow_dynamic_fee: pool_in_allow_dynamic_fee,
+        } = datum
+        let PoolDatum {
+          pool_batching_stake_credential: pool_out_stake_credential,
+          asset_a: pool_out_asset_a,
+          asset_b: pool_out_asset_b,
+          total_liquidity: pool_out_total_liquidity,
+          reserve_a: pool_out_reserve_a,
+          reserve_b: pool_out_reserve_b,
+          base_fee_a_numerator: pool_out_base_fee_a_numerator,
+          base_fee_b_numerator: pool_out_base_fee_b_numerator,
+          fee_sharing_numerator_opt: pool_out_fee_sharing_numerator_opt,
+          allow_dynamic_fee: pool_out_allow_dynamic_fee,
+        } = pool_out_datum
+        expect and {
+            // Irrelevant fields on Pool Datum must be unchanged
+            pool_in_stake_credential == pool_out_stake_credential,
+            pool_in_asset_a == pool_out_asset_a,
+            pool_in_asset_b == pool_out_asset_b,
+            pool_in_base_fee_a_numerator == pool_out_base_fee_a_numerator,
+            pool_in_base_fee_b_numerator == pool_out_base_fee_b_numerator,
+            pool_in_fee_sharing_numerator_opt == pool_out_fee_sharing_numerator_opt,
+            pool_in_allow_dynamic_fee == pool_out_allow_dynamic_fee,
+            // Pool Address must be unchanged (both Payment and Stake Credential)
+            pool_in_address == pool_out_address,
+          }
+        when action is {
+          DirectSwap(a_to_b, swap_amount, min_receive) -> {
+            expect swap_amount > 0
+            expect min_receive > 0
+            expect pool_in_total_liquidity == pool_out_total_liquidity
+            let (reserve_in, reserve_out, trading_fee_numerator) =
+              if a_to_b {
+                (
+                  pool_in_reserve_a,
+                  pool_in_reserve_b,
+                  pool_in_base_fee_a_numerator,
+                )
+              } else {
+                (
+                  pool_in_reserve_b,
+                  pool_in_reserve_a,
+                  pool_in_base_fee_b_numerator,
+                )
+              }
+            let amount_out =
+              math.calculate_amount_out(
+                reserve_in: reserve_in,
+                reserve_out: reserve_out,
+                amount_in: swap_amount,
+                trading_fee_numerator: trading_fee_numerator,
+              )
+            let earned_fee_in =
+              math.calculate_earned_fee_in(
+                amount_in: swap_amount,
+                trading_fee_numerator: trading_fee_numerator,
+                fee_sharing_numerator_opt: pool_in_fee_sharing_numerator_opt,
+              )
+            expect amount_out >= min_receive
+            if a_to_b {
+              and {
+                pool_in_reserve_a + swap_amount - earned_fee_in == pool_out_reserve_a,
+                pool_in_reserve_b - amount_out == pool_out_reserve_b,
+                (
+                  pool_in_value
+                    |> assets.add(
+                        pool_in_asset_a.policy_id,
+                        pool_in_asset_a.asset_name,
+                        swap_amount,
+                      )
+                    |> assets.add(
+                        pool_in_asset_b.policy_id,
+                        pool_in_asset_b.asset_name,
+                        -amount_out,
+                      )
+                ) == pool_out_value,
+              }
+            } else {
+              and {
+                pool_in_reserve_b + swap_amount - earned_fee_in == pool_out_reserve_b,
+                pool_in_reserve_a - amount_out == pool_out_reserve_a,
+                (
+                  pool_in_value
+                    |> assets.add(
+                        pool_in_asset_a.policy_id,
+                        pool_in_asset_a.asset_name,
+                        -amount_out,
+                      )
+                    |> assets.add(
+                        pool_in_asset_b.policy_id,
+                        pool_in_asset_b.asset_name,
+                        swap_amount,
+                      )
+                ) == pool_out_value,
+              }
+            }
+          }
+          DirectDeposit(_, _, _) -> todo
+          DirectWithdraw(_, _, _) -> todo
         }
       }
     }
