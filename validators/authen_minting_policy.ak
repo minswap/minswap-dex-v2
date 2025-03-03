@@ -248,6 +248,7 @@ fn validate_global_setting(global_setting: GlobalSetting) -> Bool {
     fee_sharing_taker,
     pool_stake_key_updater,
     pool_dynamic_fee_updater,
+    integrators,
     admin,
   } = global_setting
   and {
@@ -260,6 +261,11 @@ fn validate_global_setting(global_setting: GlobalSetting) -> Bool {
     list.all(
       batchers,
       fn(batcher) { validate_pool_authorization_method(batcher) },
+    ),
+    !builtin.null_list(integrators),
+    list.all(
+      integrators,
+      fn(integrator) { validate_pool_authorization_method(integrator) },
     ),
   }
 }

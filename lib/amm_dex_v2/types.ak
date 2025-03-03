@@ -53,10 +53,35 @@ pub type UpdatePoolParametersAction {
   UpdatePoolStakeCredential
 }
 
+pub type DirectPoolAction {
+  DirectSwap {
+    // The AToB direction of swap request. True for A -> B and False for B -> A
+    a_to_b_direction: Bool,
+    // Amount of Asset In which users want to exchange
+    swap_amount: Int,
+    // Minimum amount of Asset Out which users want to receive after exchanging
+    minimum_receive: Int,
+  }
+  DirectDeposit {
+    deposit_amount_a: Int,
+    deposit_amount_b: Int,
+    // The minimum amount of LP Token which users want to receive after depositing
+    minimum_lp: Int,
+  }
+  DirectWithdraw {
+    lp_amount: Int,
+    // minimum received amounts of Asset A
+    minimum_asset_a: Int,
+    // minimum received amounts of Asset B
+    minimum_asset_b: Int,
+  }
+}
+
 pub type PoolRedeemer {
   Batching
   UpdatePoolParameters { action: UpdatePoolParametersAction }
   WithdrawFeeSharing
+  DirectInteract { action: DirectPoolAction, integrator_index: Int }
 }
 
 pub type PoolBatchingRedeemer {
@@ -335,6 +360,7 @@ pub type GlobalSetting {
   pool_stake_key_updater: PoolAuthorizationMethod,
   // The actor who can update the Pool's dynamic fee.
   pool_dynamic_fee_updater: PoolAuthorizationMethod,
+  integrators: List<PoolAuthorizationMethod>,
   // The actor who can update the addresses mentioned above.
   // This admin can be transferred to another wallet and should be stored in the most secure location.
   admin: PoolAuthorizationMethod,
