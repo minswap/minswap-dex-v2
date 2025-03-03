@@ -1,8 +1,11 @@
-use aiken/transaction.{ScriptContext, Spend}
+use cardano/transaction.{OutputReference, Transaction}
 
-validator {
-  fn spend(_d: Data, _r: Data, ctx: ScriptContext) {
-    expect ScriptContext { purpose: Spend(_), .. } = ctx
+validator always_success {
+  spend(_d: Option<Data>, _r: Data, _o: OutputReference, _self: Transaction) {
     True
+  }
+
+  else(_) {
+    fail
   }
 }

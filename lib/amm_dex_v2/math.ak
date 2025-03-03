@@ -1,4 +1,4 @@
-use aiken/list
+use aiken/collection/list
 use amm_dex_v2/utils
 
 pub fn calculate_sqrt(x: Int) -> Int {
