@@ -1,22 +1,12 @@
 import { mConStr2, SLOT_CONFIG_NETWORK, unixTimeToEnclosingSlot } from "@meshsdk/core";
 import { blockchainProvider, orderValidatorScript, orderValidatorAddress, txBuilder, wallet1, wallet1Address, wallet1Collateral, wallet1Utxos, orderValidatorRewardAddress, orderCanclValidatorRewardAddress, orderCanclValidatorScript } from "./setup.js";
-// register order cancellation validator stake key
-// const unsignedTx = await txBuilder
-//     // .registerStakeCertificate(orderValidatorScriptHash)
-//     .registerStakeCertificate(orderCanclValidatorRewardAddress)
-//     .selectUtxosFrom(wallet1Utxos)
-//     .changeAddress(wallet1Address)
-//     .complete();
-// const signedTx = await wallet1.signTx(unsignedTx);
-// const txHash = await wallet1.submitTx(signedTx);
-// console.log("register order cancel stake certificate tx hash:", txHash);
 console.log("orderValidatorAddress:", orderValidatorAddress);
 const orderUtxo = (await blockchainProvider.fetchAddressUTxOs(orderValidatorAddress))[0];
 if (!orderUtxo) {
     throw new Error("order utxo not found!");
 }
 console.log("orderUtxo:", orderUtxo);
-const invalidBefore = unixTimeToEnclosingSlot((Date.now() - 15000), SLOT_CONFIG_NETWORK.preview);
+const invalidBefore = unixTimeToEnclosingSlot((Date.now() - 15000), SLOT_CONFIG_NETWORK.preprod);
 console.log('\n', "expired time: 1738668722616");
 console.log(" current time:", Date.now() - 15000, '\n');
 const unsignedTx = await txBuilder

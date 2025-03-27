@@ -25,7 +25,7 @@ if (!maestroKey) {
     throw new Error("MAESTRO_KEY does not exist");
 }
 const blockchainProvider = new MaestroProvider({
-    network: 'Preview',
+    network: 'Preprod',
     apiKey: maestroKey,
 });
 
@@ -54,11 +54,11 @@ const wallet1 = new MeshWallet({
 const wallet1Address = await wallet1.getChangeAddress();
 
 const wallet1Utxos = await wallet1.getUtxos();
-const wallet1Collateral: UTxO = (await blockchainProvider.fetchUTxOs("0f61fee1b8e12b8faf807794464bef3195a32b7949270c7f530fff5144e36aa1", 5))[0];
+const wallet1Collateral: UTxO = (await blockchainProvider.fetchUTxOs("d4a881d7562d1e17fa0ae7b02dd9dec40564ca2e7258b286ba8d5511ce97809a", 1))[0];
 // const wallet1Collateral: UTxO = (await wallet1.getCollateral())[0]
-if (!wallet1Collateral) {
-    throw new Error('No collateral utxo found');
-}
+// if (!wallet1Collateral) {
+//     throw new Error('No collateral utxo found');
+// }
 
 const { pubKeyHash: wallet1VK, stakeCredentialHash: wallet1SK } = deserializeAddress(wallet1Address);
 
@@ -102,16 +102,16 @@ const { address: multiSigAddress, scriptCbor: multiSigCbor } = serializeNativeSc
 const multisigHash = resolveNativeScriptHash(nativeScript);
 
 // Evaluator for Aiken verbose mode
-const evaluator = new OfflineEvaluator(blockchainProvider, "preview");
+const evaluator = new OfflineEvaluator(blockchainProvider, 'preprod');
 // Create transaction builder
 const txBuilder = new MeshTxBuilder({
     fetcher: blockchainProvider,
     submitter: blockchainProvider,
     evaluator: evaluator, // Can also be "evaluator: blockchainProvider,"
     // evaluator: blockchainProvider,
-    verbose: false,
+    // verbose: true,
 });
-txBuilder.setNetwork('preview');
+txBuilder.setNetwork('preprod');
 
 // constants
 const factoryAssetName = "4d5346";
@@ -145,11 +145,11 @@ const alwaysSuccessValidatorHash = resolveScriptHash(alwaysSuccessValidatorScrip
 const authenValidator = blueprint.validators.filter(v => (
     v.title.includes("authen_minting_policy.authen_minting_policy.mint")
 ));
-const dexInitParamTxHash = "038cac6973b0d784ed7a7e472ce7a9cf9fcc14dce2cdf018ce8e1c742000bc8b";
+const dexInitParamTxHash = "00960ee7101756197ba4675be7f9ba082e9ee94fc857c57fe355f2401c1bd985";  // change this and below on each dex init
 const dexInitParamTxIndex = 2;
 const authenValidatorScript = applyParamsToScript(
     authenValidator[0].compiledCode,
-    [outputReference(dexInitParamTxHash, dexInitParamTxIndex)], // change this on each dex init
+    [outputReference(dexInitParamTxHash, dexInitParamTxIndex)],
     "JSON",
 );
 const authenPolicyId = resolveScriptHash(authenValidatorScript, "V3");
@@ -181,10 +181,12 @@ const poolValidatorRewardAddress = serializeRewardAddress(
     0,
 );
 const poolAddressData = scriptAddress(
-    alwaysSuccessValidatorHash, // modify here <==== DONE
+    alwaysSuccessValidatorHash,
     poolStakeCredentialHash,
     true,
 );
+const poolValidatorScriptHash = poolStakeCredentialHash;
+console.log("poolValidatorScriptHash:", poolValidatorScriptHash);
 
 // Pool Batching Validator
 const poolBatchingValidator = blueprint.validators.filter(v => (
@@ -192,7 +194,7 @@ const poolBatchingValidator = blueprint.validators.filter(v => (
 ));
 const poolBatchingValidatorScript = applyParamsToScript(
     poolBatchingValidator[0].compiledCode,
-    [builtinByteString(authenPolicyId), conStr(1, [builtinByteString(alwaysSuccessValidatorHash)])], // modify here <==== DONE
+    [builtinByteString(authenPolicyId), poolAddressData],
     "JSON",
 );
 const poolBatchingValidatorHash = resolveScriptHash(poolBatchingValidatorScript, "V3");
@@ -201,6 +203,7 @@ const poolBatchingValidatorRewardAddress = serializeRewardAddress(
     true,
     0,
 );
+console.log("poolBatchingValidatorHash:", poolBatchingValidatorHash);
 
 // Factory Validator
 const factoryValidator = blueprint.validators.filter(v => (
@@ -254,7 +257,7 @@ const orderValidatorRewardAddress = serializeRewardAddress(
     true,
     0,
 );
-// console.log("orderValidatorScriptHash:", orderValidatorScriptHash);
+console.log("orderValidatorScriptHash:", orderValidatorScriptHash);
 // console.log('orderValidator Reward Address:', orderValidatorRewardAddress);
 
 // tests
@@ -264,6 +267,11 @@ const orderValidatorRewardAddress = serializeRewardAddress(
 // console.log("orderSK:", orderSK);
 // console.log("orderScH:", orderScH);
 // console.log("orderStakeScH:", orderStakeScH);
+// console.log("mPubKeyAddress(wallet1VK, wallet1SK):", mPubKeyAddress(wallet1VK, wallet1SK));
+// console.log("poolAddressData:", poolAddressData);
+
+console.log("authen validator utxos number:", (await blockchainProvider.fetchAddressUTxOs(authenAddress)).length, '\n');
+console.log("factory validator utxos number:", (await blockchainProvider.fetchAddressUTxOs(factoryAddress)).length, '\n');
 
 // test mint
 // Always success mint validator
@@ -301,6 +309,7 @@ const lpAssetName = sha3(assetASha256 + assetBSha256);
 const iMyTokenTwoSupply = 1500;
 const myTokenOneSupply = 1500;
 const totalLiquidity = calculateInitialLiquidity(myTokenOneSupply, iMyTokenTwoSupply);
+// console.log("totalLiquidity:", totalLiquidity);
 const maxInt64 = 9223372036854775807n;
 const remainingLiquidity = maxInt64 - (BigInt(totalLiquidity) - 10n);
 
@@ -348,6 +357,7 @@ export {
     poolValidatorAddress,
     poolValidatorRewardAddress,
     poolValidatorScript,
+    poolValidatorScriptHash,
     // pool batching
     poolBatchingValidatorHash,
     poolBatchingValidatorRewardAddress,

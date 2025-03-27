@@ -73,6 +73,8 @@ pub fn get_batching_pool(
     ..
   } = pool_output
 
+  // trace @"gbp": require_total_liquidity_unchange, stake_credential
+
   expect pool_in_datum: PoolDatum =
     utils.must_find_script_inline_datum(pool_in_datum_raw)
 
@@ -109,6 +111,12 @@ pub fn get_batching_pool(
     } else {
       True
     }
+  // expect
+  //   if require_total_liquidity_unchange {
+  //     (pool_in_total_liquidity == pool_out_total_liquidity)?
+  //   } else {
+  //     True
+  //   }
   expect and {
       pool_in_stake_credential == pool_out_stake_credential,
       pool_in_stake_credential == stake_credential,
@@ -120,6 +128,17 @@ pub fn get_batching_pool(
       pool_in_fee_sharing_numerator_opt == pool_out_fee_sharing_numerator_opt,
       pool_in_allow_dynamic_fee == pool_out_allow_dynamic_fee,
     }
+  // expect and {
+  //     (pool_in_stake_credential == pool_out_stake_credential)?,
+  //     (pool_in_stake_credential == stake_credential)?,
+  //     (pool_in_address == pool_out_address)?,
+  //     (pool_in_asset_a == pool_out_asset_a)?,
+  //     (pool_in_asset_b == pool_out_asset_b)?,
+  //     (pool_in_base_fee_a_numerator == pool_out_base_fee_a_numerator)?,
+  //     (pool_in_base_fee_b_numerator == pool_out_base_fee_b_numerator)?,
+  //     (pool_in_fee_sharing_numerator_opt == pool_out_fee_sharing_numerator_opt)?,
+  //     (pool_in_allow_dynamic_fee == pool_out_allow_dynamic_fee)?,
+  //   }
   let Asset { policy_id: asset_a_policy_id, asset_name: asset_a_asset_name } =
     pool_in_asset_a
   let Asset { policy_id: asset_b_policy_id, asset_name: asset_b_asset_name } =
@@ -180,6 +199,11 @@ pub fn get_batching_pool(
       estimate_pool_out_value == pool_out_value,
       remaining_liquidity_supply_out - remaining_liquidity_supply_in == pool_in_total_liquidity - pool_out_total_liquidity,
     }
+  // expect and {
+  //     (estimate_pool_in_value == pool_in_value)?,
+  //     (estimate_pool_out_value == pool_out_value)?,
+  //     (remaining_liquidity_supply_out - remaining_liquidity_supply_in == pool_in_total_liquidity - pool_out_total_liquidity)?,
+  //   }
 
   let trading_fee_a_numerator =
     get_trading_fee_numerator(

@@ -1,14 +1,27 @@
 Dex initialization:
-    d51b13719330c33e498e32600d6b2bed16c4c3500cca8c2a6f441b45f10e59e3
+    986ba0c8372f9d012690526e1cd00b5a1fa010e4abdb1e4d21909ab4f7b228d7 (Preprod 1.8.14) // Preview 1.8.14 -> 3e8c551a99b51f698def21d7987febd8d1a738e3946225e5f3d7729be01651ee // Preview 1.8.8 -> 3f13dd312e19a0ec7a37fa9000f7af0d57c0b993cc44f8fcb5e843f3b3b68f7f
 
+
+REGISTER ALL STAKE CREDENTIALS:
+    58b43e13866b71481b19c6a0c1a6ad89b799ee5cad6c4bb1dc043caf232e91df (Preprod 1.8.14)
+REGISTER ALL STAKE CREDENTIALS (Necessary validators for batching transaction):
+    681643cf20f36fd3853cd7bdba922163d4fe0718c51b3c836d724ac3153d44b3 (Preprod 1.8.14)
+
+
+""" (ARCHIVE)
 Register Order Stake Certificate:
-    edeed128821d7a0bc229720ba68111d135c2cd19bdaf8e0e012934f83d5321bb
+    e80f8126a8b244bf1335f219a7876f0d87ae2ed90e8e56922c1ef552f081414a (Preprod 1.8.14) // Preview 1.8.14 -> a28ebfe4d077b2d2cc985022137b4a2b2cf35b2d30a9e9cd77839e1422d3d21c // Preview 1.8.8 -> 153cf9d7e57d4bc39f1cb63e80f7cd46db968402dfd9c6bf84e859ebcd989232
 Register Order Cancellation Stake Certificate:
-    8c1d2347d3fc289c2fcacfb31af8f6a73e8a568da1ea3ac312684233903e0072
+    b4c06e84f37510139c5a1f027039e02cb8dfadcdb7018ef78a0d78892e536d00
 Register Pool Stake Certificate:
-    5f442eb03601c8b1b59d9a110750802f795214af8e7d575da91cc9484a6d58fb
+    bbf01d4172b0dbb349642dff3a6b05716d7beecb91518c5d571ca1f9b8cbdfd8 (Preprod 1.8.14) // Preview 1.8.14 -> 58cd62ada544b642af86597d3adf0c99bdd8408309fcd68d4b90488d50b24b85 // Preview 1.8.8 -> a78106af0df5fb1b549218f6ffbffe0e5479536c584725f4912772a65f13e1b9
 Register Pool Batching Stake Certificate:
-    137a4e02370fc96f45af85f6be5a1158d880df333f4cdd293ffe2957ad32894d
+    b559e612d98b33ef6f230c6569bc06e59fa109ee7686f1a1493cf32e808e22d3 (Preprod 1.8.14) // Preview 1.8.14 -> 1248b9347ef11bc21b0f1b30cdf6207cd8d2421f10b24e483d804919e50343f1 // Preview 1.8.8 -> 130d5f64fe5c4a4dfc4aed876f7e0835f9b73aca0ff0ef605b177b4060db675d
+"""
+
+
+Pool Creation:
+    e19f44f94613b21c2a69069e183e835a8fc11c4d3be3a4f8b953ba77bc18a595 (Preprod 1.8.14) // Preview 1.8.14 -> adbc2ddf2c9953348a03fbf2cf75fc3daf83b324f6d2aaffa03cc878e344023a // Preview 1.8.8 -> 662c5dbdb70b0b987c01095c0347fba9198ff2c2b9c624d92be9681aae4a4569
 
 ORDERS:
 Cancel order by owner:
@@ -19,9 +32,38 @@ Cancel order by owner:
 
 Cancel order by anyone:
     Create Order:
-        f4671171103405b01401f97b09fc0d980b9e7c4c23c1f34a3c49ec603ad72cd4
+        f7428222a1c6d864fb3026a03a8c5e9e3d07d7cbba028362dc97e2c745d861b5
 
 Pool Batching:
     Create Order:
-        65ff69d86aa191e5fbaba017765a041ceac75c899531de58c74cbfec25db193e
+        4106dcd1474caec634c74272568603c5dd3ccb9bbd6be3c3073eb33cc7f94de5 (Preprod 1.8.14) // Preview 1.8.14 -> 8b56d48a1cc0b7160e8400c9f2b8242e1222ce8f22ca41f0b862d73e81a1de3c // Preview 1.8.8 -> 8163138df85fc9302ae54e30551ca5e33ebf8743257b2e6392db54c9d89a674d
     Process Order:
+        00960ee7101756197ba4675be7f9ba082e9ee94fc857c57fe355f2401c1bd985
+
+
+
+// Restarting (For batching transaction)
+- Replace dex.. txhash and idx with new utxo
+- dex Init
+- save authen minting validator -> replace hash in `create_pool.ts`
+- create pool
+- create order
+- register all stake credentials
+- save all batching related validator -> replace hashes in `batching.ts`
+- submit batching transaction
+
+
+// Review
+- Probably change pool datum last element (dynamic fee) to NONE ??
+- (*) Total liquidity in pool datum might not or might be changed (should change but it's not changed); Also, remaining liquidty out should change
+
+
+// Batching review
+- receiver address may not be have been passed correctly in order_datum
+- order_out_value == get_swap_output_value( <==== comparison might not be ordered because of the new Aiken update
+
+// Lession learnt (Aiken)
+- Make unused redeemers type `Data`
+- Do not leave any warnings in Aiken during build (A)
+- Do not build crashed programs (B)
+- Both A and B will lead to redeemer errors

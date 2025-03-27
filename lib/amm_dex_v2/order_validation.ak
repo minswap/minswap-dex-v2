@@ -2,6 +2,12 @@ use aiken/builtin
 use aiken/collection/list
 use aiken/crypto.{blake2b_256}
 use amm_dex_v2/math
+// use amm_dex_v2/types.{
+//   Asset, DatumMap, BatchingPool, SwapRouting,
+//   EODDatumHash, EODInlineDatum, EODNoDatum,
+//   ExtraOrderDatum, OrderDatum, PoolState, SAOAll,
+//   SAOSpecificAmount, SwapAmountOption, SwapExactIn, SortedValueList,
+// }
 use amm_dex_v2/types.{
   Asset, BatchingPool, DAOAll, DAOSpecificAmount, DatumMap, Deposit,
   DepositAmountOption, Donation, EODDatumHash, EODInlineDatum, EODNoDatum,
@@ -41,6 +47,7 @@ fn get_optimized_swap_output_value(
 ) -> Option<SortedValueList> {
   // Ensure that asset A is ADA
   if utils.is_ada_asset(asset_a_policy_id, asset_a_asset_name) {
+    trace @"ad": 1
     let order_in_value_list = order_in_value |> utils.value_to_list
     let ada_entry = builtin.head_list(order_in_value_list)
     let rest_0 = builtin.tail_list(order_in_value_list)
@@ -112,6 +119,7 @@ fn get_optimized_swap_output_value(
       _ -> None
     }
   } else {
+    trace @"g N": 1
     None
   }
 }
@@ -127,14 +135,17 @@ fn get_swap_output_value(
   amount_out: Int,
 ) -> Value {
   if utils.is_ada_asset(asset_in_policy_id, asset_in_asset_name) {
+    trace @"x": 1
     order_in_value
       |> assets.add(ada_policy_id, ada_asset_name, -(used_batcher_fee + amount_in))
       |> assets.add(asset_out_policy_id, asset_out_asset_name, amount_out)
   } else if utils.is_ada_asset(asset_out_policy_id, asset_out_asset_name) {
+    trace @"y": 1
     order_in_value
       |> assets.add(ada_policy_id, ada_asset_name, amount_out - used_batcher_fee)
       |> assets.add(asset_in_policy_id, asset_in_asset_name, -amount_in)
   } else {
+    trace @"z": 1
     order_in_value
       |> assets.add(ada_policy_id, ada_asset_name, -used_batcher_fee)
       |> assets.add(asset_in_policy_id, asset_in_asset_name, -amount_in)
@@ -167,6 +178,7 @@ fn compare_swap_output_value(
   is {
     Some(v) -> v == ( order_out_value |> utils.value_to_list )
     None -> {
+      trace @"s": 1
       let (asset_in, asset_out) =
         if a_to_b_direction {
           (asset_a, asset_b)
@@ -261,6 +273,7 @@ fn validate_swap_exact_in(
     )
   let slippage_satisfied = is_slippage_satisfied(amount_out)
   if slippage_satisfied {
+    trace @"dd": success_receiver_datum, success_receiver
     expect and {
         validate_order_output_except_value(
           receiver: success_receiver,
@@ -277,6 +290,7 @@ fn validate_swap_exact_in(
           amount_in: swap_amount,
           amount_out: amount_out,
         ),
+        True,
       }
     if a_to_b_direction {
       (
@@ -296,6 +310,9 @@ fn validate_swap_exact_in(
       )
     }
   } else {
+    // let Address { payment_credential: ref_rec_pk, .. } = refund_receiver
+    // trace @"sn s": ref_rec_pk, kill_on_failed, used_batcher_fee, refund_receiver_datum
+    // fail
     expect and {
         kill_on_failed,
         validate_order_output(
@@ -1197,7 +1214,7 @@ pub fn validate_order_receiver(
   let Address { payment_credential: receiver_payment_cred, .. } = receiver
   let is_correct_address = receiver == output_address
   when receiver_payment_cred is {
-    VerificationKey(_) -> is_correct_address
+    VerificationKey(_) -> is_correct_address?
     Script(_) -> and {
         is_correct_address,
         is_valid_datum(
@@ -1250,12 +1267,14 @@ fn validate_order_output_except_value(
   when receiver_payment_cred is {
     VerificationKey(_) -> receiver == output_address
     Script(_) -> and {
-        receiver == output_address,
-        is_valid_datum(
-          raw_datum: raw_order_output_datum,
-          extra_order_datum: receiver_datum,
-        ),
-      }
+      // trace @"s dat": receiver_datum, raw_order_output_datum
+      receiver == output_address,
+      // False,
+      is_valid_datum(
+        raw_datum: raw_order_output_datum,
+        extra_order_datum: receiver_datum,
+      ),
+    }
   }
 }
 
@@ -1313,6 +1332,20 @@ pub fn apply_orders(
         Some((expired_time, _)) -> current_time_approximation <= expired_time
       },
     }
+  // expect and {
+  //     // max_batcher_fee must be positive
+  //     (max_batcher_fee > 0)?,
+  //     // Used Batcher Fee must be positive and less than or equal batcher fee
+  //     (used_batcher_fee > 0)?,
+  //     (used_batcher_fee <= max_batcher_fee)?,
+  //     // lp_asset must be the same with processing Liquidity Pool
+  //     (lp_asset == order_lp_asset)?,
+  //     // In case expired setting is turned on, the execution time must not exceed the expired_time
+  //     when expiry_setting_opt is {
+  //       None -> True
+  //       Some((expired_time, _)) -> (current_time_approximation <= expired_time)?
+  //     },
+  //   }
   let (new_state, rest_outs) =
     when order_step is {
       SwapExactIn(
@@ -1680,6 +1713,10 @@ pub fn apply_orders(
           all_outputs,
         )
       SwapMultiRouting(_, _, _) -> fail
+      // _ -> {
+      //   // trace @"Ord nt SwExtIn": 1
+      //   fail
+      // }
     }
 
   when rest_inputs is {
@@ -1734,24 +1771,44 @@ pub fn validate_cancel_expired_orders(
   expect Some((expired_time, max_tip)) = expiry_setting_opt
   expect and {
       // the transaction must be created after expired time
-      (expired_time < start_valid_time_range)?,
-      trace @"expired_time": expired_time
-      trace @"start_valid_time_range": start_valid_time_range
+      expired_time < start_valid_time_range,
+      // trace @"expired_time": expired_time
+      // trace @"start_valid_time_range": start_valid_time_range
       // the output have to paid back to sender
-      (refund_receiver == order_out_address)?,
+      refund_receiver == order_out_address,
       // ADA in the order might be deducted for tipping a canceller
       // The tip must not exceed the maximum tip
       // Other tokens must be returned to sender
-      (assets.lovelace_of(order_out_value) >= assets.lovelace_of(order_in_value) - max_tip)?,
-      (assets.without_lovelace(order_out_value) == assets.without_lovelace(
+      assets.lovelace_of(order_out_value) >= assets.lovelace_of(order_in_value) - max_tip,
+      assets.without_lovelace(order_out_value) == assets.without_lovelace(
         order_in_value,
-      ))?,
+      ),
       // If sender is script address, the output have to attach the defined datum
       is_valid_datum(
         raw_datum: raw_order_output_datum,
         extra_order_datum: refund_receiver_datum,
-      )?,
+      ),
     }
+  // expect and {
+  //     // the transaction must be created after expired time
+  //     (expired_time < start_valid_time_range)?,
+  //     trace @"expired_time": expired_time
+  //     trace @"start_valid_time_range": start_valid_time_range
+  //     // the output have to paid back to sender
+  //     (refund_receiver == order_out_address)?,
+  //     // ADA in the order might be deducted for tipping a canceller
+  //     // The tip must not exceed the maximum tip
+  //     // Other tokens must be returned to sender
+  //     (assets.lovelace_of(order_out_value) >= assets.lovelace_of(order_in_value) - max_tip)?,
+  //     (assets.without_lovelace(order_out_value) == assets.without_lovelace(
+  //       order_in_value,
+  //     ))?,
+  //     // If sender is script address, the output have to attach the defined datum
+  //     is_valid_datum(
+  //       raw_datum: raw_order_output_datum,
+  //       extra_order_datum: refund_receiver_datum,
+  //     )?,
+  //   }
   if rest_order_inputs == [] {
     True
   } else {

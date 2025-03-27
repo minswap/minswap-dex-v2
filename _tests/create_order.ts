@@ -5,13 +5,13 @@ const orderStep = mConStr0([
     mConStr1([]), // True
     mConStr0([swapAmount]), // swap_amount_option
     18, // minimum_receive
-    mConStr1([]), // True
+    mConStr0([]), // False
 ]);
 const orderDatum = mConStr0([
     mConStr0([wallet1VK]),
     mPubKeyAddress(wallet1VK, wallet1SK),
     mConStr0([]),
-    mPubKeyAddress(wallet1VK, wallet1SK),
+    mPubKeyAddress(wallet1VK, wallet1SK), // <-----------
     mConStr0([]),
     mConStr0([
         authenPolicyId, // policy id

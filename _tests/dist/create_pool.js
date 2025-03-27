@@ -1,7 +1,7 @@
 import { mConStr0, mConStr1, stringToHex } from "@meshsdk/core";
 import { alwaysSuccessMintValidatorHash, assetA, assetB, authenPolicyId, blockchainProvider, factoryAddress, factoryAssetName, factoryValidatorScript, iMyTokenTwoSupply, lpAssetName, maxInt64, myTokenOneSupply, poolAuthAssetName, poolBatchingValidatorHash, poolValidatorAddress, remainingLiquidity, totalLiquidity, txBuilder, wallet1, wallet1Address, wallet1Collateral, wallet1Utxos } from "./setup.js";
 // Authen
-const authenScriptTxHash = "ff253881c37abe0636dd9a3248f7c4861bd2b1ed217d45e2161ddc16e85f3e7e";
+const authenScriptTxHash = "3c41ad3f5e4252864db0b717fb33d878e0116d6271512743457bb6bc99d0f220";
 const authenScriptTxIndex = 0;
 // Factory
 // const factoryScriptTxHash = "";

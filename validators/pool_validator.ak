@@ -23,7 +23,7 @@ validator pool_validator(
   // fn validate_pool
   spend(
     _datum: Option<PoolDatum>,
-    _redeemer: PoolRedeemer,
+    _redeemer: Data,
     pool_input_ref: OutputReference,
     transaction: Transaction,
   ) {
@@ -62,6 +62,9 @@ validator pool_validator(
       Batching -> {
         let Transaction { withdrawals, .. } = transaction
         let PoolDatum { pool_batching_stake_credential, .. } = datum
+
+        // trace @"is pairs in pool val..": pairs.has_key(withdrawals, pool_batching_stake_credential), True, False
+
         pairs.has_key(withdrawals, pool_batching_stake_credential)
       }
       UpdatePoolParameters(action) -> {
@@ -173,8 +176,8 @@ validator pool_validator(
 validator pool_batching_validator(
   // The PolicyID of Authen Minting Policy
   authen_policy_id: PolicyId,
-  // The Payment Credential of Pool Validator
-  pool_payment_cred: Credential,
+  // The Address of Pool Validator
+  pool_address: Address,
 ) {
   // fn validate_pool_batching
   withdraw(
@@ -182,6 +185,7 @@ validator pool_batching_validator(
     stake_credential: Credential,
     transaction: Transaction,
   ) {
+    // trace @"j in p val.": 1
     let Transaction {
       inputs,
       outputs,
@@ -193,6 +197,7 @@ validator pool_batching_validator(
       withdrawals,
       ..
     } = transaction
+    // trace @"a tx des"
     let PoolBatchingRedeemer {
       batcher_index,
       orders_fee,
@@ -200,18 +205,22 @@ validator pool_batching_validator(
       pool_input_indexes_opt,
       vol_fees,
     } = redeemer
+    // trace @"a p red des"
     let global_setting =
       pool_validation.get_and_validate_global_setting(
         reference_inputs: reference_inputs,
         authen_policy_id: authen_policy_id,
       )
+    // trace @"a g gs"
     let GlobalSetting { batchers, .. } = global_setting
+    // trace @"a bat des"
     let current_time_approximation =
       utils.must_get_current_time_approximation(validity_range)
 
     // Due to authorized batchers is a list so we use @batcher_index to save the On-chain cost 
     // on searching the batcher address in this section 
     let batcher_address = utils.list_at_index(batchers, batcher_index)
+    // trace @"imd b val"
     expect and {
         // Transaction must be executed by the authorized batchers
         utils.authorize_pool_license(
@@ -231,31 +240,19 @@ validator pool_batching_validator(
         inputs,
         fn(input) {
           let Input { output: Output { address: addr, .. }, .. } = input
-          let Address {
-            payment_credential: payment_cred,
-            stake_credential: stake_cred,
-          } = addr
-          or {
-            payment_cred == pool_payment_cred,
-            stake_cred == Some(Inline(pool_payment_cred)),
-          }
+          addr == pool_address
         },
       )
+    // trace @"pool_inputs no. (imd)": list.length(pool_inputs)
     let pool_outputs =
       list.filter(
         outputs,
         fn(output) {
           let Output { address: addr, .. } = output
-          let Address {
-            payment_credential: payment_cred,
-            stake_credential: stake_cred,
-          } = addr
-          or {
-            payment_cred == pool_payment_cred,
-            stake_cred == Some(Inline(pool_payment_cred)),
-          }
+          addr == pool_address
         },
       )
+    // trace @"pool_outputs no. (imd)": list.length(pool_outputs)
 
     // We assume that inputs not belonging to the batcher or liquidity pool are orders. 
     // These inputs' structure will be verified in the @apply_orders function and SwapMultiRouting branch. 
@@ -268,11 +265,10 @@ validator pool_batching_validator(
           let Output { address: addr, .. } = out
           let Address {
             payment_credential: payment_cred,
-            stake_credential: stake_cred,
+            ..
           } = addr
           and {
-            payment_cred != pool_payment_cred,
-            stake_cred != Some(Inline(pool_payment_cred)),
+            addr != pool_address,
             when batcher_address is {
               PAMSignature(pkh) -> payment_cred != VerificationKey(pkh)
               PAMSpendScript(sh) -> payment_cred != Script(sh)
@@ -281,6 +277,7 @@ validator pool_batching_validator(
           }
         },
       )
+    // trace @"order_inputs no. (imd)": list.length(order_inputs)
     // Currently, transaction inputs will be sorted by TxId and TxIndex of UTxO.
     // We have to calculate indexes of orders inputs sorting by the ASC created time
     // on the off-chain and on-chain will sort the TxIns by the indexes
@@ -291,20 +288,31 @@ validator pool_batching_validator(
         [],
         fn(idx, ips) { list.push(ips, utils.list_at_index(order_inputs, idx)) },
       )
+    // trace @"sorted_order_inputs no. (imd)": list.length(sorted_order_inputs)
 
+    // trace @"imd b c inp len and pool len"
     expect and {
         // Order Inputs and Input Indexes must have the same length
         builtin.length_of_bytearray(input_indexes) == list.length(order_inputs),
         // Pool Inputs & Outputs must have the same length
         utils.compare_list_length(pool_inputs, pool_outputs),
       }
+    // expect and {
+    //     // Order Inputs and Input Indexes must have the same length
+    //     (builtin.length_of_bytearray(input_indexes) == list.length(order_inputs))?,
+    //     // Pool Inputs & Outputs must have the same length
+    //     (utils.compare_list_length(pool_inputs, pool_outputs))?,
+    //   }
 
     when pool_inputs is {
       [pool_input] -> {
+        // trace @"when p in is 1"
         // In case transaction only contains 1 Pool Input & Output, all order types are accepted except SwapMultiRouting
         let pool_output = pool_outputs |> builtin.head_list
+        // trace @"imd b exp vol.."
         expect [vol_fee] = vol_fees
         let Input { output: pool_in_output, .. } = pool_input
+        // trace @"imd b p val..."
         let BatchingPool {
           asset_a,
           asset_b,
@@ -323,6 +331,18 @@ validator pool_batching_validator(
             require_total_liquidity_unchange: False,
             vol_fee: vol_fee,
           )
+
+        // trace @"pool_inputs": pool_inputs
+        // trace @"order_inputs": order_inputs
+        // trace @"sorted_order_inputs": sorted_order_inputs
+        // trace @"pool_outputs": pool_outputs
+
+        // trace @"pool_inputs no. (last)": list.length(pool_inputs)
+        // trace @"order_inputs no. (last)": list.length(order_inputs)
+        // trace @"sorted_order_inputs no. (last)": list.length(sorted_order_inputs)
+        // trace @"pool_outputs no. (last)": list.length(pool_outputs)
+
+        // trace @"i v": 1
         pool_state_out == order_validation.apply_orders(
           datum_map: datums,
           asset_a: asset_a,

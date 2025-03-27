@@ -3,11 +3,12 @@ import { alwaysSuccessMintValidatorHash, alwaysSuccessValidatorMintScript, txBui
 
 // Change token name below to mint any token
 const tokenName = "iMyTokenTwo";
+// const tokenName = "myTokenOne";
 const tokenNameHex = stringToHex(tokenName);
 
 const unsignedTx = await txBuilder
     .mintPlutusScriptV3()
-    .mint("3000", alwaysSuccessMintValidatorHash, tokenNameHex)
+    .mint("30000", alwaysSuccessMintValidatorHash, tokenNameHex)
     .mintingScript(alwaysSuccessValidatorMintScript)
     .mintRedeemerValue("")
     .txInCollateral(

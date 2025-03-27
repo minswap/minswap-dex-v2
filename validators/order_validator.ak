@@ -31,13 +31,16 @@ validator order_validator(
   }
 
   // fn validate_order
-  withdraw(raw_redeemer: Data, account: Credential, transaction: Transaction) {
-    expect redeemer: OrderRedeemer = raw_redeemer
+  withdraw(redeemer: OrderRedeemer, account: Credential, transaction: Transaction) {
     expect Script(own_hash) = account
 
     when redeemer is {
       ApplyOrder -> {
         let Transaction { withdrawals, .. } = transaction
+
+        // Test
+        // trace @"is apply order triggered?": pairs.has_key(withdrawals, pool_batching_credential), True, False
+
         // validate that an Order can be spent if there's a `Order Batching` validator in the `withdrawals`
         pairs.has_key(withdrawals, pool_batching_credential)
       }

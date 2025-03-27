@@ -1,13 +1,13 @@
-import { deserializeDatum, mConStr0, mConStr1, SLOT_CONFIG_NETWORK, stringToHex, unixTimeToEnclosingSlot } from "@meshsdk/core";
+import { deserializeDatum, mConStr0, mConStr1, stringToHex } from "@meshsdk/core";
 import { alwaysSuccessMintValidatorHash, alwaysSuccessValidatorScript, assetA, assetB, authenAddress, authenPolicyId, blockchainProvider, lpAssetName, orderLovelaceAmount, orderValidatorAddress, orderValidatorRewardAddress, orderValidatorScriptHash, poolAuthAssetName, poolBatchingValidatorHash, poolBatchingValidatorRewardAddress, poolValidatorAddress, poolValidatorRewardAddress, poolValidatorScriptHash, remainingLiquidity, swapAmount, totalLiquidity, txBuilder, wallet1, wallet1Address, wallet1Collateral, wallet1Utxos, wallet1VK } from "./setup.js";
 // pool batching ref script
-const poolBatchingScriptTxHash = "75e53842f67e41cb7cbc9f6496913c17147017fae341c4ae77afbdf46fc4a110"; // Preview 1.8.14 -> "77bbb195460ab5fcae27f70858ae373c9cda09a26bfadc8c7655268e840d8ed3"; // Preview 1.8.8 -> "64ef728f6eae2f102108268f66b0c13c27a709baa4e7a87b6be0b89ba749971f";
+const poolBatchingScriptTxHash = "4a29ca132fe1bad746c86c571932f6a1c4677c43d8ca4ef2beeff43e39b24efc"; // Preview 1.8.14 -> "77bbb195460ab5fcae27f70858ae373c9cda09a26bfadc8c7655268e840d8ed3"; // Preview 1.8.8 -> "64ef728f6eae2f102108268f66b0c13c27a709baa4e7a87b6be0b89ba749971f";
 const poolBatchingScriptTxIndex = 0;
 // pool ref script
-const poolScriptTxHash = "61453a1a6314c58fa622ee2ee1651d18420a4c60a47c17c82eb70e15a7f2ba1c"; // Preview 1.8.14 -> "7a946f89065ea118b133c405771bbb06f9eca14b19796ae2b9b2475066a230ec"; // Preview 1.8.8 -> "8d7f379ef425a9a35fd58c2b92cbb31d1237774387fa71368ca7d19250928a9f";
+const poolScriptTxHash = "e7245f13504afde30e69ac155b81ed33218b9d8e999a8a2d869d020a1bdf10f5"; // Preview 1.8.14 -> "7a946f89065ea118b133c405771bbb06f9eca14b19796ae2b9b2475066a230ec"; // Preview 1.8.8 -> "8d7f379ef425a9a35fd58c2b92cbb31d1237774387fa71368ca7d19250928a9f";
 const poolScriptTxIndex = 0;
 // order ref script
-const orderScriptTxHash = "d4a881d7562d1e17fa0ae7b02dd9dec40564ca2e7258b286ba8d5511ce97809a"; // Preview 1.8.14 -> "fe772f40e5426b35451a3bf20c7fcc22902062517b7ddeb42ca6cd781c31be58"; // Preview 1.8.8 -> "8bf0851af4d85a8db601d77576bc2dad733d07d8147b31c75b67e743d92573e6";
+const orderScriptTxHash = "7b01f01dd409e517523d3977293311f91e2199f851c07f7366f25f66175ab962"; // Preview 1.8.14 -> "fe772f40e5426b35451a3bf20c7fcc22902062517b7ddeb42ca6cd781c31be58"; // Preview 1.8.8 -> "8bf0851af4d85a8db601d77576bc2dad733d07d8147b31c75b67e743d92573e6";
 const orderScriptTxIndex = 0;
 console.log("pool validator utxos number:", (await blockchainProvider.fetchAddressUTxOs(poolValidatorAddress)).length, '\n');
 console.log("order validator utxos number:", (await blockchainProvider.fetchAddressUTxOs(orderValidatorAddress)).length, '\n');
@@ -42,8 +42,6 @@ if (!poolUtxo.output.plutusData) {
 const oldPoolDatum = deserializeDatum(poolUtxo.output.plutusData); // ideal way is to create a type for the datum to deserialize; this is just for testing
 const updatedIMyTokenTwoSupply = oldPoolDatum.fields[4].int + swapAmount;
 const updatedMyTokenOneSupply = oldPoolDatum.fields[5].int - assetBAmount;
-console.log("updatedIMyTokenTwoSupply:", updatedIMyTokenTwoSupply);
-console.log("updatedMyTokenOneSupply:", updatedMyTokenOneSupply);
 const poolDatum = mConStr0([
     mConStr1([poolBatchingValidatorHash]),
     assetA,
@@ -56,9 +54,6 @@ const poolDatum = mConStr0([
     mConStr1([]),
     mConStr0([]),
 ]);
-const invalidBefore = unixTimeToEnclosingSlot((Date.now() - 30000), SLOT_CONFIG_NETWORK.preprod);
-const invalidAfter = unixTimeToEnclosingSlot((Date.now() + 8 * 60 * 1000), // 8 mins
-SLOT_CONFIG_NETWORK.preprod);
 const unsignedTx = await txBuilder
     // spend order utxo
     .spendingPlutusScriptV3()
@@ -107,13 +102,11 @@ const unsignedTx = await txBuilder
     // global settings utxo ref
     .readOnlyTxInReference(globalSettingsUtxo.input.txHash, globalSettingsUtxo.input.outputIndex)
     .txInCollateral(wallet1Collateral.input.txHash, wallet1Collateral.input.outputIndex, wallet1Collateral.output.amount, wallet1Collateral.output.address)
-    .invalidBefore(invalidBefore)
-    .invalidHereafter(invalidAfter)
     // transaction must be executed by authorized batcher, wallet1VK
     .requiredSignerHash(wallet1VK)
     .changeAddress(wallet1Address)
     .selectUtxosFrom(wallet1Utxos)
-    .setFee("3491809")
+    // .setFee("920621")
     .complete();
 const signedTx = await wallet1.signTx(unsignedTx);
 const txHash = await wallet1.submitTx(signedTx);
