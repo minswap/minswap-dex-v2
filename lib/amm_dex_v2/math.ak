@@ -1,4 +1,4 @@
-use aiken/list
+use aiken/collection/list
 use amm_dex_v2/utils
 
 pub fn calculate_sqrt(x: Int) -> Int {
@@ -24,8 +24,7 @@ fn do_calculate_sqrt(x: Int, i1: Int, i2: Int) -> Int {
 }
 
 test test_calculate_sqrt() {
-  let arr =
-    [(0, 0), (1, 1), (2, 1), (3, 1), (4, 2), (9, 3), (16, 4), (17, 4)]
+  let arr = [(0, 0), (1, 1), (2, 1), (3, 1), (4, 2), (9, 3), (16, 4), (17, 4)]
   list.all(
     arr,
     fn(item) {
@@ -50,8 +49,7 @@ pub fn calculate_initial_liquidity(out_a: Int, out_b: Int) -> Int {
 }
 
 test test_calculate_initial_liquidity() {
-  let data =
-    [(1_000_000, 1_000_000, 1_000_000), (1_000, 1_000_000, 31_623)]
+  let data = [(1_000_000, 1_000_000, 1_000_000), (1_000, 1_000_000, 31_623)]
   list.all(
     data,
     fn(item) {

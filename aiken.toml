@@ -1,5 +1,7 @@
 name = "aiken/amm_dex_v2"
 version = "0.0.0"
+compiler = "v1.1.9"
+plutus = "v3"
 license = "Apache-2.0"
 description = "Aiken contracts for project 'aiken/amm_dex_v2'"
 
@@ -10,5 +12,7 @@ platform = "github"
 
 [[dependencies]]
 name = "aiken-lang/stdlib"
-version = "1.7.0"
+version = "2.1.0"
 source = "github"
+
+[config]

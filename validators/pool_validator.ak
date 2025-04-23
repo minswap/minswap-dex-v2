@@ -1,14 +1,7 @@
 use aiken/builtin
-use aiken/bytearray
-use aiken/dict
-use aiken/list
-use aiken/transaction.{
-  Input, Output, ScriptContext, Spend, Transaction, WithdrawFrom,
-}
-use aiken/transaction/credential.{
-  Address, Credential, ScriptCredential, VerificationKeyCredential,
-}
-use aiken/transaction/value.{PolicyId}
+use aiken/collection/list
+use aiken/collection/pairs
+use aiken/primitive/bytearray
 use amm_dex_v2/order_validation
 use amm_dex_v2/pool_validation
 use amm_dex_v2/types.{
@@ -18,23 +11,61 @@ use amm_dex_v2/types.{
   UpdatePoolParameters, UpdatePoolStakeCredential, WithdrawFeeSharing,
 }
 use amm_dex_v2/utils
+use cardano/address.{Address, Credential, Inline, Script, VerificationKey}
+use cardano/assets.{PolicyId}
+use cardano/transaction.{Input,
+  Output, OutputReference, Transaction, find_input}
 
-validator(
+validator pool_validator(
   // The PolicyID of Authen Minting Policy
   authen_policy_id: PolicyId,
 ) {
-  fn validate_pool(
-    datum: PoolDatum,
-    redeemer: PoolRedeemer,
-    context: ScriptContext,
+  // fn validate_pool
+  spend(
+    _datum: Option<PoolDatum>,
+    _redeemer: Data,
+    pool_input_ref: OutputReference,
+    transaction: Transaction,
   ) {
-    expect ScriptContext { transaction, purpose: Spend(pool_input_ref) } =
-      context
+    let Transaction { inputs, withdrawals, .. } = transaction
+    expect Some(own_input) = inputs |> find_input(pool_input_ref)
+    expect Some(Inline(own_cred)) = own_input.output.address.stake_credential
+    withdrawals |> pairs.has_key(own_cred)
+  }
+
+  withdraw(
+    redeemer: PoolRedeemer,
+    account: Credential,
+    transaction: Transaction,
+  ) {
+    let Transaction { inputs, datums, .. } = transaction
+
+    expect Script(own_hash) = account
+    expect Some(own_input) =
+      inputs
+        |> list.find(
+            fn(input) {
+              or {
+                Script(own_hash) == input.output.address.payment_credential,
+                Some(Inline(Script(own_hash))) == input.output.address.stake_credential,
+              }
+            },
+          )
+    let Input {
+      output_reference: pool_input_ref,
+      output: Output { datum: own_input_datum, .. },
+    } = own_input
+    expect datum: PoolDatum =
+      utils.must_find_script_datum(datums, own_input_datum)
+
     when redeemer is {
       Batching -> {
         let Transaction { withdrawals, .. } = transaction
         let PoolDatum { pool_batching_stake_credential, .. } = datum
-        dict.has_key(withdrawals, pool_batching_stake_credential)
+
+        // trace @"is pairs in pool val..": pairs.has_key(withdrawals, pool_batching_stake_credential), True, False
+
+        pairs.has_key(withdrawals, pool_batching_stake_credential)
       }
       UpdatePoolParameters(action) -> {
         let Transaction {
@@ -81,7 +112,7 @@ validator(
             pool_author: authorizer,
           ),
           // This Redeemer won't mint anything 
-          value.is_zero(value.from_minted_value(mint)),
+          assets.is_zero(mint),
           pool_validation.validate_update_pool_parameters(
             action: action,
             authen_policy_id: authen_policy_id,
@@ -125,7 +156,7 @@ validator(
             pool_author: fee_sharing_taker,
           ),
           // This Redeemer won't mint anything 
-          value.is_zero(value.from_minted_value(mint)),
+          assets.is_zero(mint),
           pool_validation.validate_withdraw_fee_sharing(
             authen_policy_id: authen_policy_id,
             pool_input: pool_input,
@@ -136,22 +167,25 @@ validator(
       }
     }
   }
+
+  else(_) {
+    fail
+  }
 }
 
-validator(
+validator pool_batching_validator(
   // The PolicyID of Authen Minting Policy
   authen_policy_id: PolicyId,
-  // The Payment Credential of Pool Validator
-  pool_payment_cred: Credential,
+  // The Address of Pool Validator
+  pool_address: Address,
 ) {
-  fn validate_pool_batching(
+  // fn validate_pool_batching
+  withdraw(
     redeemer: PoolBatchingRedeemer,
-    context: ScriptContext,
+    stake_credential: Credential,
+    transaction: Transaction,
   ) {
-    expect ScriptContext {
-      transaction,
-      purpose: WithdrawFrom(stake_credential),
-    } = context
+    // trace @"j in p val.": 1
     let Transaction {
       inputs,
       outputs,
@@ -163,6 +197,7 @@ validator(
       withdrawals,
       ..
     } = transaction
+    // trace @"a tx des"
     let PoolBatchingRedeemer {
       batcher_index,
       orders_fee,
@@ -170,18 +205,22 @@ validator(
       pool_input_indexes_opt,
       vol_fees,
     } = redeemer
+    // trace @"a p red des"
     let global_setting =
       pool_validation.get_and_validate_global_setting(
         reference_inputs: reference_inputs,
         authen_policy_id: authen_policy_id,
       )
+    // trace @"a g gs"
     let GlobalSetting { batchers, .. } = global_setting
+    // trace @"a bat des"
     let current_time_approximation =
       utils.must_get_current_time_approximation(validity_range)
 
     // Due to authorized batchers is a list so we use @batcher_index to save the On-chain cost 
     // on searching the batcher address in this section 
     let batcher_address = utils.list_at_index(batchers, batcher_index)
+    // trace @"imd b val"
     expect and {
         // Transaction must be executed by the authorized batchers
         utils.authorize_pool_license(
@@ -193,7 +232,7 @@ validator(
         // Input indexes must not be empty list and be unique
         utils.is_unique_bytearray_unsorted(input_indexes),
         // validate Transaction won't mint any assets
-        value.is_zero(value.from_minted_value(mint)),
+        assets.is_zero(mint),
       }
 
     let pool_inputs =
@@ -201,19 +240,19 @@ validator(
         inputs,
         fn(input) {
           let Input { output: Output { address: addr, .. }, .. } = input
-          let Address { payment_credential: payment_cred, .. } = addr
-          payment_cred == pool_payment_cred
+          addr == pool_address
         },
       )
+    // trace @"pool_inputs no. (imd)": list.length(pool_inputs)
     let pool_outputs =
       list.filter(
         outputs,
         fn(output) {
           let Output { address: addr, .. } = output
-          let Address { payment_credential: payment_cred, .. } = addr
-          payment_cred == pool_payment_cred
+          addr == pool_address
         },
       )
+    // trace @"pool_outputs no. (imd)": list.length(pool_outputs)
 
     // We assume that inputs not belonging to the batcher or liquidity pool are orders. 
     // These inputs' structure will be verified in the @apply_orders function and SwapMultiRouting branch. 
@@ -224,18 +263,21 @@ validator(
         fn(input) {
           let Input { output: out, .. } = input
           let Output { address: addr, .. } = out
-          let Address { payment_credential: payment_cred, .. } = addr
+          let Address {
+            payment_credential: payment_cred,
+            ..
+          } = addr
           and {
-            payment_cred != pool_payment_cred,
+            addr != pool_address,
             when batcher_address is {
-              PAMSignature(pkh) ->
-                payment_cred != VerificationKeyCredential(pkh)
-              PAMSpendScript(sh) -> payment_cred != ScriptCredential(sh)
-              PAMWithdrawScript(sh) -> payment_cred != ScriptCredential(sh)
+              PAMSignature(pkh) -> payment_cred != VerificationKey(pkh)
+              PAMSpendScript(sh) -> payment_cred != Script(sh)
+              PAMWithdrawScript(sh) -> payment_cred != Script(sh)
             },
           }
         },
       )
+    // trace @"order_inputs no. (imd)": list.length(order_inputs)
     // Currently, transaction inputs will be sorted by TxId and TxIndex of UTxO.
     // We have to calculate indexes of orders inputs sorting by the ASC created time
     // on the off-chain and on-chain will sort the TxIns by the indexes
@@ -246,20 +288,31 @@ validator(
         [],
         fn(idx, ips) { list.push(ips, utils.list_at_index(order_inputs, idx)) },
       )
+    // trace @"sorted_order_inputs no. (imd)": list.length(sorted_order_inputs)
 
+    // trace @"imd b c inp len and pool len"
     expect and {
         // Order Inputs and Input Indexes must have the same length
         builtin.length_of_bytearray(input_indexes) == list.length(order_inputs),
         // Pool Inputs & Outputs must have the same length
         utils.compare_list_length(pool_inputs, pool_outputs),
       }
+    // expect and {
+    //     // Order Inputs and Input Indexes must have the same length
+    //     (builtin.length_of_bytearray(input_indexes) == list.length(order_inputs))?,
+    //     // Pool Inputs & Outputs must have the same length
+    //     (utils.compare_list_length(pool_inputs, pool_outputs))?,
+    //   }
 
     when pool_inputs is {
       [pool_input] -> {
+        // trace @"when p in is 1"
         // In case transaction only contains 1 Pool Input & Output, all order types are accepted except SwapMultiRouting
         let pool_output = pool_outputs |> builtin.head_list
+        // trace @"imd b exp vol.."
         expect [vol_fee] = vol_fees
         let Input { output: pool_in_output, .. } = pool_input
+        // trace @"imd b p val..."
         let BatchingPool {
           asset_a,
           asset_b,
@@ -278,6 +331,18 @@ validator(
             require_total_liquidity_unchange: False,
             vol_fee: vol_fee,
           )
+
+        // trace @"pool_inputs": pool_inputs
+        // trace @"order_inputs": order_inputs
+        // trace @"sorted_order_inputs": sorted_order_inputs
+        // trace @"pool_outputs": pool_outputs
+
+        // trace @"pool_inputs no. (last)": list.length(pool_inputs)
+        // trace @"order_inputs no. (last)": list.length(order_inputs)
+        // trace @"sorted_order_inputs no. (last)": list.length(sorted_order_inputs)
+        // trace @"pool_outputs no. (last)": list.length(pool_outputs)
+
+        // trace @"i v": 1
         pool_state_out == order_validation.apply_orders(
           datum_map: datums,
           asset_a: asset_a,
@@ -387,5 +452,9 @@ validator(
         )
       }
     }
+  }
+
+  else(_) {
+    fail
   }
 }
