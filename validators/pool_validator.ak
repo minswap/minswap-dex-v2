@@ -40,6 +40,8 @@ validator pool_validator(
     let Transaction { inputs, datums, .. } = transaction
 
     expect Script(own_hash) = account
+    // TODO: Validate every matching pool input. list.find only validates the
+    // first input and permits a multi-input validation bypass.
     expect Some(own_input) =
       inputs
         |> list.find(

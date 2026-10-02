@@ -57,6 +57,8 @@ validator order_validator(
           ..
         } = transaction
         // Get order datum from the own script input
+        // TODO: Validate every matching order input. list.find only validates
+        // the first input and permits a multi-input owner-cancellation bypass.
         expect Some(own_input) =
           inputs
             |> list.find(
